@@ -17,7 +17,7 @@ For each item, mark ✅, ❌ (with `path:line`), or n/a.
 - **Errors:** messages are precise (`line:col`, the pins involved) and a player can understand them. Each one has a test. Errors never crash the GUI.
 - **Levels:** each new level has a stub, a brief, a `.tst`, a reference, and a `levels.toml` entry. The brief does not give away the solution. The reference is never reachable from the player's view.
 - **Conventions:** type hints, module docstrings, dataclasses for AST and netlist structures, no new runtime dependencies.
-- **Docs:** ambiguous points are recorded in `docs/decisions.md`. `docs/hdl.md` and `docs/tst.md` match any change in behavior.
+- **Docs:** ambiguous points are recorded in `docs/decisions.md`. `docs/hdl.md` and `docs/tst.md` match any change in behavior. Every user-visible change has a `CHANGELOG.md` entry under `[Unreleased]`.
 - **Commits:** small, each one green, each message says why.
 
 ## 2. Bugs
