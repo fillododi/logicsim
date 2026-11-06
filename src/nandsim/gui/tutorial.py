@@ -40,12 +40,25 @@ ANCHORS = frozenset(
         "run_button",
         "results",
         "footer",
+        "chips",
     }
 )
 ANCHOR_KINDS = frozenset({"level", "line", "pin"})
 # Player actions the game reports. open_level may name the level: "open_level:Not".
 EVENTS = frozenset(
-    {"next", "save", "build_ok", "toggle", "open_part", "up", "run_tests", "solved", "open_level"}
+    {
+        "next",
+        "save",
+        "build_ok",
+        "toggle",
+        "set_value",
+        "open_part",
+        "up",
+        "run_tests",
+        "solved",
+        "open_level",
+        "export",
+    }
 )
 
 
@@ -58,6 +71,8 @@ class Step:
     level: str | None = None
 
     def listens_to(self, event: str, detail: str | None) -> bool:
+        if event == "set_value" and self.until == "toggle":
+            return True  # typing an input's value changes it as much as a click does
         return self.until == event or (detail is not None and self.until == f"{event}:{detail}")
 
 

@@ -168,3 +168,10 @@ def test_in_the_game_esc_closes_the_field_before_the_menu(tmp_path: Path) -> Non
     press(app, pygame.K_RETURN)
     assert app.session.inputs["in"] == 1
     assert "toggle" in app.sounds.played  # a typed value sounds like a click on the pin
+
+
+def test_ctrl_enter_over_an_input_does_not_open_the_field(tmp_path: Path) -> None:
+    app = make_app(tmp_path)
+    hover(app, "a")
+    press(app, pygame.K_RETURN, mod=pygame.KMOD_CTRL)
+    assert app.value_field is None

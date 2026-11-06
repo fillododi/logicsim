@@ -71,6 +71,7 @@ class ViewerApp:
         self.edit_path = edit_path
         self.editor: EditorWidget | None = None
         self.value_field: ValueField | None = None  # a value being typed for an input pin
+        self.field_rect: pygame.Rect | None = None  # where the value field was last drawn
         if edit_path is not None:
             buffer = TextBuffer(edit_path.read_text())
             self.editor = EditorWidget(buffer, self.fonts, self.editor_rect)
@@ -176,7 +177,7 @@ class ViewerApp:
             self.cam.zoom_at(self.mouse, 1.15**ev.y)
             self._update_hover()
         elif ev.type == pygame.KEYDOWN:
-            self._key(ev.key, getattr(ev, "unicode", ""))
+            self._key(ev.key, getattr(ev, "unicode", ""), getattr(ev, "mod", 0))
 
     def _field_event(self, ev: pygame.event.Event) -> bool:
         """Typing into the value field, if one is open. True if the event was used for it.
@@ -216,7 +217,7 @@ class ViewerApp:
         if self.session.at_top and self.session.netlist is not None:
             if field.pin in self.session.netlist.inputs:
                 self.session.set_input(field.pin, value)
-                self.on_action("toggle")
+                self.on_action("set_value")
 
     def open_value_field(self, pin: str) -> None:
         """Start typing a value for one of the top chip's input pins."""
@@ -256,7 +257,7 @@ class ViewerApp:
         return True
 
     def on_action(self, name: str) -> None:
-        """Hook for circuit actions ("toggle", "open_part", "up"); the game's tour listens."""
+        """Hook for circuit actions ("toggle", "set_value", "open_part", "up"); the tour listens."""
 
     def on_editor_action(self, action: str) -> None:
         """Editor shortcuts the host handles: "save" (Ctrl+S), "run" (Ctrl+Enter)."""
@@ -319,9 +320,10 @@ class ViewerApp:
                 self.on_action("open_part")
         self._update_hover()
 
-    def _key(self, key: int, char: str = "") -> None:
+    def _key(self, key: int, char: str = "", mod: int = 0) -> None:
         on_input = self.hover.node is not None and self.hover.node[0] == "in"
-        if on_input and self.session.at_top and self.session.netlist is not None:
+        plain = not mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT | pygame.KMOD_META)
+        if on_input and plain and self.session.at_top and self.session.netlist is not None:
             # Enter, or the first character of a value, opens the field; that character
             # then arrives as the TEXTINPUT event that follows its KEYDOWN.
             if key in (pygame.K_RETURN, pygame.K_KP_ENTER) or (char and char in "0123456789-"):
@@ -396,6 +398,7 @@ class ViewerApp:
         field = self.value_field
         snap = self.session.snapshot
         box = None if snap is None else snap.layout.boxes.get(("in", field.pin)) if field else None
+        self.field_rect = None
         if field is None or box is None or not self.session.at_top:
             self.value_field = None  # its pin is gone: rebuilt, or navigated away
             return
@@ -410,7 +413,7 @@ class ViewerApp:
         x, y = self.cam.to_screen((box.x, box.bottom))
         x = max(cx + 4, min(round(x), cx + cw - w - 4))
         y = max(cy + 4, min(round(y) + 6, cy + ch - h - 4))
-        rect = pygame.Rect(x, y, w, h)
+        rect = self.field_rect = pygame.Rect(x, y, w, h)
         pygame.draw.rect(surf, theme.PANEL, rect, border_radius=6)
         border = theme.WIRE_X if field.error else theme.ACCENT
         pygame.draw.rect(surf, border, rect, 2, border_radius=6)
