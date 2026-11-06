@@ -23,6 +23,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         help="directory to look for parts in (repeatable; default: next to the file and one up)",
     )
+    gui.add_argument("--no-edit", action="store_true", help="view only, without the editor pane")
     gui.add_argument("--save-dir", type=Path, help="where the player's chips are stored")
 
     test = sub.add_parser("test", help="run .tst files (default: every level)")
@@ -89,7 +90,7 @@ def main(argv: list[str] | None = None) -> int:
     os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")  # no banner in the terminal
     from nandsim.gui.app import open_viewer  # pygame is imported only for the GUI
 
-    return open_viewer(args.file, args.search)
+    return open_viewer(args.file, args.search, edit=not args.no_edit)
 
 
 if __name__ == "__main__":

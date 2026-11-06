@@ -1,4 +1,4 @@
-"""The viewer window: event handling, header (breadcrumbs), footer (help), error banner.
+"""The viewer window: circuit canvas, optional HDL editor pane, header, footer, error banner.
 
 `ViewerApp` takes pygame events through `handle()` and draws through `render()`,
 so tests and the playtest hook can drive it headless (`SDL_VIDEODRIVER=dummy`)
@@ -7,6 +7,7 @@ exactly as a player would. `run()` is the real event loop around those two.
 
 from __future__ import annotations
 
+import os
 import time
 from pathlib import Path
 
@@ -15,8 +16,10 @@ import pygame
 from nandsim.gui import theme
 from nandsim.gui.camera import Camera, box_at, route_at
 from nandsim.gui.canvas import Hover, draw_circuit, format_value
+from nandsim.gui.editor import EditorError, EditorWidget
 from nandsim.gui.model import breadcrumbs
 from nandsim.gui.session import ChipSession, FileWatcher
+from nandsim.gui.textbuffer import Pos, TextBuffer
 
 HEADER = 36
 FOOTER = 26
@@ -26,6 +29,10 @@ HELP = (
     "click input: toggle (right-click: count down, X: undefined)  ·  click part: open  ·  "
     "Backspace: up  ·  wheel: zoom  ·  drag: pan  ·  F: fit  ·  H: hex/dec"
 )
+EDITOR_HELP = (
+    "Ctrl+S: save & build  ·  Ctrl+Z / Ctrl+Y: undo / redo  ·  Ctrl+/: comment  ·  "
+    "Tab / Shift+Tab: indent  ·  Esc: back to the circuit"
+)
 
 
 class ViewerApp:
@@ -34,6 +41,7 @@ class ViewerApp:
         session: ChipSession,
         size: tuple[int, int] = (1280, 800),
         watcher: FileWatcher | None = None,
+        edit_path: Path | None = None,
     ) -> None:
         if not pygame.font.get_init():
             pygame.font.init()
@@ -50,14 +58,34 @@ class ViewerApp:
         self._crumbs: list[tuple[pygame.Rect, str]] = []
         self._last_poll = 0.0
         self._fitted_path: str | None = None
+        self.edit_path = edit_path
+        self.editor: EditorWidget | None = None
+        if edit_path is not None:
+            buffer = TextBuffer(edit_path.read_text())
+            self.editor = EditorWidget(buffer, self.fonts, self.editor_rect)
+            self._sync_error()
         self.fit()
 
     # ---- geometry --------------------------------------------------------
 
     @property
+    def editor_width(self) -> int:
+        return 0 if self.edit_path is None else max(380, int(self.size[0] * 0.42))
+
+    @property
+    def editor_rect(self) -> pygame.Rect:
+        w, h = self.size
+        ew = self.editor_width
+        return pygame.Rect(w - ew, HEADER, ew, h - HEADER - FOOTER)
+
+    @property
     def canvas_area(self) -> tuple[float, float, float, float]:
         w, h = self.size
-        return (0.0, float(HEADER), float(w), float(h - HEADER - FOOTER))
+        return (0.0, float(HEADER), float(w - self.editor_width), float(h - HEADER - FOOTER))
+
+    @property
+    def editing(self) -> bool:
+        return self.editor is not None and self.editor.focused
 
     def fit(self) -> None:
         if self.session.snapshot is not None:
@@ -72,6 +100,8 @@ class ViewerApp:
     # ---- events ----------------------------------------------------------
 
     def handle(self, ev: pygame.event.Event) -> None:
+        if self.editor is not None and self._editor_event(ev):
+            return
         if ev.type == pygame.MOUSEMOTION:
             if self._press is not None and pygame.BUTTON_LEFT in self._buttons(ev):
                 dx, dy = ev.rel
@@ -96,6 +126,67 @@ class ViewerApp:
             self._update_hover()
         elif ev.type == pygame.KEYDOWN:
             self._key(ev.key)
+
+    def _editor_event(self, ev: pygame.event.Event) -> bool:
+        """Route an event to the editor if it belongs there. True if consumed."""
+        ed = self.editor
+        assert ed is not None
+        pos = getattr(ev, "pos", None)
+        if ev.type == pygame.MOUSEBUTTONDOWN:
+            inside = pos is not None and ed.rect.collidepoint(pos)
+            ed.focused = inside
+            if inside:
+                ed.handle(ev)
+                return True
+            return False
+        if ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONUP) and ed._dragging:
+            ed.handle(ev)
+            return True
+        if ev.type == pygame.MOUSEWHEEL and ed.rect.collidepoint(self.mouse):
+            ed.scroll(-ev.y * 3)
+            return True
+        if ev.type == pygame.MOUSEMOTION and pos is not None and ed.rect.collidepoint(pos):
+            self.mouse = pos
+            self.hover = Hover()
+            return True
+        if not ed.focused or ev.type not in (pygame.KEYDOWN, pygame.TEXTINPUT):
+            return False
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+            ed.focused = False
+            return True
+        if ed.handle(ev) == "save":
+            self.save()
+        return True
+
+    def save(self) -> None:
+        """Write the editor's text, rebuild the circuit and mark any error in the editor."""
+        assert self.editor is not None and self.edit_path is not None
+        tmp = self.edit_path.with_suffix(self.edit_path.suffix + ".tmp")
+        tmp.write_text(self.editor.buffer.text)
+        os.replace(tmp, self.edit_path)
+        self.editor.buffer.mark_saved()
+        if self.watcher is not None:
+            self.watcher.changed()  # absorb our own write
+        self._rebuild()
+
+    def _rebuild(self) -> None:
+        self.session.reload()
+        self._sync_error()
+        if self.session.path != self._fitted_path:
+            self.fit()
+        self._update_hover()
+
+    def _sync_error(self) -> None:
+        """Show the session's error in the editor when it points into the edited file."""
+        if self.editor is None or self.edit_path is None:
+            return
+        err = self.session.error
+        if err is not None and err.pos is not None and _same_file(err.pos.file, self.edit_path):
+            self.editor.set_error(
+                EditorError(Pos.from_source(err.pos.line, err.pos.col), err.message)
+            )
+        else:
+            self.editor.set_error(None)
 
     @staticmethod
     def _buttons(ev: pygame.event.Event) -> set[int]:
@@ -157,16 +248,27 @@ class ViewerApp:
             return
         self._last_poll = now
         if self.watcher.changed():
-            self.session.reload()
-            if self.session.path != self._fitted_path:
-                self.fit()
-            self._update_hover()
+            if self.editor is not None and self.edit_path is not None:
+                on_disk = self.edit_path.read_text()
+                if not self.editor.buffer.dirty and on_disk != self.editor.buffer.text:
+                    self.editor.buffer.set_text(on_disk)  # edited elsewhere, nothing to lose
+            self._rebuild()
 
     # ---- drawing ---------------------------------------------------------
 
     def render(self, surf: pygame.Surface) -> None:
         surf.fill(theme.BG)
         draw_circuit(surf, self.session, self.cam, self.fonts, self.hover, self.hex_mode)
+        if self.session.snapshot is None:
+            x, y, w, h = self.canvas_area
+            t = self.fonts.get(16).render("nothing to draw yet", True, theme.TEXT_DIM)
+            surf.blit(t, (x + (w - t.get_width()) / 2, y + h / 2 - t.get_height()))
+        if self.editor is not None:
+            self.editor.rect = self.editor_rect
+            self.editor.render(surf)
+            r = self.editor.rect
+            border = theme.ACCENT if self.editor.focused else theme.PART_BORDER
+            pygame.draw.line(surf, border, (r.x - 1, r.y), (r.x - 1, r.bottom), 2)
         self._draw_header(surf)
         self._draw_footer(surf)
         self._draw_tooltip(surf)
@@ -188,26 +290,39 @@ class ViewerApp:
                 sep = font.render("  ›  ", True, theme.TEXT_DIM)
                 surf.blit(sep, (rect.right, rect.y))
                 x = rect.right + sep.get_width()
+        right = w - self.editor_width
         if not self.session.at_top:
             note = self.fonts.get(12).render(
                 "inputs are set at the top level", True, theme.TEXT_DIM
             )
-            surf.blit(note, (w - note.get_width() - 12, (HEADER - note.get_height()) // 2))
+            surf.blit(note, (right - note.get_width() - 12, (HEADER - note.get_height()) // 2))
+        if self.editor is not None and self.edit_path is not None:
+            dirty = self.editor.buffer.dirty
+            label = f"{self.edit_path.name}{'  ● unsaved' if dirty else ''}"
+            t = self.fonts.get(13, bold=True).render(
+                label, True, theme.WIRE_X if dirty else theme.TEXT_DIM
+            )
+            surf.blit(t, (right + 12, (HEADER - t.get_height()) // 2))
 
     def _draw_footer(self, surf: pygame.Surface) -> None:
         w, h = self.size
         err = self.session.error
         if err is not None:
             font = self.fonts.get(13)
-            lines = str(err).splitlines() + ["(showing the last version that compiled)"]
+            note = (
+                "(showing the last version that compiled)"
+                if self.session.snapshot is not None
+                else "(the circuit appears once the chip compiles)"
+            )
+            lines = str(err).splitlines() + [note]
             height = 10 + len(lines) * (font.get_linesize())
             top = h - FOOTER - height
-            pygame.draw.rect(surf, theme.ERROR_BG, (0, top, w, height))
+            pygame.draw.rect(surf, theme.ERROR_BG, (0, top, w - self.editor_width, height))
             for i, line in enumerate(lines):
                 t = font.render(line, True, theme.ERROR_TEXT)
                 surf.blit(t, (12, top + 5 + i * font.get_linesize()))
         pygame.draw.rect(surf, theme.PANEL, (0, h - FOOTER, w, FOOTER))
-        t = self.fonts.get(12).render(HELP, True, theme.TEXT_DIM)
+        t = self.fonts.get(12).render(EDITOR_HELP if self.editing else HELP, True, theme.TEXT_DIM)
         surf.blit(t, (12, h - FOOTER + (FOOTER - t.get_height()) // 2))
 
     def _draw_tooltip(self, surf: pygame.Surface) -> None:
@@ -230,6 +345,8 @@ class ViewerApp:
         pygame.init()
         screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
         pygame.display.set_caption(title)
+        pygame.key.start_text_input()
+        pygame.key.set_repeat(400, 35)
         clock = pygame.time.Clock()
         while True:
             for ev in pygame.event.get():
@@ -247,13 +364,20 @@ class ViewerApp:
             clock.tick(60)
 
 
-def open_viewer(path: Path, search_dirs: list[Path] | None = None) -> int:
-    """`nandsim gui FILE`: view one chip file and reload it when any .hdl around it changes."""
+def _same_file(a: str, b: Path) -> bool:
+    try:
+        return Path(a).resolve() == b.resolve()
+    except OSError:
+        return False
+
+
+def open_viewer(path: Path, search_dirs: list[Path] | None = None, edit: bool = True) -> int:
+    """`nandsim gui FILE`: edit and view one chip file; reloads when any .hdl around it changes."""
     from nandsim.gui.session import file_loader
 
     dirs = search_dirs or [path.parent, path.parent.parent]
     session = ChipSession(file_loader(path, dirs))
     session.reload()  # on error the window opens with the message and waits for a fix
-    app = ViewerApp(session, watcher=FileWatcher(dirs))
+    app = ViewerApp(session, watcher=FileWatcher(dirs), edit_path=path if edit else None)
     app.run(title=f"NAND Sim — {path.name}")
     return 0
