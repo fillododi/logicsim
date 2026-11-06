@@ -1,6 +1,6 @@
 [project]
 name = "nandsim"
-version = "0.3.0"
+version = "0.4.0"
 description = "A game where you build an Intel 4004 CPU from NAND gates."
 readme = "README.md"
 license = "MIT"

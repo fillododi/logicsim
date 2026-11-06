@@ -58,6 +58,6 @@ Run tests from the command line:
 
 ```bash
 uv run nandsim test                          # every level against its reference
-uv run nandsim test --impl save              # your saved chips
+uv run nandsim test --impl save              # your saved chips, with your exported chips
 uv run nandsim test chips/01_gates/Xor.tst   # one file
 ```

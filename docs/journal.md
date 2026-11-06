@@ -144,3 +144,44 @@ This became milestone 3, Tutorial and UI, which also takes on layout readability
 | Tour | 19 steps in 4 levels; 15 error tips | `chips/tutorial.toml`, `gui/tips.py` |
 
 **Next:** milestone 4, Buses: Not32, And32, Or32, Mux32, Or8Way, Mux4Way32, Mux8Way32, DMux4Way, DMux8Way. It starts with Not32, the first 32-bit level. That is where the readability work meets real buses, and where the brief and tour should introduce `a[i]` slices and bus values in hex.
+
+## Milestone 4 — Chip files and sound (2026-11-06)
+
+**Built:** the player can keep their own chips and hears the game.
+- **Your own chips:**
+  - *Export this chip as…* in the Esc menu asks for a name in a text field (new in `Menu`), renames the `CHIP` line to it, checks that the chip builds, and writes it to `<save dir>-exports/<Name>.hdl`.
+  - Every level may then use it as a part, besides the parts it lists, in the game and in `nandsim test --impl save`.
+  - The sidebar lists the player's chips, each with a × that deletes it after a confirmation naming the chips that use it.
+  - Deleting and resetting move the files to `<save dir>-backups/<time>/exports/`; nothing is destroyed.
+- **Sound:**
+  - eight effects synthesized with numpy at startup (toggle, build error, tests passed, tests failed, level solved, and three menu sounds), played through `pygame.mixer` in whatever format the device opened with;
+  - *Sound: On/Off* and *Volume* on the pause menu and title screen, saved in `<save dir>-settings.json` so a reset keeps them;
+  - no audio device means silence, not a crash.
+- **Roadmap:** at the start of the milestone, the Intel 4004 replaced RV32I as the game's CPU, and the bus, arithmetic and memory milestones were resized to 4, 8 and 12 bits.
+
+**Problems and how they were solved:**
+- *Import, then no import.* The first version (#22) followed the milestone text: export a file, import it back into the editor. Reviewing it, the user wanted something else: type a name on export, and have exported chips always available as parts. The request ("the user should be able to type the chip's name") had three readings, so I asked rather than guessed. #23 replaced import with named parts, and `CLAUDE.md`'s milestone text was updated to match.
+- *Renaming a chip safely.* Replacing `CHIP Not` with a regex could hit a comment. `ChipDef` now records where its name is written (`name_pos`), and export replaces exactly those characters. Build error positions still match the editor.
+- *Names that must never be chips.* An exported `Not.hdl` could stand in for the Not level, and a `DFF.hdl` would clash with the primitive due in milestone 7. `exported_chips` ignores any file named like a level, a primitive (`DFF` included ahead of time) or an HDL word. This also neutralizes the level-named files that #22's export wrote.
+- *Settings and reset.* A reset moves every file in the save directory, so settings stored there would unmute the game on every reset. They live beside it, like the exports and backups.
+- *The mixer's real format.* A device may open in stereo or another sample size even when mono is asked for. `to_mixer` converts to whatever `mixer.get_init()` reports, and a test opens an unsigned 8-bit mono mixer to prove it.
+- *A test click that didn't toggle.* The first click on the circuit only leaves the editor, by design (milestone 3). The sound test clicks twice, as a player would, rather than changing the behaviour.
+
+**Learned:**
+- Ask when a request has several readings that lead to different code. The round trip cost one message, and guessing would have cost a branch.
+- A milestone's text is a starting point. When the user changes its intent mid-milestone, the change belongs in `decisions.md` and in `CLAUDE.md`, so the checklist at closing matches what was asked for.
+- Keep anything a device decides (sample format, channels) out of the code that makes the sound. The synthesis is pure numpy and fully tested without audio. Only `sound.py` knows about the mixer.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 331 (+47 since 0.3.0) | `uv run pytest --co`; new or grown: menus 19, saves 18, synth 10, settings 9, sound 4, tst 29 |
+| Levels | 8/8 pass against their references | `uv run nandsim test --impl reference chips/` |
+| Source LOC | 5701 (gui 4087, netlist 696, testing 371, hdl 362, sim 81); +625, of which gui +566 | non-blank lines of `src/**/*.py`, same script for v0.3.0 (5076) |
+| Test LOC | 2736 (+344) | non-blank lines of `tests/**/*.py` |
+| Work since 0.3.0 | 5 merged PRs (#21–#25), 17 commits | `gh api …/pulls`, `git log --no-merges v0.3.0..main` |
+| Sounds | 8 effects, 1.79 s of audio in all (78,850 samples at 44.1 kHz) | `synth.render` on every recipe |
+| Sound startup | 10 ms to synthesize all; 17 ms to open the mixer and build the `Sound`s | `time.perf_counter()` around `synth.render` and `Sounds.load()`, dummy audio driver |
+
+**Next:** milestone 5, Buses (4, 8 and 12 bits): Not4, And4, Or4, Xor4, Mux4, Mux8, Mux12, Or4Way, Mux4Way4, Mux8Way4, Mux4Way12, DMux4Way, DMux8Way. It starts with Not4, the first level with a bus. Its brief and the tour should introduce `a[i]` and `a[0..3]` slices and show bus values in hex.

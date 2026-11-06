@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-11-06
+
+Milestone 4: your chips become building blocks, and the game makes sound. Name a chip you
+built and use it in every level after, hear your toggles, errors and solved levels, and get
+ready for the new goal: the Intel 4004.
+
 ### Added
 - **Your own chips:** press **Esc**, choose *Export this chip as…* and type a name, like
   `MyAnd`. The chip in the editor becomes a part that every level can use, `MyAnd(a=…, b=…)`,
@@ -22,7 +28,8 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 - **New goal: the Intel 4004.** The game now ends with the first commercial microprocessor
   (4-bit data, 12-bit addresses, 46 instructions) instead of a RISC-V CPU. The bus, arithmetic
   and memory levels ahead are resized to match.
-- **Roadmap:** the next release adds exporting and importing single chips, and sound.
+- **The "not allowed in this level" tip** now mentions your exported chips, and the error lists
+  them among the parts you may use.
 
 ## [0.3.0] — 2026-11-06
 
@@ -139,7 +146,8 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/fillododi/logicsim/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/fillododi/logicsim/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/fillododi/logicsim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fillododi/logicsim/releases/tag/v0.1.0
