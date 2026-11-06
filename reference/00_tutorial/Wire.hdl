@@ -1,0 +1,7 @@
+// Reference solution for Wire. Never shown to the player.
+CHIP Wire {
+    IN in;
+    OUT out;
+    PARTS:
+    out = in;
+}

@@ -11,8 +11,8 @@ LEVELS = load_levels()
 
 
 def test_levels_exist() -> None:
-    names = [lv.name for lv in LEVELS][:7]
-    assert names == ["Hello", "Not", "And", "Or", "Xor", "Mux", "DMux"]
+    names = [lv.name for lv in LEVELS][:8]
+    assert names == ["Wire", "Hello", "Not", "And", "Or", "Xor", "Mux", "DMux"]
 
 
 @pytest.mark.parametrize("level", LEVELS, ids=lambda lv: lv.name)

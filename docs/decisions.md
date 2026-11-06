@@ -214,3 +214,14 @@ Ambiguous spec points and the option chosen. Newest last.
 - Anchors as fixed coordinates: rejected, because they would break on resize and with the automatic layout.
 
 **Consequences:** new UI regions need a named anchor in `GameApp.anchor_rect` and `tutorial.ANCHORS`. `ViewerApp` gained an `on_action` hook (a no-op in the developer viewer).
+
+## 2026-11-06 — A second tutorial level, Wire, before Hello
+**Context:** the user asked the tutorial to explain how to connect signals directly (`out = in;`) before introducing the Nand gate.
+
+**Decision:** add a level `Wire` (`IN in; OUT out;`, no parts allowed), solved by the connection `out = in;`, before `Hello` in `00_tutorial`. The tour's first bubbles (welcome, brief, writing HDL, the circuit, toggling an input, running the tests) move to Wire. Hello's bubbles now introduce parts and the Nand, and present `pin=signal` as a connection to a part's pin. The brief of Hello says the same.
+
+**Alternatives:**
+- A bubble in Hello that only describes connections: rejected. The tour teaches by doing, and Hello can't be solved with a connection alone.
+- Teaching `pin=signal` first and connections later: rejected, because a connection is the simpler idea and part pins build on it.
+
+**Consequences:** a new game opens Wire. Both tutorial levels stay optional, since Not depends on neither. `place_bubble` now lets a bubble beside its anchor slide up or down to stay in the window, because Wire's taller "connect" bubble otherwise dropped below the `PARTS:` line and covered the editor.

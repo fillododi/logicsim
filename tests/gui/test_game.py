@@ -27,9 +27,11 @@ def game(tmp_path: Path) -> GameState:
 
 def test_new_game_starts_at_the_tutorial(tmp_path: Path) -> None:
     game = GameState(SaveStore(load_levels(), tmp_path / "save"))
-    assert game.current.name == "Hello"
-    r = game.run_tests(solution("Hello"))
-    assert r.passed and r.lines == []  # no later level uses Hello, so nothing new unlocks
+    assert game.current.name == "Wire"
+    r = game.run_tests(solution("Wire"))
+    assert r.passed and r.lines == []  # no later level uses Wire, so nothing new unlocks
+    assert GameState(game.store).current.name == "Hello"
+    assert game.select(LEVELS["Hello"]) and game.run_tests(solution("Hello")).passed
     assert GameState(game.store).current.name == "Not"
 
 

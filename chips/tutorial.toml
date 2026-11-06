@@ -15,7 +15,7 @@
 
 [[step]]
 id = "welcome"
-level = "Hello"
+level = "Wire"
 anchor = "levels"
 until = "next"
 text = """
@@ -26,11 +26,71 @@ Each entry in this list is a chip to build. Solving one unlocks the chips that u
 
 [[step]]
 id = "brief"
-level = "Hello"
+level = "Wire"
 anchor = "brief"
 until = "next"
 text = """
 The brief says what this level's chip must do: its truth table, the parts you may use, and a hint.
+"""
+
+[[step]]
+id = "connect"
+level = "Wire"
+anchor = "line:PARTS:"
+until = "build_ok"
+text = """
+You build chips by writing HDL here. Under the PARTS: line you connect signals. A connection joins two signals directly, like a wire: the left side always takes the value of the right side.
+
+Click at the end of the PARTS: line, press Enter and type:
+
+    out = in;
+
+Then press Ctrl+S to save and build the chip.
+"""
+
+[[step]]
+id = "circuit"
+level = "Wire"
+anchor = "canvas"
+until = "next"
+text = """
+This is your chip's circuit, drawn from what you wrote: inputs on the left, outputs on the right, and here one wire between them.
+"""
+
+[[step]]
+id = "toggle"
+level = "Wire"
+anchor = "pin:in"
+until = "toggle"
+text = """
+Click the input to flip it between 0 and 1. Green wires carry a 1, grey wires a 0. The output follows: they are the same wire.
+"""
+
+[[step]]
+id = "run"
+level = "Wire"
+anchor = "run_button"
+until = "solved"
+text = """
+When the chip looks right, run the level's tests (or press Ctrl+Enter). They try every row of the brief's table.
+"""
+
+[[step]]
+id = "to_hello"
+level = "Wire"
+anchor = "level:Hello"
+until = "open_level:Hello"
+text = """
+Level solved! Solved levels get a ✓. Now open Hello: a wire only passes a signal along, Hello computes something.
+"""
+
+[[step]]
+id = "nand"
+level = "Hello"
+anchor = "brief"
+until = "next"
+text = """
+To compute, a chip needs parts: other chips used inside it. The only one you start with is the Nand. Its output is 0 only when both its inputs are 1.
 """
 
 [[step]]
@@ -39,29 +99,11 @@ level = "Hello"
 anchor = "line:PARTS:"
 until = "build_ok"
 text = """
-You build chips by writing HDL here. Parts go under the PARTS: line. Click at the end of it, press Enter and type:
+A part is written Chip(pin=signal, ...). Each pin=signal is a connection: the Nand's own pin on the left, a signal of your chip on the right. Under PARTS:, type:
 
     Nand(a=a, b=b, out=out);
 
-Then press Ctrl+S to save and build the chip.
-"""
-
-[[step]]
-id = "circuit"
-level = "Hello"
-anchor = "canvas"
-until = "next"
-text = """
-This is your chip's circuit, drawn from what you wrote: inputs on the left, outputs on the right, parts in between.
-"""
-
-[[step]]
-id = "toggle"
-level = "Hello"
-anchor = "pin:a"
-until = "toggle"
-text = """
-Click an input to flip it between 0 and 1. Green wires carry a 1, grey wires a 0.
+Then press Ctrl+S.
 """
 
 [[step]]
@@ -70,16 +112,16 @@ level = "Hello"
 anchor = "pin:out"
 until = "next"
 text = """
-The output follows the table in the brief: it is 0 only when a and b are both 1. Try all four combinations.
+Now the output is computed: click a and b and watch it. It is 0 only when a and b are both 1, as in the brief.
 """
 
 [[step]]
-id = "run"
+id = "run_hello"
 level = "Hello"
 anchor = "run_button"
 until = "solved"
 text = """
-When the chip looks right, run the level's tests (or press Ctrl+Enter). They try every row of the table.
+Run the tests to solve the level.
 """
 
 [[step]]
@@ -88,7 +130,7 @@ level = "Hello"
 anchor = "level:Not"
 until = "open_level:Not"
 text = """
-Level solved! Solved levels get a ✓. Now open Not, the first real gate.
+Solved! Now open Not, the first real gate.
 """
 
 [[step]]

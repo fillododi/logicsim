@@ -23,7 +23,9 @@ git clone https://github.com/fillododi/logicsim && cd logicsim
 uv run nandsim gui
 ```
 
-A new game opens **Hello**, the tutorial level. Guide bubbles walk you through it: each one
+A new game opens the two tutorial levels: **Wire**, which connects an input straight to an
+output (`out = in;`), then **Hello**, your first part, a Nand. Guide bubbles walk you through
+them: each one
 points at a part of the screen and moves on when you do what it says. Skip the tour from any
 bubble, and press **F1** to replay it.
 

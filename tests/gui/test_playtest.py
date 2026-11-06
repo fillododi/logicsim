@@ -83,7 +83,7 @@ def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
 
     # A fresh game opens the tutorial; this player skips it and opens Not, which shows its
     # starting text and no error shouted at the player.
-    assert app.game.current.name == "Hello"
+    assert app.game.current.name == "Wire"
     click_level(app, "Not")
     assert app.game.current.name == "Not"
     app.render(pygame.Surface(app.size))

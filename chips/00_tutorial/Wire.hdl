@@ -1,0 +1,7 @@
+// Wire: Outputs exactly what comes in.
+// You may use: no parts, only a connection
+CHIP Wire {
+    IN in;
+    OUT out;
+    PARTS:
+}
