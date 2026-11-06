@@ -218,9 +218,9 @@ class GameApp(ViewerApp):
             for line in _wrap(item, cols):
                 if y + font.get_linesize() > r.bottom - 4:
                     return
-                is_unlock = item.startswith("Unlocked")
+                accent = item.startswith(("Unlocked", "Tip:"))
                 surf.blit(
-                    font.render(line, True, theme.ACCENT if is_unlock else theme.TEXT),
+                    font.render(line, True, theme.ACCENT if accent else theme.TEXT),
                     (r.x + 12, y),
                 )
                 y += font.get_linesize()

@@ -9,6 +9,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 ### Added
 - **Tutorial level, Hello:** a new first level, solved with a single Nand line, that introduces
   pins, parts and the editor. Not is still open from the start, so you can skip it.
+- **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
+  missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
+  them, under the error and in the test results.
 
 ### Changed
 - On start, the game opens the first open level after the furthest one you solved, so skipping

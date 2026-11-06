@@ -20,6 +20,7 @@ from nandsim.gui.editor import EditorError, EditorWidget
 from nandsim.gui.model import breadcrumbs
 from nandsim.gui.session import ChipSession, FileWatcher
 from nandsim.gui.textbuffer import Pos, TextBuffer
+from nandsim.gui.tips import tip_for
 from nandsim.hdl import HdlError
 
 HEADER = 36
@@ -338,7 +339,8 @@ class ViewerApp:
                 if self.session.snapshot is not None
                 else "(the circuit appears once the chip compiles)"
             )
-            lines = _short_error(err).splitlines() + [note]
+            tip = tip_for(err.message)
+            lines = _short_error(err).splitlines() + ([f"Tip: {tip}"] if tip else []) + [note]
             height = 10 + len(lines) * (font.get_linesize())
             top = h - FOOTER - height
             left = self.left_width

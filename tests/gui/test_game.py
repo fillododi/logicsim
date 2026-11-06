@@ -46,6 +46,9 @@ def test_empty_stub_does_not_build(game: GameState) -> None:
     r = game.run_tests(game.text())
     assert not r.passed and r.summary == "Doesn't build"
     assert r.lines[0].endswith("output pin 'out' of Not is not connected")
+    assert r.lines[1] == (
+        "Tip: Every OUT pin needs a driver: end a part with out=out, or write out = <signal>;"
+    )
 
 
 def test_wrong_solution_lists_failing_rows(game: GameState) -> None:
