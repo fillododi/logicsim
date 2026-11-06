@@ -417,3 +417,23 @@ Ambiguous spec points and the option chosen. Newest last.
 - Smaller rows: only delays the problem.
 
 **Consequences:** two open groups of many levels can still fill the sidebar (Buses alone has 13); if a later milestone makes that happen, the list may need a maximum height too. Tests that click levels must open a closed group first, as `test_tour_playtest.click_level` does.
+
+## 2026-11-06 — Typing a value for an input pin
+**Context:** clicking a bus input counts up (right-click down) by one. Milestone 5 brings 12-bit buses, where reaching a value can take up to 4095 clicks.
+
+**Decision:**
+- **Opening:** with the circuit focused (not the editor) and the mouse over an input of the top chip, **Enter** opens an empty field, and so does typing a digit or `-`, which also becomes the field's first character (it arrives as the TEXTINPUT that follows the KEYDOWN). It works on 1-bit pins too.
+- **Syntax and errors** are those of `.tst` values (`13`, `-1`, `0b1101`, `0x0D`), through `testing.parse_pin_value`, so the messages match: `16 does not fit in 4-bit pin 'a'`. `*` is not a value here. Characters that can't be in a value are dropped as they are typed.
+- **Enter** sets the pin and closes the field; on an error the field stays open and shows the message until the player types again. Enter on an empty field just closes it. **Esc** cancels, before the game's pause menu; **a click anywhere** cancels and still does what it would. Ctrl+Backspace clears.
+- **While the field is open, every key goes to it**, so `x`, `b` and `h` are typed rather than firing X (undefined) or H (hex/dec).
+- **A typed value counts as a toggle**: same sound, and tour steps waiting for a toggle accept it.
+- The field sits just under its pin, at a fixed size whatever the zoom, kept inside the canvas. It closes if its pin disappears (a rebuild, or navigating into a part).
+- The state is the pygame-free `gui/valuefield.ValueField`; `ViewerApp` draws and routes it, so the developer viewer has it too.
+
+**Alternatives:**
+- Clicking single bits of a bus: needs per-bit drawing on the pin, and is still slow for 12 bits.
+- The pause menu's text-field dialog: hides the circuit while typing, and the developer viewer has no menus.
+- Mouse wheel with a step: still slow, and the wheel already zooms.
+- Prefilling the field with the current value: a value is usually replaced, not edited; an empty field is simpler.
+
+**Consequences:** `testing` exports `parse_pin_value`. The help line and README list the new control.

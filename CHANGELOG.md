@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+### Added
+- **Type a value into an input.** Point at an input on the circuit and press **Enter**, or
+  just start typing a number: `13`, `-1`, `0b1101` or `0x0D`, as in test files. **Enter**
+  sets it and **Esc** cancels. Much quicker than clicking a 12-bit bus up to the value you
+  want.
+
 ### Changed
 - **Level groups fold up.** The level list shows your current group and the next one with a
   level to play; the others fold into one line with a count of solved levels, like
