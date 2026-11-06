@@ -274,3 +274,13 @@ Ambiguous spec points and the option chosen. Newest last.
 - A separate tutorial level just for wires: rejected. And already needs exactly this, so it teaches by doing.
 
 **Consequences:** the tour has 19 steps. `wire` joins the anchor list in `chips/tutorial.toml` and `tutorial.ANCHORS`.
+
+## 2026-11-06 — The player's goal: a CPU, then a whole computer
+**Context:** the user set the game's overall aim. The milestones so far end with a single-cycle CPU (milestone 7) running a hand-assembled program, but nothing said where the game itself goes after that.
+
+**Decision:** the player's aim is to build first a working CPU, and then a whole computer around it. What "a whole computer" includes (memory map, I/O, display, keyboard, storage, and so on) will be defined later, as its own milestones.
+
+**Alternatives:**
+- Stop the game at the CPU and leave the rest to the later projects (emulator, OS…): not chosen. The user wants the game to carry on to a complete machine.
+
+**Consequences:** level and milestone design should keep the CPU reusable as a part of a larger machine (clean interfaces to instruction ROM, data RAM and future I/O), so the computer levels can be added without reworking it. The scope of the computer stage is still open and needs its own decision before work starts.
