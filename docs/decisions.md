@@ -129,3 +129,23 @@ Ambiguous spec points and the option chosen. Newest last.
 **Alternatives:** compiling on every keystroke (rejected: noisy while code is half-written); tabs for indentation (rejected: spaces keep columns predictable for error positions); an external editor (rejected: contradicts the game model).
 
 **Consequences:** the game PR reuses `EditorWidget` unchanged, with the save handler writing to the player's save dir instead of the opened file.
+
+## 2026-11-06 — Game screen rules
+**Context:** the game screen ties the level list, the editor, the circuit and the tests together. A few behaviours needed choosing.
+**Decision:**
+- **Layout:**
+  - left sidebar (260 px): levels grouped by folder, then the brief;
+  - centre: the circuit;
+  - right: the editor, with a results panel holding a Run tests button.
+- **Keys:** Ctrl+S saves and builds the circuit. Run tests (button or Ctrl+Enter) saves, then runs the level's `.tst` against the player's own chips.
+- **Switching level:** unsaved text is saved to the level it belongs to before the switch.
+- **Locked levels:** they can't be opened. Clicking one explains which chips to solve first.
+- **Build errors:** hidden until the player has saved or run that level once (or already has a save for it), so a fresh level doesn't open with an error.
+- **Results wording:** "Doesn't build" with the error; "N of M checks failed" with up to 12 failing rows (test line, pin, expected, got, inputs); or "All N checks passed — level solved!" with the levels it unlocked.
+
+**Alternatives:**
+- run tests on every save (rejected: noisy while experimenting);
+- ask before switching with unsaved text (rejected: a dialog for something saving solves silently);
+- open locked levels read-only (rejected: confusing about what can be done).
+
+**Consequences:** the playtest test drives this whole loop with real events, and stays the regression check for future GUI changes.

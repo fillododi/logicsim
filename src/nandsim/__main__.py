@@ -15,7 +15,7 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nandsim", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    gui = sub.add_parser("gui", help="open a chip in the circuit viewer")
+    gui = sub.add_parser("gui", help="play the game (or, with a file, edit and view one chip)")
     gui.add_argument("file", nargs="?", type=Path, help=".hdl file to view (developer mode)")
     gui.add_argument(
         "--search",
@@ -77,17 +77,14 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "test":
         return cmd_test(args)
+    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")  # no banner in the terminal
     if args.file is None:
-        print(
-            "nandsim gui: the level select arrives later in milestone 2; "
-            "for now open a chip file, e.g. nandsim gui reference/01_gates/Mux.hdl",
-            file=sys.stderr,
-        )
-        return 2
+        from nandsim.gui.game_app import open_game  # pygame is imported only for the GUI
+
+        return open_game(args.save_dir)
     if not args.file.is_file():
         print(f"nandsim gui: no such file: {args.file}", file=sys.stderr)
         return 1
-    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")  # no banner in the terminal
     from nandsim.gui.app import open_viewer  # pygame is imported only for the GUI
 
     return open_viewer(args.file, args.search, edit=not args.no_edit)
