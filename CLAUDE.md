@@ -96,7 +96,7 @@ CHIP Xor {
 
 - **Combinational logic:** the netlist is flattened down to primitives and levelized (topological order). A combinational loop that does not pass through a DFF is an error, and the message names the involved pins.
 - **Sequential logic:** one global clock. `DFF`: `out(t) = in(t-1)`. Each cycle has two phases, tick and tock, as in nand2tetris.
-- **Performance:** evaluate level by level with vectorized numpy operations over flat arrays, rather than a Python object per gate. Profile before optimizing. Report in the journal the simulated clock speed reached by the final CPU, next to the real 4004's 740 kHz clock (one instruction cycle every 8 clocks).
+- **Performance:** evaluate level by level with vectorized numpy operations over flat arrays, rather than a Python object per gate. Profile before optimizing. Report in the journal the simulated clock speed reached by the final CPU, next to the real 4004's rate of about 92.5 k instruction cycles per second (a 740 kHz clock, 8 clocks per instruction cycle). One simulated cycle is one instruction cycle, so compare against that rate, not the raw clock.
 - Inner wire values must stay inspectable, because the GUI shows them.
 
 ## Tests (.tst)
