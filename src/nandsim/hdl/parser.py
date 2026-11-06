@@ -50,7 +50,8 @@ class _Parser:
     # CHIP Name { IN ...; OUT ...; PARTS: ... }
     def chip(self) -> ChipDef:
         start = self.expect("CHIP", "'CHIP'")
-        name = self.ident("a chip name").text
+        name_tok = self.ident("a chip name")
+        name = name_tok.text
         self.expect("{")
         inputs: list[PinDecl] = []
         outputs: list[PinDecl] = []
@@ -78,7 +79,15 @@ class _Parser:
             raise HdlError(
                 f"unexpected {self.tok.describe()} after the end of the chip", self.tok.pos
             )
-        return ChipDef(name, tuple(inputs), tuple(outputs), tuple(parts), start.pos, tuple(assigns))
+        return ChipDef(
+            name,
+            tuple(inputs),
+            tuple(outputs),
+            tuple(parts),
+            start.pos,
+            tuple(assigns),
+            name_tok.pos,
+        )
 
     def pin_decls(self, seen: dict[str, PinDecl]) -> list[PinDecl]:
         decls: list[PinDecl] = []

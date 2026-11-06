@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from nandsim.hdl import HdlError
-from nandsim.testing import Impl, parse_tst, run_tst
+from nandsim.testing import Impl, exported_chips, load_levels, parse_tst, run_tst
 from nandsim.testing.tst import EvalStep, ExpectStep, SetStep
 
 NOT_STUB = "CHIP Not { IN in; OUT out; PARTS: }"
@@ -183,3 +183,42 @@ def test_dont_care_counts_but_never_fails(root: Path, tmp_path: Path) -> None:
     tst.write_text("chip Not\nexpect out *\n")
     r = run_tst(tst, Impl("reference"), root)
     assert r.passed and r.checks == 1
+
+
+BUF = "CHIP Buf { IN in; OUT out; PARTS: Nand(a=in, b=in, out=n); Nand(a=n, b=n, out=out); }"
+
+
+def test_exported_chips_are_allowed_in_any_level(root: Path, tmp_path: Path) -> None:
+    exports = tmp_path / "save-exports"
+    exports.mkdir()
+    (exports / "Buf.hdl").write_text(BUF)
+    impl = save(tmp_path, "CHIP Not { IN in; OUT out; PARTS: Buf(in=in, out=b);"
+                          " Nand(a=b, b=b, out=out); }")  # fmt: skip
+    assert impl.exported(root) == ["Buf"]
+    r = run_tst(root / "chips" / "g" / "Not.tst", impl, root)
+    assert r.passed, r.error
+    # The reference never sees the player's exports.
+    assert Impl("reference").exported(root) == []
+
+
+def test_not_allowed_message_lists_exported_chips(root: Path, tmp_path: Path) -> None:
+    exports = tmp_path / "save-exports"
+    exports.mkdir()
+    (exports / "Buf.hdl").write_text(BUF)
+    impl = save(tmp_path, "CHIP Not { IN in; OUT out; PARTS: Or(a=in, b=in, out=out); }")
+    r = run_tst(root / "chips" / "g" / "Not.tst", impl, root)
+    assert r.error is not None
+    assert r.error.message == "'Or' is not allowed in this level; Not may use: Nand, Buf"
+
+
+def test_exported_chips_skip_names_that_cannot_be_their_own_chip(
+    root: Path, tmp_path: Path
+) -> None:
+    exports = tmp_path / "x"
+    exports.mkdir()
+    for name in ["Buf", "aBuf", "Not", "Nand", "DFF", "PARTS", "true", "2Fast", "My-Chip"]:
+        (exports / f"{name}.hdl").write_text("")
+    (exports / "notes.txt").write_text("")
+    (exports / "Sub.hdl").mkdir()
+    assert exported_chips(exports, load_levels(root)) == ["aBuf", "Buf"]
+    assert exported_chips(tmp_path / "missing", load_levels(root)) == []

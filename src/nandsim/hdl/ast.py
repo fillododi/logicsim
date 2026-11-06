@@ -100,6 +100,7 @@ class ChipDef:
     parts: tuple[Part, ...]
     pos: SourcePos
     assigns: tuple[Assign, ...] = ()
+    name_pos: SourcePos | None = None  # where the name after CHIP is written
 
     def pin(self, name: str) -> PinDecl | None:
         for p in self.inputs + self.outputs:

@@ -23,6 +23,8 @@ CHIP Xor {
 def test_parse_xor() -> None:
     chip = parse(XOR, "Xor.hdl")
     assert chip.name == "Xor"
+    assert (chip.pos.line, chip.pos.col) == (2, 1)
+    assert chip.name_pos is not None and (chip.name_pos.line, chip.name_pos.col) == (2, 6)
     assert [p.name for p in chip.inputs] == ["a", "b"]
     assert [p.name for p in chip.outputs] == ["out"]
     assert len(chip.parts) == 4

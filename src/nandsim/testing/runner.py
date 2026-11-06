@@ -1,7 +1,8 @@
 """Runs a `.tst` script against an implementation: the hidden reference or a player save.
 
 Before simulating, the runner enforces the level's rules: the implementation must
-keep the stub's interface, and its parts must be among those the level allows.
+keep the stub's interface, and its parts must be among those the level allows or
+the player's exported chips.
 """
 
 from __future__ import annotations
@@ -12,9 +13,9 @@ from typing import Literal
 
 from nandsim.hdl import ChipDef, HdlError, SourcePos, parse
 from nandsim.netlist import ChipLibrary, Primitive, elaborate
-from nandsim.paths import data_root, default_save_dir
+from nandsim.paths import data_root, default_save_dir, exports_dir
 from nandsim.sim import Simulator
-from nandsim.testing.levels import Level, find_level
+from nandsim.testing.levels import Level, exported_chips, find_level, load_levels
 from nandsim.testing.tst import EvalStep, ExpectStep, SetStep, TstScript, Value, parse_tst
 
 
@@ -31,7 +32,15 @@ class Impl:
         return self.save_dir or default_save_dir()
 
     def library(self, root: Path | None = None) -> ChipLibrary:
-        return ChipLibrary([self.directory(root)])
+        """The reference chips, or the player's saves followed by their exported chips."""
+        d = self.directory(root)
+        return ChipLibrary([d] if self.kind == "reference" else [d, exports_dir(d)])
+
+    def exported(self, root: Path | None = None) -> list[str]:
+        """The player's exported chips, which every level may use; none for the reference."""
+        if self.kind == "reference":
+            return []
+        return exported_chips(exports_dir(self.directory(root)), load_levels(root))
 
 
 @dataclass(frozen=True)
@@ -64,18 +73,25 @@ def run_tst(path: Path, impl: Impl, root: Path | None = None) -> TstResult:
         return TstResult(str(path), "?", error=e)
     level = find_level(script.chip, root)
     where = str(impl.directory(root))
-    return run_script(script, impl.library(root), level, where)
+    return run_script(script, impl.library(root), level, where, impl.exported(root))
 
 
 def run_script(
-    script: TstScript, lib: ChipLibrary, level: Level | None, where: str = "the library"
+    script: TstScript,
+    lib: ChipLibrary,
+    level: Level | None,
+    where: str = "the library",
+    exported: list[str] | None = None,
 ) -> TstResult:
-    """Run a parsed script with chips from `lib`, enforcing `level`'s rules if given."""
+    """Run a parsed script with chips from `lib`, enforcing `level`'s rules if given.
+
+    `exported` names the player's exported chips, allowed in any level besides its parts.
+    """
     result = TstResult(script.file, script.chip)
     try:
         top = _resolve_top(script, lib, where)
         if level is not None:
-            _check_level(top, level)
+            _check_level(top, level, exported or [])
         sim = Simulator(elaborate(top, lib))
         _run_steps(script, sim, result)
     except HdlError as e:
@@ -99,7 +115,7 @@ def _signature(chip: ChipDef) -> str:
     return f"IN {pins(chip.inputs)}; OUT {pins(chip.outputs)}"
 
 
-def _check_level(top: ChipDef, level: Level) -> None:
+def _check_level(top: ChipDef, level: Level, exported: list[str]) -> None:
     stub = parse(level.stub.read_text(), str(level.stub))
     if _signature(top) != _signature(stub):
         raise HdlError(
@@ -107,12 +123,12 @@ def _check_level(top: ChipDef, level: Level) -> None:
             f"but declares {_signature(top)}",
             top.pos,
         )
-    allowed = set(level.parts)
+    allowed = [*level.parts, *(n for n in exported if n not in level.parts)]
     for part in top.parts:
         if part.chip not in allowed:
             raise HdlError(
                 f"'{part.chip}' is not allowed in this level; {top.name} may use: "
-                f"{', '.join(level.parts)}",
+                f"{', '.join(allowed)}",
                 part.pos,
             )
 

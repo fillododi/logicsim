@@ -41,7 +41,8 @@ CASES = [
     ),
     (
         build_error("And(a=in, b=in, out=out);"),
-        "Only the parts listed in the brief can be used here. Names are case-sensitive.",
+        "Only the parts in the brief and your exported chips can be used here. "
+        "Names are case-sensitive.",
     ),
     (
         build_error("Nand(a=in, b=x, out=out);"),

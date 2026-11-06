@@ -1,12 +1,23 @@
-"""The level list: `chips/levels.toml`, in unlock order, with the parts each level may use."""
+"""The level list: `chips/levels.toml`, in unlock order, with the parts each level may use.
+
+Besides the parts a level lists, every level may use the chips the player exported
+(see `exported_chips`): they are the player's own building blocks, made of parts
+they have already unlocked.
+"""
 
 from __future__ import annotations
 
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
+from nandsim.netlist import PRIMITIVES
 from nandsim.paths import data_root
+
+CHIP_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+KEYWORDS = frozenset({"CHIP", "IN", "OUT", "PARTS", "true", "false"})
+RESERVED = frozenset({"Nand", "DFF"})  # the primitives, DFF included before it lands
 
 
 @dataclass(frozen=True)
@@ -48,3 +59,20 @@ def load_levels(root: Path | None = None) -> list[Level]:
 
 def find_level(name: str, root: Path | None = None) -> Level | None:
     return next((lv for lv in load_levels(root) if lv.name == name), None)
+
+
+def exported_chips(directory: Path, levels: list[Level]) -> list[str]:
+    """Names of the player's exported chips: `<Name>.hdl` files directly in `directory`.
+
+    A file whose name couldn't be a chip of its own (not an identifier, a keyword, a
+    primitive or a level's chip) is left out, so it can never stand in for a level.
+    """
+    if not directory.is_dir():
+        return []
+    taken = {lv.name for lv in levels} | set(PRIMITIVES) | RESERVED | KEYWORDS
+    names = [
+        p.stem
+        for p in directory.iterdir()
+        if p.suffix == ".hdl" and p.is_file() and CHIP_NAME.fullmatch(p.stem)
+    ]
+    return sorted((n for n in names if n not in taken), key=str.lower)

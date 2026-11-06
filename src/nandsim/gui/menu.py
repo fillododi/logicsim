@@ -1,13 +1,16 @@
 """Overlay menus: the title screen, the Esc pause menu and confirmation dialogs.
 
-A `Menu` is a title, an optional message and a column of buttons. It takes pygame
-events and answers with the chosen item's action, or "back" on Esc; the host
-decides what the actions mean. Up/Down (or Tab) move the selection, Enter or
-Space choose, and the mouse hovers and clicks.
+A `Menu` is a title, an optional message, an optional one-line text field and a
+column of buttons. It takes pygame events and answers with the chosen item's
+action, or "back" on Esc; the host decides what the actions mean. Up/Down (or
+Tab) move the selection, Enter or Space choose, and the mouse hovers and clicks.
+With a text field, typing edits the field (Backspace deletes, Ctrl+Backspace
+clears) and Space no longer chooses.
 """
 
 from __future__ import annotations
 
+import re
 import textwrap
 from dataclasses import dataclass, field
 
@@ -16,6 +19,8 @@ import pygame
 from nandsim.gui import theme
 
 BUTTON_H = 40
+FIELD_H = 36
+FIELD_MAX = 40  # characters
 PANEL_W = 380
 PAD = 24
 
@@ -37,11 +42,16 @@ class Menu:
     message: str = ""
     selected: int = 0
     big_title: bool = False  # the title screen's name, larger than a dialog's title
+    text: str | None = None  # the text field's contents; None: no field
+    allowed: str = r"\S"  # regex for one character the field accepts
+    error: str = ""  # shown under the field, in the error colour
     rects: list[pygame.Rect] = field(default_factory=list)  # buttons, as last drawn
     panel: pygame.Rect = field(default_factory=lambda: pygame.Rect(0, 0, 0, 0))
 
     def handle(self, ev: pygame.event.Event) -> str | None:
         """The action chosen by this event, BACK for Esc, or None."""
+        if self.text is not None and self._edit(ev):
+            return None
         if ev.type == pygame.KEYDOWN:
             if ev.key == pygame.K_ESCAPE:
                 return BACK
@@ -61,6 +71,22 @@ class Menu:
                 return self.items[i].action
         return None
 
+    def _edit(self, ev: pygame.event.Event) -> bool:
+        """Typing into the text field; True if the event was used for it."""
+        assert self.text is not None
+        if ev.type == pygame.TEXTINPUT:
+            keep = "".join(c for c in ev.text if re.fullmatch(self.allowed, c))
+            self.text = (self.text + keep)[:FIELD_MAX]
+            self.error = ""
+            return True
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_BACKSPACE:
+            ctrl = getattr(ev, "mod", 0) & pygame.KMOD_CTRL
+            self.text = "" if ctrl else self.text[:-1]
+            self.error = ""
+            return True
+        # Space would type nothing (names have no spaces) and must not press a button.
+        return ev.type == pygame.KEYDOWN and ev.key == pygame.K_SPACE
+
     def _at(self, pos: tuple[int, int]) -> int | None:
         return next((i for i, r in enumerate(self.rects) if r.collidepoint(pos)), None)
 
@@ -73,10 +99,15 @@ class Menu:
         cols = max(16, (width - 2 * PAD) // text_font.size("M")[0])
         paras = self.message.split("\n") if self.message else []
         message = [ln for para in paras for ln in textwrap.wrap(para, cols) or [""]]
+        errors = textwrap.wrap(self.error, cols) if self.error else []
+        field_h = 0
+        if self.text is not None:
+            field_h = 8 + FIELD_H + 6 + len(errors) * text_font.get_linesize()
         height = (
             PAD
             + title_font.get_linesize()
             + (len(message) * text_font.get_linesize() + 12 if message else 0)
+            + field_h
             + 12
             + len(self.items) * (BUTTON_H + 10)
             + PAD
@@ -96,6 +127,24 @@ class Menu:
                 surf.blit(text_font.render(line, True, theme.TEXT_DIM), (self.panel.x + PAD, y))
                 y += text_font.get_linesize()
             y += 8
+        if self.text is not None:
+            y += 8
+            box = pygame.Rect(self.panel.x + PAD, y, width - 2 * PAD, FIELD_H)
+            pygame.draw.rect(surf, theme.BG, box, border_radius=6)
+            edge = theme.ERROR_TEXT if self.error else theme.ACCENT
+            pygame.draw.rect(surf, edge, box, width=2, border_radius=6)
+            font = fonts.get(16)
+            t = font.render(self.text, True, theme.TEXT)
+            tx, ty = box.x + 10, box.centery - t.get_height() // 2
+            surf.blit(t, (tx, ty))
+            caret_x = tx + t.get_width() + 1
+            pygame.draw.line(
+                surf, theme.TEXT, (caret_x, ty + 2), (caret_x, ty + t.get_height() - 2)
+            )
+            y = box.bottom + 6
+            for line in errors:
+                surf.blit(text_font.render(line, True, theme.ERROR_TEXT), (self.panel.x + PAD, y))
+                y += text_font.get_linesize()
         y += 12
         self.rects = []
         for i, item in enumerate(self.items):
