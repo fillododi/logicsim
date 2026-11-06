@@ -8,6 +8,7 @@ exactly as a player would. `run()` is the real event loop around those two.
 from __future__ import annotations
 
 import os
+import textwrap
 import time
 from pathlib import Path
 
@@ -351,10 +352,12 @@ class ViewerApp:
                 else "(the circuit appears once the chip compiles)"
             )
             tip = tip_for(err.message)
-            lines = _short_error(err).splitlines() + ([f"Tip: {tip}"] if tip else []) + [note]
+            left = self.left_width
+            cols = max(20, (w - self.editor_width - left - 24) // font.size("M")[0])
+            raw = _short_error(err).splitlines() + ([f"Tip: {tip}"] if tip else []) + [note]
+            lines = [part for line in raw for part in textwrap.wrap(line, cols) or [""]]
             height = 10 + len(lines) * (font.get_linesize())
             top = h - FOOTER - height
-            left = self.left_width
             pygame.draw.rect(
                 surf, theme.ERROR_BG, (left, top, w - self.editor_width - left, height)
             )
