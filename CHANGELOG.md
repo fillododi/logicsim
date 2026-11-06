@@ -6,6 +6,18 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 6 = `0.6.0`).
 
 ## [Unreleased]
 
+### Added
+- **Circuit viewer:** `nandsim gui path/to/Chip.hdl` draws a chip from its HDL, with no
+  positions to write.
+  - Wires are coloured by value: 0, 1 or undefined. Buses show their value; `H` switches between
+    hex and decimal, and hovering any wire shows its value.
+  - Click an input to toggle it. On a bus, click counts up and right-click counts down. `X` makes
+    an input undefined, so you can see how undefined values spread (or don't).
+  - Click a part to open its inside, and use the breadcrumbs or Backspace to go back up.
+  - Zoom with the mouse wheel, drag to pan, and press `F` to fit.
+  - Saving the file, or any chip next to it, reloads the view. Mistakes show as a banner with
+    their line and column while the last working circuit stays on screen.
+
 ## [0.1.0] — 2026-11-06
 
 Milestone 1: the core. There is no GUI yet; chips are tested from the command line.
