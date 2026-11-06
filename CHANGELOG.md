@@ -13,6 +13,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   it, after telling you which of your chips use it. They are saved in
   `~/.local/share/nandsim/save-exports/`, where you can keep or share them. A game reset clears
   them too. Deleted chips aren't lost: like a reset, they move to the backups folder.
+- **Sound:** clicks when you toggle an input, a buzz for a build error, a chime when the tests
+  pass, a low tone when they fail, a little fanfare when you solve a level, and ticks and blips
+  in the menus. *Sound: On/Off* and *Volume* are in the Esc menu and on the title screen, and
+  the game remembers them, even after a reset. No audio device? The game simply plays silently.
 
 ### Changed
 - **New goal: the Intel 4004.** The game now ends with the first commercial microprocessor

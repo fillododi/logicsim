@@ -52,6 +52,11 @@ copied there, whose `CHIP` name matches the file name, becomes one of your chips
 to one to delete it. A deleted chip, and all of them on a reset, move to
 `~/.local/share/nandsim/save-backups/<date and time>/exports/`.
 
+The game has sound effects. Turn them off with **Sound: On/Off**, or step the volume with
+**Volume**, on the title screen or in the Esc menu. The choice is kept in
+`~/.local/share/nandsim/save-settings.json`, so a reset doesn't change it. Without an audio
+device the game runs silently.
+
 ### Controls
 
 | | |
