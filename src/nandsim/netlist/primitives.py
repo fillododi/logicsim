@@ -1,7 +1,7 @@
 """The primitive table: chips implemented by the engine itself rather than in HDL.
 
 Elaboration and the engine look primitives up here instead of hard-wiring Nand,
-so DFF (milestone 6) and Python builtins can be added as new rows.
+so DFF (milestone 7) and Python builtins can be added as new rows.
 """
 
 from __future__ import annotations

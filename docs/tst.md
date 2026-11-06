@@ -30,7 +30,7 @@ expect out 1
 | `eval` | Propagates the inputs through the chip. |
 | `expect <pin> <value>` | Checks an output (or input) pin. Each `expect`, and each output in a table row, is one check. |
 
-`tick` and `tock`, for sequential chips, arrive in milestone 6.
+`tick` and `tock`, for sequential chips, arrive in milestone 7.
 
 ## Values
 
