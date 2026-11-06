@@ -103,6 +103,10 @@ class ViewerApp:
         return x <= pos[0] < x + w and y <= pos[1] < y + h
 
     @property
+    def help_text(self) -> str:
+        return EDITOR_HELP if self.editing else HELP
+
+    @property
     def editing(self) -> bool:
         return self.editor is not None and self.editor.focused
 
@@ -178,6 +182,9 @@ class ViewerApp:
             self.on_editor_action(action)
         return True
 
+    def on_action(self, name: str) -> None:
+        """Hook for circuit actions ("toggle", "open_part", "up"); the game's tour listens."""
+
     def on_editor_action(self, action: str) -> None:
         """Editor shortcuts the host handles: "save" (Ctrl+S), "run" (Ctrl+Enter)."""
         if action == "save":
@@ -232,15 +239,18 @@ class ViewerApp:
         kind, ident = key
         if kind == "in" and self.session.at_top:
             self.session.toggle(str(ident), -1 if right else 1)
+            self.on_action("toggle")
         elif kind == "part" and not right:
             if self.session.open(snap.view.part(int(ident))):
                 self.fit()
+                self.on_action("open_part")
         self._update_hover()
 
     def _key(self, key: int) -> None:
         if key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
             if self.session.up():
                 self.fit()
+                self.on_action("up")
         elif key == pygame.K_f:
             self.fit()
         elif key == pygame.K_h:
@@ -253,6 +263,7 @@ class ViewerApp:
         if path != self.session.path:
             self.session.goto(path)
             self.fit()
+            self.on_action("up")  # breadcrumbs only lead to ancestors
 
     def _update_hover(self) -> None:
         snap = self.session.snapshot
@@ -351,7 +362,7 @@ class ViewerApp:
                 t = font.render(line, True, theme.ERROR_TEXT)
                 surf.blit(t, (left + 12, top + 5 + i * font.get_linesize()))
         pygame.draw.rect(surf, theme.PANEL, (0, h - FOOTER, w, FOOTER))
-        t = self.fonts.get(12).render(EDITOR_HELP if self.editing else HELP, True, theme.TEXT_DIM)
+        t = self.fonts.get(12).render(self.help_text, True, theme.TEXT_DIM)
         surf.blit(t, (12, h - FOOTER + (FOOTER - t.get_height()) // 2))
 
     def _draw_tooltip(self, surf: pygame.Surface) -> None:

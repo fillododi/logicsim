@@ -195,3 +195,21 @@ Ambiguous spec points and the option chosen. Newest last.
 - Name the chip after what it does (it is a Nand): rejected, because `Nand` is the primitive's name and a second name for the same gate adds nothing. "Hello" says what the level is for.
 
 **Consequences:** `levels.toml` starts with `Hello`. `test_levels_exist` now checks seven names.
+
+## 2026-11-06 — Guided tour: data, anchors, events and progress
+**Context:** milestone 3 asks for guide bubbles anchored to UI elements, written as data in `chips/tutorial.toml`. They should advance when the player does what they explain, can be skipped and replayed with F1, and remember what was seen in `tutorial.json`.
+
+**Decision:**
+- **One linear tour.** It is a list of `[[step]]` entries with `id`, `text`, `anchor`, `until` and an optional `level`. One bubble shows at a time. A step tied to a level only shows, and only listens, while that level is open, so the tour can continue in Not and And.
+- **Anchors** are named UI regions resolved to screen rectangles each frame: `levels`, `level:<Name>`, `brief`, `editor`, `line:<text>` (the first editor line containing the text), `canvas`, `pin:<name>`, `part` (the first part that opens, else any part), `header`, `run_button`, `results` and `footer`. A pin or part that isn't drawn falls back to the canvas. For `line:` anchors the bubble keeps the whole editor row clear, since the player is about to type there.
+- **Events** are player actions the game reports: `next` (the bubble's button), `save`, `build_ok`, `toggle`, `open_part`, `up`, `run_tests`, `solved` and `open_level[:<Name>]`. Ctrl+Enter counts as a build too, so a player who skips Ctrl+S isn't stuck.
+- **Progress:** `tutorial.json` (`version`, `seen`, `skipped`) sits next to the saves. The tour resumes at the first unseen step. Skip hides it. F1 clears it and opens the first step's level. An unreadable file is set aside as `.json.bad`, as `progress.json` is.
+- **Validation:** loading checks the ids, anchors and events and names the offending step. A test also checks that the levels named in the data exist.
+- **Bubbles swallow clicks** that land on them, so a click on a bubble never reaches what lies under it.
+
+**Alternatives:**
+- Per-level tours that are independent of each other: rejected for now. A single sequence is simpler to write and to resume, and the `level` field covers what is needed.
+- Timed or "click anywhere" advancing: rejected, because the spec wants the player to do the thing.
+- Anchors as fixed coordinates: rejected, because they would break on resize and with the automatic layout.
+
+**Consequences:** new UI regions need a named anchor in `GameApp.anchor_rect` and `tutorial.ANCHORS`. `ViewerApp` gained an `on_action` hook (a no-op in the developer viewer).

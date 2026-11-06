@@ -9,6 +9,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 ### Added
 - **Tutorial level, Hello:** a new first level, solved with a single Nand line, that introduces
   pins, parts and the editor. Not is still open from the start, so you can skip it.
+- **Guided tour:** bubbles point at the level list, the brief, the editor, the circuit and the
+  Run tests button, and move on when you do what they explain. Skip it from any bubble, or press
+  **F1** to replay it. The tour remembers where you got to.
 - **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
   missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
   them, under the error and in the test results.

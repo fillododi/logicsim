@@ -39,7 +39,7 @@ level = "Hello"
 anchor = "line:PARTS:"
 until = "build_ok"
 text = """
-You build chips by writing HDL here. Parts go after PARTS:. Click at the end of that line, press Enter and type:
+You build chips by writing HDL here. Parts go under the PARTS: line. Click at the end of it, press Enter and type:
 
     Nand(a=a, b=b, out=out);
 

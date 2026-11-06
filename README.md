@@ -23,6 +23,10 @@ git clone https://github.com/fillododi/logicsim && cd logicsim
 uv run nandsim gui
 ```
 
+A new game opens **Hello**, the tutorial level. Guide bubbles walk you through it: each one
+points at a part of the screen and moves on when you do what it says. Skip the tour from any
+bubble, and press **F1** to replay it.
+
 Each level gives you:
 - **a brief:** what the chip does, its truth table and a hint;
 - **a starting text:** the chip's pins.
@@ -43,6 +47,7 @@ Your work is saved in `~/.local/share/nandsim/save/`. Pass `--save-dir` to use a
 | Click an input | toggle it. On a bus, click counts up and right-click counts down. |
 | `X` over an input | make it undefined (amber), to see how unknown values spread |
 | Click a part | open it and see its inside. The breadcrumbs or Backspace go back up. |
+| `F1` | replay the guided tour |
 | Mouse wheel, drag, `F` | zoom, pan, fit to the window |
 | `H` | show buses in hex or decimal |
 | Hover a wire | show its name and value |
