@@ -164,22 +164,33 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     assert step_id(app) == "replay"
     press_next(app)
 
-    # "open_part" waits for And: nothing shows in Not.
-    assert step_id(app) == "open_part" and shown(app) is None
+    # "wires" waits for And: nothing shows in Not.
+    assert step_id(app) == "wires" and shown(app) is None
     app.editor.clipboard.put(NOT)
     keydown(app, pygame.K_a, CTRL)
     keydown(app, pygame.K_v, CTRL)
     keydown(app, pygame.K_RETURN, CTRL)
     click_level(app, "And")
-    assert app.game.current.name == "And"
+    assert app.game.current.name == "And" and step_id(app) == "wires"
+    b = shown(app)
+    assert b is not None and app.anchor_rect("line:PARTS:") != app.editor_rect
+    app.screenshot(shots / "5-wires.png")
     app.editor.clipboard.put(AND)
     keydown(app, pygame.K_a, CTRL)
     keydown(app, pygame.K_v, CTRL)
     keydown(app, pygame.K_s, CTRL)
+    assert step_id(app) == "see_wire"
+    shown(app)
+    wire = app._wire_rect()
+    canvas = pygame.Rect(*(round(v) for v in app.canvas_area))
+    assert wire is not None and canvas.contains(wire) and app.anchor_rect("wire") == wire
+    app.screenshot(shots / "6-see-wire.png")
+    press_next(app)
+    assert step_id(app) == "open_part"
     shown(app)
     part = app.anchor_rect("part")
     assert part is not None
-    app.screenshot(shots / "5-open-part.png")
+    app.screenshot(shots / "7-open-part.png")
     click(app, part.center)  # the Not part, not the Nand
     assert app.session.path == "And/Not#2" and step_id(app) == "back_up"
     shown(app)

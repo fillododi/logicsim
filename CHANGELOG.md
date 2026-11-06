@@ -26,6 +26,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 - **Reset game:** start over from the first level, after a confirmation. Your old chips and
   progress aren't deleted: they move to a `save-backups/` folder next to your saves.
 
+- **Wires in the tour:** in the And level, the tour and the brief explain how to pass one
+  part's output into another through a wire of your own, then point at your wire on the
+  circuit.
+
 ### Changed
 - **Fewer wire crossings:** wires between two columns of parts are spread out so they cross
   each other much less; a 64-part test chip went from about 2500 crossings to under 1000.

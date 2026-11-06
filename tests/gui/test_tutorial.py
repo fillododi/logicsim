@@ -119,6 +119,15 @@ def test_paragraphs_and_code() -> None:
         ("Nand(a=a, b=b, out=out);", True),
         ("Then save.", False),
     ]
+    # Consecutive code lines are one block; a blank line still splits them.
+    text = "Wire:\n\n    Not(in=a, out=na);\n    Not(in=na, out=out);\nDone.\n\n    x\n\n    y"
+    assert paragraphs(text) == [
+        ("Wire:", False),
+        ("Not(in=a, out=na);\nNot(in=na, out=out);", True),
+        ("Done.", False),
+        ("x", True),
+        ("y", True),
+    ]
 
 
 def test_bubble_sits_beside_its_anchor() -> None:

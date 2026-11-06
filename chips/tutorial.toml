@@ -4,7 +4,8 @@
 #   level   optional: the step only shows (and waits) while this level is open
 #   anchor  what the bubble points at (see docs/decisions.md for the list):
 #             levels, level:<Name>, brief, editor, line:<text>, canvas,
-#             pin:<name>, part, header, run_button, results, footer
+#             pin:<name>, part, wire (the first part-to-part wire), header,
+#             run_button, results, footer
 #   until   the player action that completes the step:
 #             next (the bubble's Next button), save, build_ok, toggle,
 #             open_part, up, run_tests, solved, open_level, open_level:<Name>
@@ -154,12 +155,35 @@ Press F1 at any time to replay this tour.
 """
 
 [[step]]
+id = "wires"
+level = "And"
+anchor = "line:PARTS:"
+until = "build_ok"
+text = """
+And needs two parts in a row: the output of one becomes the input of the next. To connect them, give the first part's output a name of your own, a wire, and use that name as an input of the second part:
+
+    Not(in=a, out=na);
+    Not(in=na, out=out);
+
+Here the wire na carries the first Not's output into the second Not, so out is a again. Build your And with a wire like this, then press Ctrl+S.
+"""
+
+[[step]]
+id = "see_wire"
+level = "And"
+anchor = "wire"
+until = "next"
+text = """
+Your wire is drawn from one part to the other. Point at it to see its name and value: the whole wire lights up. Click a and b and watch the value pass through it.
+"""
+
+[[step]]
 id = "open_part"
 level = "And"
 anchor = "part"
 until = "open_part"
 text = """
-And can use your own Not as a part. Once your And builds, click a Not part to look inside it: it is the chip you wrote.
+Your And uses your own Not as a part. Click the Not to look inside it: it is the chip you wrote.
 """
 
 [[step]]

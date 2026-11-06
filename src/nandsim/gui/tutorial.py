@@ -29,7 +29,18 @@ TUTORIAL_VERSION = 1
 
 # Anchors a step may point at. "kind:arg" anchors take an argument.
 ANCHORS = frozenset(
-    {"levels", "brief", "editor", "canvas", "part", "header", "run_button", "results", "footer"}
+    {
+        "levels",
+        "brief",
+        "editor",
+        "canvas",
+        "part",
+        "wire",
+        "header",
+        "run_button",
+        "results",
+        "footer",
+    }
 )
 ANCHOR_KINDS = frozenset({"level", "line", "pin"})
 # Player actions the game reports. open_level may name the level: "open_level:Not".
@@ -194,23 +205,31 @@ def paragraphs(text: str) -> list[tuple[str, bool]]:
     """Split step text into (paragraph, is_code) blocks.
 
     Blank lines separate paragraphs, lines inside a paragraph are joined with
-    spaces, and a line indented by four spaces is a code block of its own.
+    spaces, and lines indented by four spaces form a code block. Consecutive code
+    lines stay one block, joined with newlines, so they are drawn without a gap.
     """
     blocks: list[tuple[str, bool]] = []
     para: list[str] = []
+    code: list[str] = []
 
     def flush() -> None:
         if para:
             blocks.append((" ".join(para), False))
             para.clear()
+        if code:
+            blocks.append(("\n".join(code), True))
+            code.clear()
 
     for line in text.splitlines():
         if line.startswith("    ") and line.strip():
-            flush()
-            blocks.append((line.strip(), True))
+            if para:
+                flush()
+            code.append(line.strip())
         elif not line.strip():
             flush()
         else:
+            if code:
+                flush()
             para.append(line.strip())
     flush()
     return blocks

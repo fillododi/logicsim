@@ -45,7 +45,10 @@ def draw_bubble(
     for i, (para, is_code) in enumerate(paragraphs(step.text)):
         if i:
             rows.append(("", False))
-        rows += [(para, True)] if is_code else [(t, False) for t in textwrap.wrap(para, cols)]
+        if is_code:
+            rows += [(line, True) for line in para.split("\n")]
+        else:
+            rows += [(t, False) for t in textwrap.wrap(para, cols)]
     line_h = font.get_linesize()
     head_h = small.get_linesize() + 8
     foot_h = 40 if step.until == "next" else small.get_linesize() + 14
