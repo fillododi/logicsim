@@ -5,7 +5,7 @@ description: Close a NAND Sim milestone — check every item from CLAUDE.md is d
 
 # Milestone
 
-Argument: the milestone number N (1–6). If it is missing, infer it from `docs/journal.md`: N is the first milestone that has no entry yet.
+Argument: the milestone number N (1–7). If it is missing, infer it from `docs/journal.md`: N is the first milestone that has no entry yet.
 
 ## Steps
 
@@ -19,7 +19,7 @@ Argument: the milestone number N (1–6). If it is missing, infer it from `docs/
    **Built:** …
    **Problems and how they were solved:** …
    **Learned:** …
-   **Numbers:** tests, levels, LOC; engine speed where relevant (simulated clock Hz is required at M6)
+   **Numbers:** tests, levels, LOC; engine speed where relevant (simulated clock Hz is required at M7, the CPU)
    **Next:** what milestone N+1 starts with
    ```
 

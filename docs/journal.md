@@ -20,7 +20,7 @@ One entry per milestone: what was built, problems, what was learned, numbers.
 - *Golden error tests.* My hand-counted columns were wrong three times, and the parser was right each time. Error tests are now written by running the parser once and checking the output by eye.
 
 **Learned:**
-- **Engine cost scales with depth, not gate count.** Each level costs about 3.4 µs of fixed numpy overhead, so a 4096-gate netlist 3 levels deep runs at about 148 M gate-evals/s, while a 257-gate chain 257 levels deep manages only about 0.3 M. Milestone 6's single-cycle CPU will be a few hundred levels deep, which points to roughly 1 kHz before builtins. The levers, in order: builtins for wide, deep blocks (adder, ALU, RAM, register file), then merging small levels or compiling level schedules.
+- **Engine cost scales with depth, not gate count.** Each level costs about 3.4 µs of fixed numpy overhead, so a 4096-gate netlist 3 levels deep runs at about 148 M gate-evals/s, while a 257-gate chain 257 levels deep manages only about 0.3 M. The single-cycle CPU (now milestone 7) will be a few hundred levels deep, which points to roughly 1 kHz before builtins. The levers, in order: builtins for wide, deep blocks (adder, ALU, RAM, register file), then merging small levels or compiling level schedules.
 - Kleene NAND matters already: `Mux` with `sel` defined and the unselected input undefined gives a defined output, as real hardware does.
 - Stopping at the first error keeps every message precise; recovery can come later without changing the format.
 
@@ -68,7 +68,7 @@ One entry per milestone: what was built, problems, what was learned, numbers.
 **Learned:**
 - Separating "what to show" from "how to draw it" paid off immediately. The editor, game rules and layout were tested headless in milliseconds, and most bugs were found there rather than on screen.
 - Scripted playtests with screenshots are the closest thing to a user test without a user. The two bugs they caught would have been the first things a player hit.
-- **Layout quality degrades on large, deeply connected chips.** The 64-part ripple chip has about 2500 wire crossings. Correct and fast, but hard to read. Milestones 3–4 (32-bit buses, adders, ALU) will make this the main GUI issue. The levers: better track ordering in channels, dummy-node straightening, and highlighting the hovered net across the whole canvas.
+- **Layout quality degrades on large, deeply connected chips.** The 64-part ripple chip has about 2500 wire crossings. Correct and fast, but hard to read. The 32-bit buses, adders and ALU (milestones 4–5) would make this the main GUI issue, so it moves into milestone 3. The levers: better track ordering in channels, dummy-node straightening, and highlighting the hovered net across the whole canvas.
 
 **Numbers:**
 
@@ -90,4 +90,4 @@ One entry per milestone: what was built, problems, what was learned, numbers.
 - guide bubbles anchored to the editor, canvas, Run tests button and sidebar, driven by `chips/tutorial.toml`;
 - progress in `tutorial.json`.
 
-Then milestone 3, buses: Not32, And32, Or32, Mux32, Or8Way, Mux4Way32, Mux8Way32, DMux4Way, DMux8Way. Improving layout readability for 32-bit chips comes with it.
+This became milestone 3, Tutorial and UI, which also takes on layout readability for large chips. Buses move to milestone 4.

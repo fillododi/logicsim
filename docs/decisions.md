@@ -164,3 +164,20 @@ Ambiguous spec points and the option chosen. Newest last.
 - Keep nand2tetris's rule that only parts drive outputs: rejected. It forces meaningless gates.
 
 **Consequences:** the circuit view tracks drivers per bit, for inputs, labelled outputs and constants too. Wire paths gain `label.pin` entries such as `Top/g1.out`.
+
+## 2026-11-06 — New milestone 3: Tutorial and UI
+**Context:** after 0.2.0 the user asked to make the tutorial (agreed in the GUI analysis) and UI work the next milestone. The milestone 2 journal also found that large chips, though correct, are hard to read: about 2500 crossings for 64 parts. The 32-bit chips coming next would make that worse.
+
+**Decision:** insert milestone 3, "Tutorial and UI", and renumber the rest: Buses 4, Arithmetic 5, Sequential logic 6, CPU 7. Releases stay one per milestone (`0.3.0` … `0.7.0`).
+- **Scope:**
+  - a tutorial level before Not;
+  - guide bubbles defined in `chips/tutorial.toml`, completed by player actions, with skip and F1 replay, and progress in `tutorial.json` (so `progress.json` keeps version 1);
+  - tips for common build errors;
+  - layout readability, hovered-net highlighting, junction dots, and a help line that fits.
+- **Renumbering:** text that pointed at future milestones (the `tick`/`tock` message, the DFF note, docs, the milestone skill) now uses the new numbers. Earlier decision entries keep their wording.
+
+**Alternatives:**
+- Fold the tutorial into milestone 4: rejected, because it mixes teaching with new content and delays the fix for unreadable large chips.
+- A 0.2.x patch series outside the milestones: rejected, because this is enough work to deserve its own checklist and journal entry.
+
+**Consequences:** the CPU is now milestone 7, and the simulated clock speed is reported in its journal entry. The tutorial level shifts which level opens first in a new game. Saves are keyed by chip name, so existing saves keep working.

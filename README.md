@@ -89,10 +89,11 @@ nandsim test chips/01_gates/Xor.tst
 |---|---|---|
 | 1. Core | HDL, simulator, tests, the gates Not to DMux | ✅ [0.1.0](https://github.com/fillododi/logicsim/releases/tag/v0.1.0) |
 | 2. GUI | the game screen, circuit view, editor, saves | ✅ [0.2.0](https://github.com/fillododi/logicsim/releases/tag/v0.2.0) |
-| 3. Buses | 32-bit Not, And, Or, Mux, multi-way Mux and DMux | |
-| 4. Arithmetic | adders, a barrel shifter, the ALU | |
-| 5. Sequential logic | DFF, registers, register file, RAM, PC, clock controls | |
-| 6. CPU | a single-cycle RV32I that runs a hand-assembled program | |
+| 3. Tutorial and UI | a first level and guide bubbles that teach the game; readable large chips | next |
+| 4. Buses | 32-bit Not, And, Or, Mux, multi-way Mux and DMux | |
+| 5. Arithmetic | adders, a barrel shifter, the ALU | |
+| 6. Sequential logic | DFF, registers, register file, RAM, PC, clock controls | |
+| 7. CPU | a single-cycle RV32I that runs a hand-assembled program | |
 
 NAND Sim is the first project in a series that retraces computing from the hardware up. Next come an emulator for the same CPU, an assembler, a ROM monitor, a compiler, an operating system, networking, and finally real machines (boot sector, BIOS, UEFI on QEMU). Targeting RISC-V means each step can be checked against the real toolchain.
 

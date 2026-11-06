@@ -81,7 +81,7 @@ def test_value_bases(text: str, width: int, bits: int) -> None:
          "X.tst:3:2: error: table row needs '|' between inputs and outputs"),
         ("chip X\ntable a | o\n 0 | 1\n", "X.tst:2:1: error: table is never closed: missing 'end'"),
         ("chip X\ntick\n", "X.tst:2:1: error: 'tick' is for sequential chips, which arrive in "
-         "milestone 5"),
+         "milestone 6"),
         ("chip X\nfrob\n", "X.tst:2:1: error: unknown command 'frob' (expected chip, table, set, "
          "eval, expect)"),
         ("// nothing\n", "X.tst:1:1: error: empty test: it must start with 'chip <Name>'"),
