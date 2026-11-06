@@ -41,6 +41,8 @@ Later levels are built from *your* chips, so a mistake in `And` will show up in 
 like in real hardware.
 
 Your work is saved in `~/.local/share/nandsim/save/`. Pass `--save-dir` to use another folder.
+To start over, choose **Reset game…** on the main menu or in the Esc menu. Your old files
+aren't deleted: they move to `~/.local/share/nandsim/save-backups/<date and time>/`.
 
 ### Controls
 
@@ -55,7 +57,8 @@ Your work is saved in `~/.local/share/nandsim/save/`. Pass `--save-dir` to use a
 | Hover a wire | show its name and value |
 | Ctrl+S, Ctrl+Enter | build, run the tests |
 | Ctrl+Z / Ctrl+Y, Ctrl+/, Tab / Shift+Tab | undo / redo, comment, indent |
-| Esc | leave the editor so the keys above control the circuit |
+| Click the circuit | leave the editor so the keys above control the circuit |
+| Esc | pause: resume, replay the tour, go to the main menu, reset the game or quit |
 
 ## The language
 

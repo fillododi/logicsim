@@ -65,6 +65,7 @@ class ViewerApp:
         self._crumbs: list[tuple[pygame.Rect, str]] = []
         self._last_poll = 0.0
         self._fitted_path: str | None = None
+        self.quit_requested = False  # set to leave `run()` after the current frame
         self.edit_path = edit_path
         self.editor: EditorWidget | None = None
         if edit_path is not None:
@@ -410,6 +411,9 @@ class ViewerApp:
 
     # ---- real loop -------------------------------------------------------
 
+    def before_quit(self) -> None:
+        """Hook run once before the window closes; the game keeps unsaved text here."""
+
     def run(self, title: str = "NAND Sim") -> None:
         pygame.init()
         screen = pygame.display.set_mode(self.size, pygame.RESIZABLE)
@@ -420,13 +424,17 @@ class ViewerApp:
         while True:
             for ev in pygame.event.get():
                 if ev.type == pygame.QUIT:
-                    pygame.quit()
-                    return
+                    self.quit_requested = True
+                    break
                 if ev.type == pygame.VIDEORESIZE:
                     self.size = (ev.w, ev.h)
                     self.fit()
                     continue
                 self.handle(ev)
+            if self.quit_requested:  # the window closed, or a menu chose Quit
+                self.before_quit()
+                pygame.quit()
+                return
             self.tick()
             self.render(screen)
             pygame.display.flip()

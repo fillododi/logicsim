@@ -20,14 +20,25 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
   the way to each part it feeds.
 - **Junction dots** mark where a wire branches, so a fork no longer looks like two wires
   crossing.
+- **Main menu:** the game opens on a title screen with Play (or Continue), Reset game and Quit.
+- **Pause menu:** press **Esc**, even while typing, to resume, replay the tour, go back to the
+  main menu, reset the game or quit.
+- **Reset game:** start over from the first level, after a confirmation. Your old chips and
+  progress aren't deleted: they move to a `save-backups/` folder next to your saves.
 
 ### Changed
 - **Fewer wire crossings:** wires between two columns of parts are spread out so they cross
   each other much less; a 64-part test chip went from about 2500 crossings to under 1000.
 - **Help line in narrow windows:** the shortcuts at the bottom wrap onto more lines instead of
   running off the edge of the window.
+- **Esc opens the pause menu** in the game instead of leaving the editor. Click the circuit to
+  leave the editor. The developer viewer (`nandsim gui FILE`) keeps Esc as before.
 - On start, the game opens the first open level after the furthest one you solved, so skipping
   the tutorial doesn't send you back to it every time.
+
+### Fixed
+- Closing the window no longer loses text you typed but hadn't saved; it is saved to the level,
+  as switching level already did.
 
 ## [0.2.0] — 2026-11-06
 

@@ -3,11 +3,13 @@
 from __future__ import annotations
 
 import json
+from datetime import datetime
 from pathlib import Path
 
 import pytest
 
 from nandsim.gui.saves import SaveStore
+from nandsim.hdl import HdlError
 from nandsim.testing import Impl, load_levels, run_tst
 
 LEVELS = {lv.name: lv for lv in load_levels()}
@@ -62,3 +64,30 @@ def test_library_prefers_unsaved_editor_text(store: SaveStore) -> None:
     chip = lib.resolve("Not")
     assert len(chip.parts) == 1  # the editor text, not the empty saved file
     assert store.library().resolve("Not").parts == ()
+
+
+def test_reset_moves_everything_to_a_backup(store: SaveStore) -> None:
+    assert not store.has_progress()
+    assert store.reset() is None  # nothing to back up: nothing is created
+    assert not store.backups.exists()
+
+    not_ref = LEVELS["Not"].reference.read_text()
+    store.save(LEVELS["Not"], not_ref)
+    store.mark_solved(LEVELS["Not"])
+    (store.root / "tutorial.json").write_text("{}")
+    assert store.has_progress()
+
+    when = datetime(2026, 11, 6, 15, 30, 12)
+    dest = store.reset(now=when)
+    assert dest == store.root.parent / "save-backups" / "2026-11-06_153012"
+    assert sorted(p.name for p in dest.iterdir()) == ["Not.hdl", "progress.json", "tutorial.json"]
+    assert (dest / "Not.hdl").read_text() == not_ref  # nothing is lost
+    assert not store.has_progress() and store.solved == frozenset()
+    assert store.load(LEVELS["Not"]) == LEVELS["Not"].stub.read_text()
+    assert SaveStore(load_levels(), store.root).solved == frozenset()  # on disk too
+    # The library searches the save dir recursively: the backup must not be found there.
+    with pytest.raises(HdlError, match="unknown chip 'Not'"):
+        store.library().resolve("Not")
+
+    store.save(LEVELS["Not"], "again")
+    assert store.reset(now=when) == store.backups / "2026-11-06_153012-2"

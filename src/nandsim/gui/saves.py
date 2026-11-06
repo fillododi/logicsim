@@ -5,6 +5,10 @@ Layout of the save directory (default `~/.local/share/nandsim/save/`):
     <Name>.hdl       the player's HDL for each chip they have opened
     progress.json    {"version": 1, "solved": ["Not", "And", ...]}
 
+A game reset moves all of these into `<save dir>-backups/<time>/`, next to the
+save directory and never inside it: the chip library searches the save directory
+recursively, so a backup inside it would still be used as the player's chips.
+
 A level is *unlocked* when every level it may use as a part is solved; primitives
 are always available. *Solved* is sticky: it records that the chip passed its
 tests once, so later experiments never lock the player out of a level.
@@ -14,6 +18,7 @@ from __future__ import annotations
 
 import json
 import os
+from datetime import datetime
 from pathlib import Path
 
 from nandsim.netlist import PRIMITIVES, ChipLibrary
@@ -67,6 +72,45 @@ class SaveStore:
     def is_unlocked(self, level: Level) -> bool:
         needed = {p for p in level.parts if p not in PRIMITIVES}
         return needed <= self._solved
+
+    # ---- reset --------------------------------------------------------
+
+    @property
+    def backups(self) -> Path:
+        return self.root.with_name(self.root.name + "-backups")
+
+    def has_progress(self) -> bool:
+        """Whether the player has anything to lose: a saved chip, progress or tour state."""
+        return bool(self._player_files())
+
+    def reset(self, now: datetime | None = None) -> Path | None:
+        """Start over: move every player file into `backups/<time>/` and return that folder.
+
+        `backups` is `<save dir>-backups`, beside the save directory (see the module doc).
+
+        Nothing is deleted, so a reset by mistake can be undone by moving the files
+        back. Returns None, and creates nothing, when there was nothing to move.
+        """
+        files = self._player_files()
+        self._solved = set()
+        self.warning = None
+        if not files:
+            return None
+        stamp = (now or datetime.now()).strftime("%Y-%m-%d_%H%M%S")
+        dest = self.backups / stamp
+        n = 1
+        while dest.exists():  # two resets within the same second
+            n += 1
+            dest = self.backups / f"{stamp}-{n}"
+        dest.mkdir(parents=True)
+        for f in files:
+            f.replace(dest / f.name)
+        return dest
+
+    def _player_files(self) -> list[Path]:
+        if not self.root.is_dir():
+            return []
+        return sorted(p for p in self.root.iterdir() if p.is_file())
 
     def _read_progress(self) -> set[str]:
         p = self.root / "progress.json"
