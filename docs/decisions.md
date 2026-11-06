@@ -329,3 +329,24 @@ Ambiguous spec points and the option chosen. Newest last.
 - A scrolling menu: more work than paging for the same result.
 
 **Consequences:** `SaveStore` gained `exports`, `export_path`, `export`, `chip_files` and `read_chip_file`; `GameApp` gained `export_chip` and `import_chip`. Exported files are never cleaned up.
+
+## 2026-11-06 — Exported chips are named parts of the library; no import
+**Context:** after the first version of chip files (entry above), the user asked that exporting not replace the editor's text on import, and that the player type the chip's name instead. Asked to clarify, they said: on export the player types the file's name, and there is no import, because exported files are always in the library.
+
+**Decision:**
+- **Export asks for a name** in a one-line text field (*Export this chip as…* in the Esc menu). The field suggests `My<Level>`, or the name this level was last exported under. The editor's text, saved or not, is written to `<save dir>-exports/<Name>.hdl` with the name after `CHIP` replaced by the typed one; nothing else in the text changes, so build error positions still match the editor. The editor itself is untouched.
+- **A name must be able to stand for a chip of its own:** an ASCII identifier, not an HDL word (`CHIP IN OUT PARTS true false`), not a primitive (`Nand`, and `DFF` ahead of milestone 7), not any level's chip. The dialog shows why a name is refused, under the field.
+- **The chip must build** (parse and elaborate, with the player's saves and other exports) before it is written, so an export can never break a level that uses it. A circular use, a chip that contains its own exported name, is a build error like any other.
+- **Replacing** an exported chip of the same name with different contents asks first, with Cancel selected.
+- **Exported chips are in the library and allowed in every level**, besides the level's parts, both in the game and in `nandsim test --impl save`: the runner searches the exports folder after the saves and lists exported chips in the *not allowed* message. A file whose name couldn't be a chip of its own (the rules above) is never treated as an exported chip.
+- **No import.** A shared `.hdl` file is used by copying it into the exports folder. The sidebar lists the player's chips under *Your chips*.
+
+**Alternatives:**
+- Exported chips allowed only in levels already solved: not chosen; the user wants them always in the library.
+- Keeping import beside named export: not chosen, the user dropped it.
+- Exporting without a build check: rejected, a broken export would surface as a confusing error in another level.
+
+**Consequences:**
+- A player can export a level's answer under another name and use it in that same level. Since they wrote the answer themselves, this is accepted. A file copied in from someone else can solve a level, which is what sharing chips means.
+- `ChipDef` gained `name_pos`. `testing` gained `exported_chips`, and `run_script` an `exported` argument. `SaveStore` replaced `chip_files`, `read_chip_file` and `export(level, …)` with `exported`, `name_problem`, `prepare_export` and `export(name, …)`. `Menu` gained a text field. The import menu and its paging are gone.
+- The level briefs' *Parts you may use* line doesn't list exported chips; the sidebar does.
