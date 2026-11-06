@@ -1,0 +1,7 @@
+// Mux: A selector: outputs `a` when `sel` is 0 and `b` when `sel` is 1.
+// You may use: Nand, Not, And, Or, Xor
+CHIP Mux {
+    IN a, b, sel;
+    OUT out;
+    PARTS:
+}

@@ -1,0 +1,12 @@
+// Mux: every input combination
+chip Mux
+table a b sel | out
+    0 0 0 | 0
+    0 0 1 | 0
+    0 1 0 | 0
+    0 1 1 | 1
+    1 0 0 | 1
+    1 0 1 | 0
+    1 1 0 | 1
+    1 1 1 | 1
+end

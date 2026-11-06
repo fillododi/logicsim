@@ -43,3 +43,39 @@ Ambiguous spec points and the option chosen. Newest last.
 **Decision:** `CHANGELOG.md` in Keep a Changelog format. Every user-visible change adds a line under `[Unreleased]` in the same PR. Each milestone is a release `0.N.0`, tagged `v0.N.0` (replacing the earlier `mN` tags, which were never created).
 **Alternatives:** generating the changelog from commit messages (rejected: commits explain *why* for developers, release notes speak to players); separate milestone and version tags (rejected: redundant).
 **Consequences:** `/make-change` writes the entry, `/review` checks it, `/milestone` cuts the release and bumps `pyproject.toml`.
+
+## 2026-11-06 — The `.tst` format
+**Context:** CLAUDE.md requires truth tables, sequential scripts and values in three bases, but leaves the syntax open.
+**Decision:** a line-based format of our own: `chip`, `table … | … end`, `set`, `eval`, `expect`. Values may be decimal (negatives in two's complement), `0b`, `0x`, or `*` for don't care. A table row expands to set, eval and expect. `tick` and `tock` are parsed and rejected until milestone 5.
+**Alternatives:** the nand2tetris `.tst` + `.cmp` pair (rejected: two files per test and fixed-width output columns are awkward to write and to read in error messages).
+**Consequences:** failures point at the exact row and print actual values in the base the expected value was written in.
+
+## 2026-11-06 — HDL errors stop at the first problem
+**Context:** the parser and elaborator could try to recover and report many errors.
+**Decision:** raise one `HdlError` with `file:line:col` at the first problem.
+**Alternatives:** error recovery that collects several errors (rejected for now: complex, and cascades confuse beginners).
+**Consequences:** the editor underlines one spot at a time. Collecting several errors can be added later without changing the message format.
+
+## 2026-11-06 — Unconnected part inputs are errors
+**Context:** nand2tetris silently ties unconnected part inputs to false.
+**Decision:** an unconnected part input, or any unconnected bit of one, is an error. Write `false` to mean false.
+**Alternatives:** default to false (rejected: hides a common beginner mistake).
+**Consequences:** HDL is slightly more verbose; mistakes surface at the line that makes them.
+
+## 2026-11-06 — Chips may read their own OUT pins
+**Context:** nand2tetris forbids feeding an output pin back into a part, which forces an extra internal wire.
+**Decision:** allowed. In a flattened netlist an output pin is just a net.
+**Alternatives:** forbid it as nand2tetris does (rejected: an arbitrary rule with no hardware reason).
+**Consequences:** none for the engine; one less error for players to meet.
+
+## 2026-11-06 — Levels list their allowed parts explicitly, and keep the stub's pins
+**Context:** a level must be solved with earlier chips, not with the chip itself or a later one.
+**Decision:** each `[[level]]` in `chips/levels.toml` has a `parts` list. The runner rejects any other part used directly by the top chip, and rejects an implementation whose `IN`/`OUT` differ from the stub. A pytest guard checks that every allowed part is a primitive or an earlier level.
+**Alternatives:** derive the allowed parts from the unlock order (rejected: some levels will want to restrict parts on purpose).
+**Consequences:** sub-chips are not re-checked: they passed their own level.
+
+## 2026-11-06 — Level data packaged as `nandsim/_data`
+**Context:** an installed wheel has no repo, but `chips/` and `reference/` live at the repo root.
+**Decision:** hatch `force-include` copies them to `nandsim/_data/`. `nandsim.paths.data_root()` uses that directory when present, and the repo root otherwise. CI runs every level from an installed wheel.
+**Alternatives:** move the data into `src/nandsim/` (rejected: buries the levels deep in the package tree, where they are awkward to edit and review).
+**Consequences:** the reference solutions ship inside the wheel. They are hidden from the GUI, not secret.

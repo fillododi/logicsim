@@ -1,1 +1,31 @@
-# Levels in unlock order. Filled from milestone 1.
+# Levels in unlock order. `parts` lists the chips each level may use.
+
+[[level]]
+name = "Not"
+group = "01_gates"
+parts = ["Nand"]
+
+[[level]]
+name = "And"
+group = "01_gates"
+parts = ["Nand", "Not"]
+
+[[level]]
+name = "Or"
+group = "01_gates"
+parts = ["Nand", "Not", "And"]
+
+[[level]]
+name = "Xor"
+group = "01_gates"
+parts = ["Nand", "Not", "And", "Or"]
+
+[[level]]
+name = "Mux"
+group = "01_gates"
+parts = ["Nand", "Not", "And", "Or", "Xor"]
+
+[[level]]
+name = "DMux"
+group = "01_gates"
+parts = ["Nand", "Not", "And", "Or", "Xor", "Mux"]

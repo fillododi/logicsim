@@ -1,0 +1,7 @@
+// Xor: Outputs 1 when the inputs differ.
+// You may use: Nand, Not, And, Or
+CHIP Xor {
+    IN a, b;
+    OUT out;
+    PARTS:
+}

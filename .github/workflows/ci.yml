@@ -22,9 +22,9 @@ jobs:
       - run: uv run ruff format --check .
       - run: uv run pytest -q
       - name: Levels against reference
+        run: uv run nandsim test
+      - name: Installed wheel finds its levels
         run: |
-          if grep -q '^\[' chips/levels.toml; then
-            uv run nandsim test --impl reference chips/
-          else
-            echo "no levels yet"
-          fi
+          uv build
+          cd "$(mktemp -d)"
+          uvx --from "$GITHUB_WORKSPACE"/dist/nandsim-*.whl nandsim test
