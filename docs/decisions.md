@@ -399,3 +399,21 @@ Ambiguous spec points and the option chosen. Newest last.
 - Settings inside the save directory: rejected, a reset would undo the player's mute.
 
 **Consequences:** `GameApp` has `settings` and `sounds`; `sounds.played` logs recent sounds for tests. `SaveStore.settings_path` and `paths.settings_file` name the file.
+
+## 2026-11-06 — Level groups fold in the sidebar
+**Context:** milestone 5 adds 13 bus levels. The sidebar draws the whole level list, then the brief, with no scrolling: 21 levels and 3 group headers take about 666 of the 860 default pixels, which pushes the brief off-screen. Later milestones add more.
+
+**Decision:**
+- **Each group header is a button** (`▾`/`▸`, the group name, solved/total, green with a ✓ when all are solved). Clicking it opens or closes the group; a closed group is only its header.
+- **Default open groups:** the current level's group, and the next group after it that has an open (unlocked, unsolved) level. At most two groups, and what to do next is always in sight: Not from the tutorial, the first bus level once Gates is under way. Earlier groups with unsolved levels, such as a skipped tutorial, stay closed with their count showing.
+- **The player's choice lasts until the defaults change**, which is when the current level moves to another group or a level gets solved. It isn't saved: the game starts with the defaults.
+- **Tour bubbles** that point at a level in a closed group point at the group's header instead; the `levels` anchor covers headers and rows.
+- `GameState.groups()`, `default_expanded()` and `group_label()` hold the rules, without pygame.
+
+**Alternatives:**
+- Scrolling the list in a fixed height: the brief still loses space, and a wheel over the sidebar is easy to miss.
+- An accordion with only the current group open: hides Not from a player in the tutorial, which the tour and the "Not is open from the start" rule rely on.
+- Opening every group with an open level: with part-based unlocking, several groups open at once later in the game, and the list overflows again.
+- Smaller rows: only delays the problem.
+
+**Consequences:** two open groups of many levels can still fill the sidebar (Buses alone has 13); if a later milestone makes that happen, the list may need a maximum height too. Tests that click levels must open a closed group first, as `test_tour_playtest.click_level` does.

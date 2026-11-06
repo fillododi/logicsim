@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+### Changed
+- **Level groups fold up.** The level list shows your current group and the next one with a
+  level to play; the others fold into one line with a count of solved levels, like
+  `▸ TUTORIAL ✓ 2/2`. Click a group's name to open or close it. This leaves room for the
+  brief as more levels arrive.
+
 ## [0.4.0] — 2026-11-06
 
 Milestone 4: your chips become building blocks, and the game makes sound. Name a chip you

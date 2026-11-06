@@ -21,7 +21,7 @@ from nandsim.gui.app import HEADER, ViewerApp
 from nandsim.gui.brief import brief_lines
 from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
-from nandsim.gui.game import GameState
+from nandsim.gui.game import GameState, group_label
 from nandsim.gui.guide import Bubble, draw_bubble
 from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
@@ -42,6 +42,7 @@ BUTTON_W = 210
 SILENT_ACTIONS = {"mute", "volume"}  # these play their own preview, if any
 
 GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
+CHEVRON = {True: "▾", False: "▸"}  # a group header, open or closed
 
 
 class GameApp(ViewerApp):
@@ -68,7 +69,10 @@ class GameApp(ViewerApp):
         warnings = [w for w in (store.warning, self.tour.warning, self.settings.warning) if w]
         self.notice: str | None = "; ".join(warnings) or None
         self._attempted = store.has_save(self.game.current)
-        self._rows: list[tuple[pygame.Rect, Level]] = []
+        self._rows: list[tuple[pygame.Rect, Level]] = []  # level rows, as last drawn
+        self._group_rows: list[tuple[pygame.Rect, str]] = []  # group headers, as last drawn
+        self.expanded: set[str] = set()  # level groups open in the sidebar
+        self._expanded_for: tuple[str, frozenset[str]] | None = None
         self._exported = store.exported()  # the player's exported chips, for the sidebar
         self._chip_rows: list[tuple[pygame.Rect, str]] = []  # × buttons, as last drawn
         self._export_names: dict[str, str] = {}  # level -> name it was last exported as
@@ -130,6 +134,26 @@ class GameApp(ViewerApp):
         self.game.select(level)
         self.tour.catch_up(level.name)  # its next step may be something already done here
         self._load_current()
+
+    def toggle_group(self, group: str) -> None:
+        """Open or close a level group in the sidebar."""
+        self._sync_expanded()
+        if group in self.expanded:
+            self.expanded.discard(group)
+            self.sounds.play("back")
+        else:
+            self.expanded.add(group)
+            self.sounds.play("select")
+
+    def _sync_expanded(self) -> None:
+        """Back to the default open groups when the current group or the solved levels change.
+
+        Between those changes the player's own choices stay as they are.
+        """
+        key = (self.game.current.group, self.game.store.solved)
+        if key != self._expanded_for:
+            self._expanded_for = key
+            self.expanded = self.game.default_expanded()
 
     def _load_current(self) -> None:
         """Show the current level: its text in the editor, its circuit on the canvas."""
@@ -445,6 +469,10 @@ class GameApp(ViewerApp):
                     if level is not self.game.current:
                         self.open_level(level)
                     return
+            for rect, group in self._group_rows:
+                if rect.collidepoint(ev.pos):
+                    self.toggle_group(group)
+                    return
             if ev.pos[0] < SIDEBAR or self.results_rect.collidepoint(ev.pos):
                 return
         super().handle(ev)
@@ -507,10 +535,15 @@ class GameApp(ViewerApp):
         x, y, cw, ch = (round(v) for v in self.canvas_area)
         canvas = pygame.Rect(x, y, cw, ch)
         if anchor == "levels":
-            rects = [r for r, _ in self._rows]
+            rects = [r for r, _ in self._group_rows] + [r for r, _ in self._rows]
             return rects[0].unionall(rects[1:]) if rects else None
         if kind == "level":
-            return next((r for r, lv in self._rows if lv.name == arg), None)
+            row = next((r for r, lv in self._rows if lv.name == arg), None)
+            if row is not None:
+                return row
+            # In a closed group: point at its header, which the player clicks first.
+            group = next((lv.group for lv in self.game.levels if lv.name == arg), None)
+            return next((r for r, g in self._group_rows if g == group), None)
         if anchor == "brief":
             return self._brief_rect
         if anchor == "editor":
@@ -627,27 +660,7 @@ class GameApp(ViewerApp):
         title = self.fonts.get(16, bold=True).render("NAND Sim", True, theme.TEXT)
         surf.blit(title, (14, (HEADER - title.get_height()) // 2))
         font = self.fonts.get(14)
-        y = HEADER + 6
-        self._rows = []
-        group = None
-        for level in self.game.levels:
-            if level.group != group:
-                group = level.group
-                label = group.split("_", 1)[-1].replace("_", " ").title()
-                t = self.fonts.get(12, bold=True).render(label.upper(), True, theme.TEXT_DIM)
-                surf.blit(t, (14, y + 6))
-                y += ROW_H
-            status = self.game.status(level)
-            rect = pygame.Rect(6, y, SIDEBAR - 12, ROW_H - 2)
-            if level is self.game.current:
-                pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
-            color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[status]
-            glyph = font.render(GLYPH[status], True, color)
-            surf.blit(glyph, (rect.x + 8, rect.centery - glyph.get_height() // 2))
-            name = font.render(level.name, True, theme.TEXT if status != "locked" else color)
-            surf.blit(name, (rect.x + 30, rect.centery - name.get_height() // 2))
-            self._rows.append((rect, level))
-            y += ROW_H
+        y = self._draw_levels(surf, HEADER + 6)
         y += 8
         pygame.draw.line(surf, theme.PART_BORDER, (12, y), (SIDEBAR - 12, y))
         y += 10
@@ -677,6 +690,52 @@ class GameApp(ViewerApp):
                 y += CHIP_ROW_H
             y += 8
         self._draw_brief(surf, y)
+
+    def _draw_levels(self, surf: pygame.Surface, y: int) -> int:
+        """The level list, group by group; a closed group is only its header. Returns the
+        y below it."""
+        self._sync_expanded()
+        font = self.fonts.get(14)
+        small = self.fonts.get(12, bold=True)
+        self._rows, self._group_rows = [], []
+        for group, levels in self.game.groups():
+            is_open = group in self.expanded
+            head = pygame.Rect(6, y, SIDEBAR - 12, ROW_H - 2)
+            if head.collidepoint(self.mouse) and not self.menus:
+                pygame.draw.rect(surf, theme.BG, head, border_radius=5)
+            chevron = small.render(CHEVRON[is_open], True, theme.TEXT_DIM)
+            surf.blit(chevron, (head.x + 8, head.centery - chevron.get_height() // 2))
+            label = small.render(group_label(group).upper(), True, theme.TEXT_DIM)
+            surf.blit(label, (head.x + 24, head.centery - label.get_height() // 2))
+            solved = sum(self.game.status(lv) == "solved" for lv in levels)
+            done = solved == len(levels)
+            count = small.render(
+                f"✓ {solved}/{len(levels)}" if done else f"{solved}/{len(levels)}",
+                True,
+                theme.WIRE_1 if done else theme.TEXT_DIM,
+            )
+            surf.blit(
+                count, (head.right - 8 - count.get_width(), head.centery - count.get_height() // 2)
+            )
+            self._group_rows.append((head, group))
+            y += ROW_H
+            if not is_open:
+                continue
+            for level in levels:
+                status = self.game.status(level)
+                rect = pygame.Rect(6, y, SIDEBAR - 12, ROW_H - 2)
+                if level is self.game.current:
+                    pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
+                color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[
+                    status
+                ]
+                glyph = font.render(GLYPH[status], True, color)
+                surf.blit(glyph, (rect.x + 8, rect.centery - glyph.get_height() // 2))
+                name = font.render(level.name, True, theme.TEXT if status != "locked" else color)
+                surf.blit(name, (rect.x + 30, rect.centery - name.get_height() // 2))
+                self._rows.append((rect, level))
+                y += ROW_H
+        return y
 
     def _draw_brief(self, surf: pygame.Surface, y: int) -> None:
         text_font = self.fonts.get(13)

@@ -87,7 +87,12 @@ def press_next(app: GameApp) -> None:
 
 
 def click_level(app: GameApp, name: str) -> None:
+    """Click a level in the sidebar, first opening its group if it's closed, as a player would."""
     app.render(pygame.Surface(app.size))
+    if all(lv.name != name for _, lv in app._rows):
+        group = next(lv.group for lv in app.game.levels if lv.name == name)
+        click(app, next(r for r, g in app._group_rows if g == group).center)
+        app.render(pygame.Surface(app.size))
     click(app, next(r for r, lv in app._rows if lv.name == name).center)
 
 
