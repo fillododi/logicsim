@@ -185,3 +185,40 @@ This became milestone 3, Tutorial and UI, which also takes on layout readability
 | Sound startup | 10 ms to synthesize all; 17 ms to open the mixer and build the `Sound`s | `time.perf_counter()` around `synth.render` and `Sounds.load()`, dummy audio driver |
 
 **Next:** milestone 5, Buses (4, 8 and 12 bits): Not4, And4, Or4, Xor4, Mux4, Mux8, Mux12, Or4Way, Mux4Way4, Mux8Way4, Mux4Way12, DMux4Way, DMux8Way. It starts with Not4, the first level with a bus. Its brief and the tour should introduce `a[i]` and `a[0..3]` slices and show bus values in hex.
+
+## Milestone 5 — Buses (2026-11-06)
+
+**Built:** the chips that move the 4004's values around, and the UI to work with them.
+- **13 bus levels** in a new *Buses* group, at the 4004's widths: Not4, And4, Or4, Xor4 (4-bit bitwise); Mux4, Mux8, Mux12 (2-way, 4/8/12 bits); Or4Way; Mux4Way4, Mux8Way4, Mux4Way12; DMux4Way, DMux8Way. Each has a stub, a brief, a `.tst` and a hidden reference. Pins follow nand2tetris (`sel = 0` picks `a`). Each level lists only the gate it widens or combines, so Not4 opens as soon as Not is solved.
+- **Typing an input's value** on the circuit: **Enter** or a digit over an input opens a small field that takes `.tst` syntax (`13`, `-1`, `0b1101`, `0x0D`) through a new `testing.parse_pin_value`, with the same error messages. A 12-bit input no longer takes thousands of clicks.
+- **A sidebar for many levels:** groups fold (the current one and the next with a level to play are open by default), and the list scrolls past the room the brief needs, keeping the current level in sight.
+- **The tour** teaches typing a value (Hello) and exporting a chip and the *Your chips* list (And), and mentions folding groups.
+- **Tips for bus errors:** a wrong width on a pin or in a connection, a slice past the last bit, and a partly connected bus.
+
+**Problems and how they were solved:**
+- *A list that outgrew its sidebar.* The milestone's analysis predicted that 21 levels would push the brief off the 860 px window. Folding groups (#27) helped until the bus levels arrived: solving Not opens Not4, so Gates and Buses are open together, 22 rows, and And's brief lost its table and hint. A fixed half of the sidebar for the list still cut And's hint. The list now gets what the brief leaves, in whole rows and never fewer than 5, and scrolls past it (#31).
+- *Keys that mean two things.* With the value field open, `x`, `b` and `h` must be typed, not fire X (undefined) or H (hex). The field takes every key while open, and in the game it sees Esc before the pause menu does. Writing the tour playtest showed that after the new step, Ctrl+Enter over an input opened the field instead of doing nothing; modified keys no longer open it.
+- *A bubble over what you type.* The Hello bubble covered the value field's hint. It showed only in a screenshot, since the tests passed. The bubble now keeps clear of the field as well as of its anchor.
+- *Tests that prove something.* The muxes are too wide to test every input. Their `.tst` files check every `sel` with distinct inputs, then one bit set or cleared on the chosen input, then seeded random rows. Seven plausible wrong solutions (swapped `sel` bits, crossed bits, a stuck bit, outputs in the wrong order, a missing input) each failed 1 to 57 checks before the levels were committed.
+- *A message that didn't match.* The first width-mismatch tips never fired: the error says `has 1 bit but 'in' has 4`, with a unit only after the first number. Pinning each tip to a real error from a bus level caught it at once.
+- *Parallel branches.* Two branches each appended an entry to `docs/decisions.md`. The second was brought up to date by merging `main` rather than rebasing, which would have needed a force-push.
+
+**Learned:**
+- Look at the screen. Two of this milestone's problems (the cut brief, the covered field) passed every test and showed only in a screenshot.
+- Size UI by its content, not by ratios: the brief's real height decided the list's, which a share of the window couldn't.
+- A test file is only as good as the wrong answers it rejects. Running a few plausible mistakes against generated tests costs minutes and shows what they actually check.
+- Tips and messages drift apart unless a test ties them together.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 438 (+107 since 0.4.0) | `uv run pytest --co -q` |
+| Levels | 21/21 pass against their references (13 new, 1,366 checks in the bus `.tst` files) | `uv run nandsim test --impl reference chips/` |
+| NAND count (depth) per bus reference | Not4 4 (1), And4 8 (2), Or4 12 (2), Xor4 16 (3), Mux4 32 (5), Mux8 64 (5), Mux12 96 (5), Or4Way 9 (4), Mux4Way4 96 (9), Mux8Way4 224 (13), Mux4Way12 288 (9), DMux4Way 15 (5), DMux8Way 35 (7) | `elaborate()` on each reference: `gate_count` and `len(levels)` |
+| Engine on the widest bus chip | Mux4Way12, 288 NAND, depth 9: 28.5k evals/s (8.2 M gate-evals/s); elaboration 9 ms; top-level layout 0.6 ms | `Simulator.eval()` in a loop for 2 s with `sel` changing, `layout(build_view(...))` averaged over 20 runs; Python 3.12.3, this laptop |
+| Source LOC | 6068 (gui 4440, netlist 696, testing 385, hdl 362, sim 81); +367 since 0.4.0, of which gui +353 | non-blank lines of `src/**/*.py` at HEAD and at v0.4.0, same script |
+| Test LOC | 3284 (+437) | non-blank lines of `tests/**/*.py`, same script (it counts 2847 at v0.4.0) |
+| Work since 0.4.0 | 6 merged PRs (#27–#32), 13 commits | `gh pr list`, `git log --no-merges v0.4.0..HEAD` |
+
+**Next:** milestone 6, Arithmetic: HalfAdder, FullAdder, Add4 with carry in and out, Inc4, Inc12 for the program counter, and the 4004's ALU (add and subtract with carry/borrow, increment and decrement, complement, rotate through carry, DAA, KBP, TCS, and the zero and carry flags JCN tests). It starts with an analysis of the ALU's operations and flags against Intel's MCS-4 manual, then the adders, which are ordinary levels.

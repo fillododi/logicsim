@@ -44,6 +44,8 @@ expect out 1
 
 A value that doesn't fit the pin's width is an error.
 
+The game takes the same syntax when you type an input's value on the circuit (**Enter** or a digit over the input), with the same error messages; `*` isn't allowed there.
+
 ## Results
 
 A failing check names its position, the pin, the expected value, and the actual value printed in the same base. For a table row it also lists the inputs:
