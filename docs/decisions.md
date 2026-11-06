@@ -108,3 +108,24 @@ Ambiguous spec points and the option chosen. Newest last.
 - Developer mode: `nandsim gui FILE` searches for parts next to the file and one directory up (`--search` overrides this). Without a file, the command explains that the level select comes later.
 **Alternatives:** double-click to open parts (rejected: slower to explore); inputs settable at any level (rejected: they would contradict the parent's wiring); file-system events instead of polling (rejected: platform-specific, and polling a few files is cheap).
 **Consequences:** the session layer (`gui/session.py`) owns all of this and is pure Python, so the editor PR reuses it by swapping the file loader for one that reads the editor's text.
+
+## 2026-11-06 — Editor behaviour
+**Context:** players write every chip in the in-game editor, which is built from scratch on pygame (no new dependency).
+**Decision:**
+- **Model and highlighting:** a pure `TextBuffer` (lines, cursor, anchor-based selection, snapshot undo) and a lenient per-line syntax highlighter that never fails on half-typed code.
+- **Typing:**
+  - consecutive typed characters merge into one undo step until a space, newline or other command;
+  - Enter keeps the current indentation and adds a level after `{` or `(`;
+  - a closing brace typed on a blank line removes one level;
+  - Backspace inside the indentation removes a whole level (4 spaces);
+  - Tab inserts spaces up to the next tab stop, or indents the selected lines;
+  - Ctrl+/ toggles `// ` comments.
+- **Movement:** Home goes to the first non-blank character, then to column 0. Word moves treat each symbol as its own stop.
+- **Save and errors:** Ctrl+S writes the file atomically and rebuilds. An error whose position is in the edited file is underlined there; errors in other files show only in the banner.
+- **Focus:** the editor takes keys while focused, and Esc or a click on the canvas gives them back to the circuit.
+- **External edits:** a change on disk replaces the buffer only when it has no unsaved edits.
+- **Clipboard:** pygame-ce's `scrap.put_text`/`get_text`, with an in-process fallback for headless runs.
+
+**Alternatives:** compiling on every keystroke (rejected: noisy while code is half-written); tabs for indentation (rejected: spaces keep columns predictable for error positions); an external editor (rejected: contradicts the game model).
+
+**Consequences:** the game PR reuses `EditorWidget` unchanged, with the save handler writing to the player's save dir instead of the opened file.
