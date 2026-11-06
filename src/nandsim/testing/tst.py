@@ -169,7 +169,7 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
             steps.append(ExpectStep(args[0].text, parse_value(args[1], True), head.pos))
         elif cmd in ("tick", "tock"):
             raise HdlError(
-                f"'{cmd}' is for sequential chips, which arrive in milestone 6", head.pos
+                f"'{cmd}' is for sequential chips, which arrive in milestone 7", head.pos
             )
         else:
             raise HdlError(

@@ -1,7 +1,7 @@
 [project]
 name = "nandsim"
 version = "0.3.0"
-description = "A game where you build a RISC-V CPU from NAND gates."
+description = "A game where you build an Intel 4004 CPU from NAND gates."
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.12"

@@ -1,1 +1,1 @@
-"""NAND Sim: build a RISC-V CPU from NAND gates."""
+"""NAND Sim: build an Intel 4004 CPU from NAND gates."""
