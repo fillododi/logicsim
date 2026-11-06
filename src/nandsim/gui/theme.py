@@ -28,6 +28,8 @@ PRIMITIVE_FILL: Color = (54, 46, 62)
 PART_BORDER: Color = (90, 95, 110)
 IO_FILL: Color = (36, 52, 60)
 
+BUBBLE: Color = (50, 55, 76)  # guide bubbles
+
 ERROR_BG: Color = (90, 31, 36)
 ERROR_TEXT: Color = (255, 215, 215)
 

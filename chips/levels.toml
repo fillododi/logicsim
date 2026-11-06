@@ -1,5 +1,12 @@
 # Levels in unlock order. `parts` lists the chips each level may use.
 
+# The tutorial: the guide bubbles in tutorial.toml walk through it. Not doesn't
+# need it, so a player can skip straight to the gates.
+[[level]]
+name = "Hello"
+group = "00_tutorial"
+parts = ["Nand"]
+
 [[level]]
 name = "Not"
 group = "01_gates"

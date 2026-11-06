@@ -6,6 +6,20 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 
 ## [Unreleased]
 
+### Added
+- **Tutorial level, Hello:** a new first level, solved with a single Nand line, that introduces
+  pins, parts and the editor. Not is still open from the start, so you can skip it.
+- **Guided tour:** bubbles point at the level list, the brief, the editor, the circuit and the
+  Run tests button, and move on when you do what they explain. Skip it from any bubble, or press
+  **F1** to replay it. The tour remembers where you got to.
+- **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
+  missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
+  them, under the error and in the test results.
+
+### Changed
+- On start, the game opens the first open level after the furthest one you solved, so skipping
+  the tutorial doesn't send you back to it every time.
+
 ## [0.2.0] — 2026-11-06
 
 Milestone 2: the game. Play with `nandsim gui`: pick a level, write the chip, see its circuit,

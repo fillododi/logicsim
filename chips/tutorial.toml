@@ -1,0 +1,139 @@
+# The guided tour: bubbles shown in order, one at a time. Each step:
+#
+#   id      unique name; tutorial.json remembers which ids the player has seen
+#   level   optional: the step only shows (and waits) while this level is open
+#   anchor  what the bubble points at (see docs/decisions.md for the list):
+#             levels, level:<Name>, brief, editor, line:<text>, canvas,
+#             pin:<name>, part, header, run_button, results, footer
+#   until   the player action that completes the step:
+#             next (the bubble's Next button), save, build_ok, toggle,
+#             open_part, up, run_tests, solved, open_level, open_level:<Name>
+#   text    what the bubble says; blank lines split paragraphs, and lines
+#           indented by four spaces are shown as code
+#
+# The player can skip the tour from any bubble, and F1 replays it from the start.
+
+[[step]]
+id = "welcome"
+level = "Hello"
+anchor = "levels"
+until = "next"
+text = """
+Welcome to NAND Sim! You will build a computer from a single kind of gate, the Nand.
+
+Each entry in this list is a chip to build. Solving one unlocks the chips that use it.
+"""
+
+[[step]]
+id = "brief"
+level = "Hello"
+anchor = "brief"
+until = "next"
+text = """
+The brief says what this level's chip must do: its truth table, the parts you may use, and a hint.
+"""
+
+[[step]]
+id = "write"
+level = "Hello"
+anchor = "line:PARTS:"
+until = "build_ok"
+text = """
+You build chips by writing HDL here. Parts go under the PARTS: line. Click at the end of it, press Enter and type:
+
+    Nand(a=a, b=b, out=out);
+
+Then press Ctrl+S to save and build the chip.
+"""
+
+[[step]]
+id = "circuit"
+level = "Hello"
+anchor = "canvas"
+until = "next"
+text = """
+This is your chip's circuit, drawn from what you wrote: inputs on the left, outputs on the right, parts in between.
+"""
+
+[[step]]
+id = "toggle"
+level = "Hello"
+anchor = "pin:a"
+until = "toggle"
+text = """
+Click an input to flip it between 0 and 1. Green wires carry a 1, grey wires a 0.
+"""
+
+[[step]]
+id = "output"
+level = "Hello"
+anchor = "pin:out"
+until = "next"
+text = """
+The output follows the table in the brief: it is 0 only when a and b are both 1. Try all four combinations.
+"""
+
+[[step]]
+id = "run"
+level = "Hello"
+anchor = "run_button"
+until = "solved"
+text = """
+When the chip looks right, run the level's tests (or press Ctrl+Enter). They try every row of the table.
+"""
+
+[[step]]
+id = "unlocked"
+level = "Hello"
+anchor = "level:Not"
+until = "open_level:Not"
+text = """
+Level solved! Solved levels get a ✓. Now open Not, the first real gate.
+"""
+
+[[step]]
+id = "on_your_own"
+level = "Not"
+anchor = "brief"
+until = "next"
+text = """
+From here on there is no step-by-step: read the brief, try something, run the tests.
+
+When a check fails, the results list the inputs, what was expected and what your chip gave.
+"""
+
+[[step]]
+id = "replay"
+level = "Not"
+anchor = "footer"
+until = "next"
+text = """
+Press F1 at any time to replay this tour.
+"""
+
+[[step]]
+id = "open_part"
+level = "And"
+anchor = "part"
+until = "open_part"
+text = """
+And can use your own Not as a part. Once your And builds, click a Not part to look inside it: it is the chip you wrote.
+"""
+
+[[step]]
+id = "back_up"
+level = "And"
+anchor = "header"
+until = "up"
+text = """
+The breadcrumbs show where you are. Click And, or press Backspace, to go back up.
+"""
+
+[[step]]
+id = "done"
+level = "And"
+anchor = "levels"
+until = "next"
+text = """
+That's the tour. Every chip from here to the CPU is built the same way. Good luck!
+"""

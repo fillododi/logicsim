@@ -11,6 +11,7 @@ from typing import Literal
 
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import Loader
+from nandsim.gui.tips import tip_for
 from nandsim.netlist import PRIMITIVES, ChipLibrary
 from nandsim.testing import Level, TstResult, parse_tst, run_script
 
@@ -34,8 +35,14 @@ class GameState:
         self.report: TestReport | None = None
 
     def _first_level(self) -> Level:
-        """The first unlocked level not solved yet; otherwise the first level."""
-        for lv in self.levels:
+        """The first open level past the furthest solved one; else any open level; else the first.
+
+        Looking past the furthest solved level means a player who skipped the
+        tutorial isn't sent back to it every time they start the game.
+        """
+        solved = [i for i, lv in enumerate(self.levels) if self.status(lv) == "solved"]
+        start = solved[-1] + 1 if solved else 0
+        for lv in self.levels[start:] + self.levels[:start]:
             if self.status(lv) == "open":
                 return lv
         return self.levels[0]
@@ -111,7 +118,10 @@ def _report(result: TstResult) -> TestReport:
     if result.error is not None:
         e = result.error
         where = f"line {e.pos.line}:{e.pos.col}: " if e.pos else ""
-        return TestReport(False, "Doesn't build", [f"{where}{e.message}"])
+        tip = tip_for(e.message)
+        return TestReport(
+            False, "Doesn't build", [f"{where}{e.message}"] + ([f"Tip: {tip}"] if tip else [])
+        )
     if result.passed:
         return TestReport(True, f"All {result.checks} checks passed", [])
     bad = len(result.failures)

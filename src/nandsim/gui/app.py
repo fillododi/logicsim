@@ -8,6 +8,7 @@ exactly as a player would. `run()` is the real event loop around those two.
 from __future__ import annotations
 
 import os
+import textwrap
 import time
 from pathlib import Path
 
@@ -20,6 +21,7 @@ from nandsim.gui.editor import EditorError, EditorWidget
 from nandsim.gui.model import breadcrumbs
 from nandsim.gui.session import ChipSession, FileWatcher
 from nandsim.gui.textbuffer import Pos, TextBuffer
+from nandsim.gui.tips import tip_for
 from nandsim.hdl import HdlError
 
 HEADER = 36
@@ -102,6 +104,10 @@ class ViewerApp:
         return x <= pos[0] < x + w and y <= pos[1] < y + h
 
     @property
+    def help_text(self) -> str:
+        return EDITOR_HELP if self.editing else HELP
+
+    @property
     def editing(self) -> bool:
         return self.editor is not None and self.editor.focused
 
@@ -177,6 +183,9 @@ class ViewerApp:
             self.on_editor_action(action)
         return True
 
+    def on_action(self, name: str) -> None:
+        """Hook for circuit actions ("toggle", "open_part", "up"); the game's tour listens."""
+
     def on_editor_action(self, action: str) -> None:
         """Editor shortcuts the host handles: "save" (Ctrl+S), "run" (Ctrl+Enter)."""
         if action == "save":
@@ -231,15 +240,18 @@ class ViewerApp:
         kind, ident = key
         if kind == "in" and self.session.at_top:
             self.session.toggle(str(ident), -1 if right else 1)
+            self.on_action("toggle")
         elif kind == "part" and not right:
             if self.session.open(snap.view.part(int(ident))):
                 self.fit()
+                self.on_action("open_part")
         self._update_hover()
 
     def _key(self, key: int) -> None:
         if key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
             if self.session.up():
                 self.fit()
+                self.on_action("up")
         elif key == pygame.K_f:
             self.fit()
         elif key == pygame.K_h:
@@ -252,6 +264,7 @@ class ViewerApp:
         if path != self.session.path:
             self.session.goto(path)
             self.fit()
+            self.on_action("up")  # breadcrumbs only lead to ancestors
 
     def _update_hover(self) -> None:
         snap = self.session.snapshot
@@ -338,10 +351,13 @@ class ViewerApp:
                 if self.session.snapshot is not None
                 else "(the circuit appears once the chip compiles)"
             )
-            lines = _short_error(err).splitlines() + [note]
+            tip = tip_for(err.message)
+            left = self.left_width
+            cols = max(20, (w - self.editor_width - left - 24) // font.size("M")[0])
+            raw = _short_error(err).splitlines() + ([f"Tip: {tip}"] if tip else []) + [note]
+            lines = [part for line in raw for part in textwrap.wrap(line, cols) or [""]]
             height = 10 + len(lines) * (font.get_linesize())
             top = h - FOOTER - height
-            left = self.left_width
             pygame.draw.rect(
                 surf, theme.ERROR_BG, (left, top, w - self.editor_width - left, height)
             )
@@ -349,7 +365,7 @@ class ViewerApp:
                 t = font.render(line, True, theme.ERROR_TEXT)
                 surf.blit(t, (left + 12, top + 5 + i * font.get_linesize()))
         pygame.draw.rect(surf, theme.PANEL, (0, h - FOOTER, w, FOOTER))
-        t = self.fonts.get(12).render(EDITOR_HELP if self.editing else HELP, True, theme.TEXT_DIM)
+        t = self.fonts.get(12).render(self.help_text, True, theme.TEXT_DIM)
         surf.blit(t, (12, h - FOOTER + (FOOTER - t.get_height()) // 2))
 
     def _draw_tooltip(self, surf: pygame.Surface) -> None:

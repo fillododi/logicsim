@@ -181,3 +181,36 @@ Ambiguous spec points and the option chosen. Newest last.
 - A 0.2.x patch series outside the milestones: rejected, because this is enough work to deserve its own checklist and journal entry.
 
 **Consequences:** the CPU is now milestone 7, and the simulated clock speed is reported in its journal entry. The tutorial level shifts which level opens first in a new game. Saves are keyed by chip name, so existing saves keep working.
+
+## 2026-11-06 — Tutorial level: `Hello` in `00_tutorial`
+**Context:** milestone 3 asks for a tutorial level before Not whose answer is a single `Nand` line.
+
+**Decision:**
+- **The level:** chip `Hello` (`IN a, b; OUT out;`), solved by `Nand(a=a, b=b, out=out);`, in a new group `chips/00_tutorial/` (shown as "Tutorial"). Its brief explains pins and the `Chip(pin=signal)` syntax, and its hint is close to the answer on purpose, since teaching the syntax is the level's job.
+- **Optional:** `Hello` allows only `Nand`, and Not doesn't list `Hello` as a part, so Not stays open from the start and solving `Hello` unlocks nothing new.
+- **Where a game opens:** it opens the first open level after the furthest solved level (wrapping around), instead of the first open unsolved level. Otherwise a player who skipped `Hello` would land on it every time they start.
+
+**Alternatives:**
+- Make Not require `Hello`: rejected, because experienced players would be forced through it.
+- Name the chip after what it does (it is a Nand): rejected, because `Nand` is the primitive's name and a second name for the same gate adds nothing. "Hello" says what the level is for.
+
+**Consequences:** `levels.toml` starts with `Hello`. `test_levels_exist` now checks seven names.
+
+## 2026-11-06 — Guided tour: data, anchors, events and progress
+**Context:** milestone 3 asks for guide bubbles anchored to UI elements, written as data in `chips/tutorial.toml`. They should advance when the player does what they explain, can be skipped and replayed with F1, and remember what was seen in `tutorial.json`.
+
+**Decision:**
+- **One linear tour.** It is a list of `[[step]]` entries with `id`, `text`, `anchor`, `until` and an optional `level`. One bubble shows at a time: the first unseen step tied to the open level or to no level. A step tied to a level only shows, and only listens, while that level is open, so the tour continues in Not and And. Steps waiting on another level don't hold up the open level's steps, so a player who leaves the tutorial early still gets the Not and And bubbles.
+- **Anchors** are named UI regions resolved to screen rectangles each frame: `levels`, `level:<Name>`, `brief`, `editor`, `line:<text>` (the first editor line containing the text), `canvas`, `pin:<name>`, `part` (the first part that opens, else any part), `header`, `run_button`, `results` and `footer`. A pin or part that isn't drawn falls back to the canvas. For `line:` anchors the bubble keeps the whole editor row clear, since the player is about to type there.
+- **Events** are player actions the game reports: `next` (the bubble's button), `save`, `build_ok`, `toggle`, `open_part`, `up`, `run_tests`, `solved` and `open_level[:<Name>]`. Ctrl+Enter counts as a build too, so a player who skips Ctrl+S isn't stuck. An action no step was waiting for is remembered for the session, per level. When a step whose action already happened comes up, it completes at once: solving Hello before the "run" bubble doesn't make the player run the tests again. A replay forgets these actions.
+- **Progress:** `tutorial.json` (`version`, `seen`, `skipped`) sits next to the saves. The tour resumes at the first unseen step. Skip hides it. F1 clears it and opens the first step's level. A corrupt file is set aside as `.json.bad`, as `progress.json` is. A file that can't be read at all (permissions, I/O) only restarts the tour. Either way the sidebar says so, next to any `progress.json` warning.
+- **Validation:** loading checks the ids, anchors and events and names the offending step. The game also passes the level names, so a typo in `level`, `level:<Name>` or `open_level:<Name>` is an error at start-up instead of a step that never shows.
+- **Gestures:** the bubble swallows a press that starts on it, its release, the wheel, and plain moves over it. Moves also clear the canvas hover. A drag that only passes over the bubble, or ends on it, still reaches the editor or the canvas.
+- **Bubbles swallow clicks** that land on them, so a click on a bubble never reaches what lies under it.
+
+**Alternatives:**
+- Per-level tours that are independent of each other: rejected for now. A single sequence is simpler to write and to resume, and the `level` field covers what is needed.
+- Timed or "click anywhere" advancing: rejected, because the spec wants the player to do the thing.
+- Anchors as fixed coordinates: rejected, because they would break on resize and with the automatic layout.
+
+**Consequences:** new UI regions need a named anchor in `GameApp.anchor_rect` and `tutorial.ANCHORS`. `ViewerApp` gained an `on_action` hook (a no-op in the developer viewer).
