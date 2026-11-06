@@ -126,10 +126,15 @@ Complete them in order. Each one ends with green tests, updated docs, a journal 
 
 1. **Core:** HDL parser, elaboration, combinational simulation, `.tst` runner, CLI. Chips: Not, And, Or, Xor, Mux, DMux. No GUI yet.
 2. **Base GUI:** automatic layout, inputs and outputs that can be toggled, wire colors, hierarchical navigation, in-app HDL editor with inline errors, saves, level select.
-3. **Buses:** Not32, And32, Or32, Mux32, Or8Way, Mux4Way32, Mux8Way32, DMux4Way, DMux8Way.
-4. **Arithmetic:** HalfAdder, FullAdder, Add32, a barrel shifter, an ALU covering every RV32I operation in the subset (add, sub, and, or, xor, slt, sltu, sll, srl, sra) and comparison flags for branches.
-5. **Sequential logic:** DFF in the GUI, Bit, Register32, RegisterFile (32 registers, x0 fixed at zero), RAM at increasing sizes, PC. Clock controls in the GUI.
-6. **CPU:** a single-cycle RV32I with this subset: `LUI AUIPC JAL JALR BEQ BNE BLT BGE BLTU BGEU LW SW ADDI SLTI SLTIU XORI ORI ANDI SLLI SRLI SRAI ADD SUB SLL SLT SLTU XOR SRL SRA OR AND`. Separate instruction ROM and data RAM (Harvard architecture, which is simpler for now). Goal: run a small hand-assembled program, such as summing 1..10 or computing Fibonacci, and check the result in memory with a `.tst` file.
+3. **Tutorial and UI:** teach the game inside the game, and make large chips readable.
+   - A tutorial level before Not whose answer is a single `Nand` line.
+   - Guide bubbles anchored to UI elements (editor lines, canvas pins and parts, the Run tests button, the level list). They are written as data in `chips/tutorial.toml`, advance when the player does the thing they explain, can be skipped and replayed (F1), and remember what was seen in `tutorial.json`.
+   - Short tips for the most common build errors.
+   - UI polish: fewer wire crossings on large chips, the hovered net highlighted across the canvas, junction dots where wires branch, and a help line that fits narrow windows.
+4. **Buses:** Not32, And32, Or32, Mux32, Or8Way, Mux4Way32, Mux8Way32, DMux4Way, DMux8Way.
+5. **Arithmetic:** HalfAdder, FullAdder, Add32, a barrel shifter, an ALU covering every RV32I operation in the subset (add, sub, and, or, xor, slt, sltu, sll, srl, sra) and comparison flags for branches.
+6. **Sequential logic:** DFF in the GUI, Bit, Register32, RegisterFile (32 registers, x0 fixed at zero), RAM at increasing sizes, PC. Clock controls in the GUI.
+7. **CPU:** a single-cycle RV32I with this subset: `LUI AUIPC JAL JALR BEQ BNE BLT BGE BLTU BGEU LW SW ADDI SLTI SLTIU XORI ORI ANDI SLLI SRLI SRAI ADD SUB SLL SLT SLTU XOR SRL SRA OR AND`. Separate instruction ROM and data RAM (Harvard architecture, which is simpler for now). Goal: run a small hand-assembled program, such as summing 1..10 or computing Fibonacci, and check the result in memory with a `.tst` file.
 
 ## Code conventions
 
