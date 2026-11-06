@@ -178,6 +178,7 @@ class GameApp(ViewerApp):
                     MenuItem("Export this chip as…", "export"),
                     MenuItem("Main menu", "title"),
                     MenuItem("Reset game…", "reset"),
+                    *self._sound_items(),
                     MenuItem("Quit", "quit"),
                 ],
             )
@@ -188,9 +189,37 @@ class GameApp(ViewerApp):
         items = [MenuItem("Continue" if started else "Play", "play")]
         if started:
             items.append(MenuItem("Reset game…", "reset"))
-        items.append(MenuItem("Quit", "quit"))
+        items += [*self._sound_items(), MenuItem("Quit", "quit")]
         msg = "Build a computer, starting from a single kind of gate: the Nand."
         return Menu("NAND Sim", items, message=msg, big_title=True)
+
+    def _sound_items(self) -> list[MenuItem]:
+        return [MenuItem(*pair) for pair in self._sound_labels()]
+
+    def _sound_labels(self) -> list[tuple[str, str]]:
+        on = "Off" if self.settings.muted else "On"
+        return [
+            (f"Sound: {on}", "mute"),
+            (f"Volume: {round(self.settings.volume * 100)}%", "volume"),
+        ]
+
+    def change_sound(self, action: str) -> None:
+        """Mute or unmute, or step the volume; save it and let the player hear it.
+
+        The labels of the open menu change in place, so the selection stays put.
+        """
+        if action == "mute":
+            self.settings.muted = not self.settings.muted
+        else:
+            self.settings.volume = self.settings.next_volume()
+        try:
+            self.settings.save(self.game.store.settings_path)
+        except OSError as e:
+            self.notice = f"Couldn't save the sound settings: {e.strerror or e}"
+        labels = dict((a, label) for label, a in self._sound_labels())
+        for item in self.menus[-1].items if self.menus else []:
+            item.label = labels.get(item.action, item.label)
+        self.sounds.play("select")  # a preview at the new volume; silent once muted
 
     def _confirm_reset_menu(self) -> Menu:
         where = _home_short(self.game.store.backups)
@@ -279,6 +308,8 @@ class GameApp(ViewerApp):
             self.export_chip(self.menus[-1])
         elif action == "confirm_export" and self._pending_export is not None:
             self._write_export(*self._pending_export)
+        elif action in ("mute", "volume"):
+            self.change_sound(action)
         elif action.startswith("confirm_delete:"):
             self.delete_chip(action.split(":", 1)[1])
         elif action == "quit":

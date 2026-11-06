@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -79,7 +80,12 @@ def test_menu_keyboard_and_mouse() -> None:
 
 def test_title_screen_plays_and_esc_does_not_leave_it(tmp_path: Path) -> None:
     app = new_app(tmp_path / "save", title=True)
-    assert app.on_title and labels(app) == ["Play", "Quit"]  # nothing to reset yet
+    assert app.on_title and labels(app) == [
+        "Play",
+        "Sound: On",
+        "Volume: 60%",
+        "Quit",
+    ]  # nothing to reset
     assert not app.editing
     key(app, pygame.K_ESCAPE)
     assert app.on_title  # nowhere to go back to
@@ -93,7 +99,7 @@ def test_title_offers_continue_and_reset_once_started(tmp_path: Path) -> None:
     save = tmp_path / "save"
     SaveStore(load_levels(), save).save(LEVELS["Wire"], "CHIP Wire {}")
     app = new_app(save, title=True)
-    assert labels(app) == ["Continue", "Reset game…", "Quit"]
+    assert labels(app) == ["Continue", "Reset game…", "Sound: On", "Volume: 60%", "Quit"]
 
 
 def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) -> None:
@@ -107,6 +113,8 @@ def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) ->
         "Export this chip as…",
         "Main menu",
         "Reset game…",
+        "Sound: On",
+        "Volume: 60%",
         "Quit",
     ]
     key(app, pygame.K_ESCAPE)  # Esc again resumes
@@ -408,3 +416,28 @@ def test_menus_tick_blip_and_buzz(tmp_path: Path) -> None:
     assert app.sounds.played[-1] == "error"  # a refused name
     key(app, pygame.K_ESCAPE)
     assert app.sounds.played[-1] == "back"
+
+
+def test_sound_and_volume_change_in_place_and_are_remembered(tmp_path: Path) -> None:
+    save = tmp_path / "save"
+    app = new_app(save)
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Volume: 60%")
+    assert labels(app)[app.menus[-1].selected] == "Volume: 80%"  # same row, new label
+    assert app.sounds.played[-1] == "select" and app.sounds.played.count("select") == 2
+    click_item(app, "Volume: 80%")
+    click_item(app, "Volume: 100%")
+    assert "Volume: 20%" in labels(app)  # wraps around
+    click_item(app, "Sound: On")
+    assert "Sound: Off" in labels(app) and app.settings.muted
+    before = list(app.sounds.played)
+    key(app, pygame.K_DOWN)
+    key(app, pygame.K_UP)
+    assert app.sounds.played == before  # muted: nothing more is played
+    settings = json.loads((tmp_path / "save-settings.json").read_text())
+    assert settings == {"version": 1, "muted": True, "volume": 0.2}
+
+    again = new_app(save, title=True)  # read back on the next start, on the title screen too
+    assert "Sound: Off" in labels(again) and "Volume: 20%" in labels(again)
+    click_item(again, "Sound: Off")
+    assert again.sounds.played == ["select"]  # unmuting plays the preview
