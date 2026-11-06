@@ -1,0 +1,30 @@
+# Runs the /verify gate on every PR and on main, so main is always green.
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      SDL_VIDEODRIVER: dummy
+      SDL_AUDIODRIVER: dummy
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          python-version: "3.12"
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q
+      - name: Levels against reference
+        run: |
+          if grep -q '^\[' chips/levels.toml; then
+            uv run nandsim test --impl reference chips/
+          else
+            echo "no levels yet"
+          fi
