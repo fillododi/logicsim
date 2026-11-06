@@ -86,6 +86,11 @@ def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
     assert app.game.current.name == "Hello"
     click_level(app, "Not")
     assert app.game.current.name == "Not"
+    app.render(pygame.Surface(app.size))
+    assert app.bubble is not None  # the tour follows to Not; this player skips it too
+    click(app, app.bubble.skip.center)
+    app.render(pygame.Surface(app.size))
+    assert app.bubble is None
     assert app.editor is not None and app.editor.focused
     assert app.editor.buffer.text == app.game.current.stub.read_text()
     assert not app.show_errors and app.editor.error is None

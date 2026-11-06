@@ -202,3 +202,90 @@ def test_f1_works_while_typing(tmp_path: Path) -> None:
     assert app.editor is not None and app.editor.focused
     keydown(app, pygame.K_F1)
     assert step_id(app) == "welcome"
+
+
+def bubble_id(app: GameApp) -> str | None:
+    step = app.tour.visible(app.game.current.name)
+    return step.id if step else None
+
+
+def paste(app: GameApp, text: str) -> None:
+    assert app.editor is not None
+    app.editor.clipboard.put(text)
+    keydown(app, pygame.K_a, CTRL)
+    keydown(app, pygame.K_v, CTRL)
+
+
+def test_leaving_the_tutorial_early_keeps_the_tour_going(tmp_path: Path) -> None:
+    # Review finding: opening Not mid-tutorial used to hide every later bubble.
+    app = new_app(tmp_path / "save")
+    click_level(app, "Not")
+    assert bubble_id(app) == "on_your_own" and shown(app) is not None
+    click_level(app, "Hello")
+    assert bubble_id(app) == "welcome"  # the tutorial picks up where it was left
+
+
+def test_solving_before_the_run_bubble_still_counts(tmp_path: Path) -> None:
+    # Review finding: a Ctrl+Enter solve during the "circuit" bubble was lost.
+    app = new_app(tmp_path / "save")
+    press_next(app)
+    press_next(app)
+    paste(
+        app,
+        "CHIP Hello {\n    IN a, b;\n    OUT out;\n    PARTS:\n    Nand(a=a, b=b, out=out);\n}\n",
+    )
+    keydown(app, pygame.K_RETURN, CTRL)  # builds and solves at once
+    assert bubble_id(app) == "circuit"
+    press_next(app)
+    pin = app.anchor_rect("pin:a")
+    assert pin is not None
+    click(app, pin.center)
+    press_next(app)  # "output"; "run" is already done, so the next bubble is "unlocked"
+    assert bubble_id(app) == "unlocked"
+
+
+def test_a_drag_ending_on_the_bubble_still_ends(tmp_path: Path) -> None:
+    # Review finding: the bubble swallowed the release of an editor text selection.
+    app = new_app(tmp_path / "save")
+    b = shown(app)
+    assert b is not None and app.editor is not None
+    start = app.editor.rect.center
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=start, button=1))
+    for pos in (b.rect.center, (b.rect.x + 4, b.rect.y + 4)):
+        motion = pygame.event.Event(pygame.MOUSEMOTION, pos=pos, rel=(0, 0), buttons=(1, 0, 0))
+        app.handle(motion)
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=b.rect.center, button=1))
+    assert not app.editor._dragging
+    # A press that starts on the bubble keeps its release to itself.
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=b.rect.center, button=1))
+    assert app._bubble_press
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=app.editor.rect.center, button=1))
+    assert not app._bubble_press and not app.editor._dragging
+
+
+def test_wheel_and_hover_over_the_bubble_leave_the_canvas_alone(tmp_path: Path) -> None:
+    # Review findings: the wheel zoomed the circuit under the bubble, and a hover stayed on.
+    from nandsim.gui.canvas import Hover
+
+    app = new_app(tmp_path / "save")
+    b = shown(app)
+    assert b is not None
+    app.hover = Hover(("in", "a"), None)
+    app.handle(
+        pygame.event.Event(pygame.MOUSEMOTION, pos=b.rect.center, rel=(0, 0), buttons=(0, 0, 0))
+    )
+    assert app.hover == Hover()
+    scale = app.cam.scale
+    app.handle(pygame.event.Event(pygame.MOUSEWHEEL, x=0, y=1))
+    assert app.cam.scale == scale
+
+
+def test_both_unreadable_files_are_reported(tmp_path: Path) -> None:
+    # Review finding: a progress warning used to hide the tutorial warning.
+    save = tmp_path / "save"
+    save.mkdir()
+    (save / "progress.json").write_text("{bad")
+    (save / "tutorial.json").write_text("{bad")
+    app = new_app(save)
+    assert app.notice is not None
+    assert "progress.json.bad" in app.notice and "tutorial.json.bad" in app.notice

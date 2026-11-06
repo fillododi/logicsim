@@ -44,8 +44,10 @@ def test_steps_advance_on_their_own_event(tmp_path: Path) -> None:
     assert tour.position(tour.steps[1]) == (2, 4)
     assert not tour.event("Hello", "open_level", "And")  # a different level
     assert tour.event("Hello", "open_level", "Not")
-    # "not" belongs to Not: hidden, and deaf, while another level is open.
-    assert tour.visible("And") is None and not tour.event("And", "save")
+    # "not" belongs to Not: hidden, and deaf, while another level is open. There, the next
+    # step that fits ("any", tied to no level) shows instead.
+    other = tour.visible("And")
+    assert other is not None and other.id == "any" and not tour.event("And", "save")
     assert tour.visible("Not") is not None and tour.event("Not", "save")
     assert tour.visible("Or") is not None  # no level: shows anywhere
     assert tour.event("Or", "next")
@@ -131,3 +133,66 @@ def test_bubble_never_leaves_the_window() -> None:
     bounds = (0, 0, 400, 300)
     x, y, w, h = place_bubble((0, 0, 400, 300), (200, 100), bounds)  # anchor fills it all
     assert 0 <= x and x + w <= 400 and 0 <= y and y + h <= 300
+
+
+def test_skipping_ahead_shows_the_steps_of_the_level_you_are_in(tmp_path: Path) -> None:
+    # Review finding: leaving Hello early used to hide every later bubble for good.
+    tour = small_tour(tmp_path)
+    step = tour.visible("Not")
+    assert step is not None and step.id == "not"
+    assert tour.event("Not", "save")
+    assert tour.current is not None and tour.current.id == "hi"  # Hello's steps still wait
+
+
+def test_actions_done_early_complete_their_step_later(tmp_path: Path) -> None:
+    # Review finding: solving Hello with Ctrl+Enter before the "run" bubble lost the solve.
+    steps = [
+        Step("write", "Write.", "editor", "build_ok", "Hello"),
+        Step("look", "Look.", "canvas", "next", "Hello"),
+        Step("run", "Run.", "run_button", "solved", "Hello"),
+        Step("open", "Open Not.", "level:Not", "open_level:Not", "Hello"),
+    ]
+    tour = Tour(steps, tmp_path / "tutorial.json")
+    tour.event("Hello", "build_ok")
+    tour.event("Hello", "solved")  # too early: "look" is showing
+    tour.event("Hello", "next")
+    assert tour.current is not None and tour.current.id == "open"  # "run" caught up
+    tour.replay()  # a replay forgets what was done before it
+    tour.event("Not", "build_ok")  # done on another level: doesn't count for Hello
+    tour.event("Hello", "next")
+    assert tour.current is not None and tour.current.id == "write"
+    tour.event("Hello", "build_ok")
+    tour.event("Hello", "next")
+    assert tour.current is not None and tour.current.id == "run"
+
+
+def test_progress_that_cannot_be_read_starts_over(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # Review finding: an OSError used to crash the game at start-up.
+    (tmp_path / "tutorial.json").write_text('{"version": 1, "seen": ["hi"]}')
+
+    def denied(self: Path, *args: object, **kwargs: object) -> str:
+        raise PermissionError(13, "Permission denied")
+
+    monkeypatch.setattr(Path, "read_text", denied)
+    tour = small_tour(tmp_path)
+    assert tour.current is not None and tour.current.id == "hi"
+    assert tour.warning is not None and "Permission denied" in tour.warning
+
+
+@pytest.mark.parametrize(
+    ("entry", "bad"),
+    [
+        ('level = "Helo"\nanchor = "canvas"\nuntil = "next"', "level 'Helo'"),
+        ('anchor = "level:Nott"\nuntil = "next"', "anchor 'level:Nott'"),
+        ('anchor = "canvas"\nuntil = "open_level:Andd"', "'until' event 'open_level:Andd'"),
+    ],
+)
+def test_level_names_are_checked(tmp_path: Path, entry: str, bad: str) -> None:
+    # Review finding: a typo in a level name used to block the tour forever, silently.
+    p = tmp_path / "tutorial.toml"
+    p.write_text(f'[[step]]\nid = "a"\ntext = "x"\n{entry}\n')
+    with pytest.raises(ValueError, match=f"step 1 .a.: unknown {bad}"):
+        load_steps(p, levels={"Hello", "Not", "And"})
+    load_steps(p)  # without a level list, names aren't checked

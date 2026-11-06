@@ -44,7 +44,7 @@ class SaveStore:
         return self.path(level).is_file()
 
     def save(self, level: Level, text: str) -> None:
-        _atomic_write(self.path(level), text)
+        atomic_write(self.path(level), text)
 
     def library(self, editing: Level | None = None, text: str | None = None) -> ChipLibrary:
         """Chips as the player built them; `text` overrides `editing`'s file (unsaved editor)."""
@@ -85,10 +85,10 @@ class SaveStore:
 
     def _write_progress(self) -> None:
         data = {"version": PROGRESS_VERSION, "solved": sorted(self._solved)}
-        _atomic_write(self.root / "progress.json", json.dumps(data, indent=2) + "\n")
+        atomic_write(self.root / "progress.json", json.dumps(data, indent=2) + "\n")
 
 
-def _atomic_write(path: Path, text: str) -> None:
+def atomic_write(path: Path, text: str) -> None:
     """Write via a temp file and rename, so a crash never leaves half a save."""
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_suffix(path.suffix + ".tmp")

@@ -22,7 +22,7 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-from nandsim.gui.saves import _atomic_write
+from nandsim.gui.saves import atomic_write
 from nandsim.paths import data_root
 
 TUTORIAL_VERSION = 1
@@ -50,8 +50,12 @@ class Step:
         return self.until == event or (detail is not None and self.until == f"{event}:{detail}")
 
 
-def load_steps(path: Path | None = None) -> list[Step]:
-    """Read and check the tour. Errors name the step, so a typo in the data is easy to find."""
+def load_steps(path: Path | None = None, levels: set[str] | None = None) -> list[Step]:
+    """Read and check the tour. Errors name the step, so a typo in the data is easy to find.
+
+    With `levels`, the level names in `level`, `level:<Name>` and `open_level:<Name>`
+    are checked too: a step tied to a level that doesn't exist would never show.
+    """
     path = path or data_root() / "chips" / "tutorial.toml"
     with open(path, "rb") as f:
         data = tomllib.load(f)
@@ -65,16 +69,25 @@ def load_steps(path: Path | None = None) -> list[Step]:
             raise ValueError(f"{where}: duplicate id '{sid}'")
         anchor, until = str(e.get("anchor", "")), str(e.get("until", ""))
         kind, _, arg = anchor.partition(":")
-        if not (anchor in ANCHORS or (kind in ANCHOR_KINDS and arg)):
+        known = levels if levels is not None else None
+        if not (anchor in ANCHORS or (kind in ANCHOR_KINDS and arg)) or (
+            kind == "level" and known is not None and arg not in known
+        ):
             raise ValueError(f"{where}: unknown anchor '{anchor}'")
         event, _, detail = until.partition(":")
-        if event not in EVENTS or (detail and event != "open_level"):
+        if (
+            event not in EVENTS
+            or (detail and event != "open_level")
+            or (detail and known is not None and detail not in known)
+        ):
             raise ValueError(f"{where}: unknown 'until' event '{until}'")
         text = str(e.get("text", "")).strip()
         if not text:
             raise ValueError(f"{where}: empty text")
-        level = e.get("level")
-        steps.append(Step(sid, text, anchor, until, str(level) if level else None))
+        level = str(e["level"]) if e.get("level") else None
+        if level is not None and known is not None and level not in known:
+            raise ValueError(f"{where}: unknown level '{level}'")
+        steps.append(Step(sid, text, anchor, until, level))
     return steps
 
 
@@ -84,22 +97,31 @@ class Tour:
         self.path = path
         self.warning: str | None = None
         self.seen, self.skipped = self._read()
+        # Actions no step was waiting for, as (level, event, detail), so a step whose
+        # action already happened completes as soon as it comes up. Not saved: a
+        # restart or a replay starts clean.
+        self._done: set[tuple[str, str, str | None]] = set()
 
     # ---- state -----------------------------------------------------------
 
     @property
     def current(self) -> Step | None:
-        """The next step to complete, or None when the tour is finished or skipped."""
+        """The first step not completed yet, or None when the tour is finished or skipped."""
         if self.skipped:
             return None
         return next((s for s in self.steps if s.id not in self.seen), None)
 
     def visible(self, level: str) -> Step | None:
-        """The step to show while `level` is open (steps tied to another level wait)."""
-        step = self.current
-        if step is None or step.level not in (None, level):
+        """The step to show while `level` is open: the first unseen one for it or for any level.
+
+        Steps tied to other levels wait, but they don't hold up this level's steps, so a
+        player who leaves the tutorial early still gets the bubbles of the level they are in.
+        """
+        if self.skipped:
             return None
-        return step
+        return next(
+            (s for s in self.steps if s.id not in self.seen and s.level in (None, level)), None
+        )
 
     def position(self, step: Step) -> tuple[int, int]:
         """(1-based index, total), for the "3 / 13" counter."""
@@ -111,10 +133,19 @@ class Tour:
         """The player did `name` while `level` was open. True if that completed a step."""
         step = self.visible(level)
         if step is None or not step.listens_to(name, detail):
+            self._done.add((level, name, detail))
             return False
         self.seen.add(step.id)
+        self.catch_up(level)
         self._write()
         return True
+
+    def catch_up(self, level: str) -> None:
+        """Complete the steps now showing whose action the player already did on `level`."""
+        while (step := self.visible(level)) is not None and any(
+            lv == level and step.listens_to(name, detail) for lv, name, detail in self._done
+        ):
+            self.seen.add(step.id)
 
     def skip(self) -> None:
         self.skipped = True
@@ -122,6 +153,7 @@ class Tour:
 
     def replay(self) -> None:
         self.seen.clear()
+        self._done.clear()
         self.skipped = False
         self._write()
 
@@ -131,7 +163,12 @@ class Tour:
         if not self.path.is_file():
             return set(), False
         try:
-            data = json.loads(self.path.read_text())
+            text = self.path.read_text()
+        except OSError as e:
+            self.warning = f"tutorial file couldn't be read ({e}); the tour starts over"
+            return set(), False
+        try:
+            data = json.loads(text)
             if data.get("version") != TUTORIAL_VERSION:
                 raise ValueError(f"unknown version {data.get('version')!r}")
             return {str(s) for s in data["seen"]}, bool(data.get("skipped", False))
@@ -145,7 +182,7 @@ class Tour:
         order = {s.id: i for i, s in enumerate(self.steps)}
         seen = sorted(self.seen, key=lambda s: (order.get(s, len(order)), s))
         data = {"version": TUTORIAL_VERSION, "seen": seen, "skipped": self.skipped}
-        _atomic_write(self.path, json.dumps(data, indent=2) + "\n")
+        atomic_write(self.path, json.dumps(data, indent=2) + "\n")
 
 
 # ---- layout helpers (plain tuples, so they are testable without pygame) --------

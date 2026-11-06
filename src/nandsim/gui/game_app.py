@@ -15,6 +15,7 @@ import pygame
 from nandsim.gui import theme
 from nandsim.gui.app import FOOTER, HEADER, ViewerApp
 from nandsim.gui.brief import brief_lines
+from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
 from nandsim.gui.game import GameState
 from nandsim.gui.guide import Bubble, draw_bubble
@@ -36,15 +37,18 @@ GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 class GameApp(ViewerApp):
     def __init__(self, store: SaveStore, size: tuple[int, int] = (1440, 860)) -> None:
         self.game = GameState(store)
-        self.tour = Tour(load_steps(), store.root / "tutorial.json")
+        names = {lv.name for lv in store.levels}
+        self.tour = Tour(load_steps(levels=names), store.root / "tutorial.json")
         self.bubble: Bubble | None = None
+        self._bubble_press = False  # a press started on the bubble; its release is ours too
         self._brief_rect = pygame.Rect(0, 0, 0, 0)
         session = ChipSession(self.game.loader())
         session.reload()
         super().__init__(session, size=size)
         self.edit_path = Path(self.game.path)
         self.editor = EditorWidget(TextBuffer(self.game.text()), self.fonts, self.editor_rect)
-        self.notice: str | None = store.warning or self.tour.warning
+        warnings = [w for w in (store.warning, self.tour.warning) if w]
+        self.notice: str | None = "; ".join(warnings) or None
         self._attempted = store.has_save(self.game.current)
         self._rows: list[tuple[pygame.Rect, Level]] = []
         self._sync_error()
@@ -94,6 +98,7 @@ class GameApp(ViewerApp):
         if self.editor.buffer.dirty:  # never lose work: save it to the level it belongs to
             self.game.save(self.editor.buffer.text)
         self.game.select(level)
+        self.tour.catch_up(level.name)  # its next step may be something already done here
         self.editor.buffer.set_text(self.game.text())
         self.editor.focused = True
         self._attempted = self.game.store.has_save(level)
@@ -168,20 +173,32 @@ class GameApp(ViewerApp):
         super().handle(ev)
 
     def _bubble_event(self, ev: pygame.event.Event) -> bool:
-        """Clicks on the bubble go to its buttons and never reach what lies under it."""
+        """Presses, wheel turns and plain moves over the bubble never reach what lies under it.
+
+        Only gestures that start on the bubble are swallowed: a text selection or a pan
+        that merely ends over the bubble still gets its moves and its release.
+        """
+        if ev.type == pygame.MOUSEBUTTONUP and self._bubble_press:
+            self._bubble_press = False
+            return True
         b = self.bubble
-        pos = getattr(ev, "pos", None)
+        pos = self.mouse if ev.type == pygame.MOUSEWHEEL else getattr(ev, "pos", None)
         if b is None or pos is None or not b.rect.collidepoint(pos):
             return False
         if ev.type == pygame.MOUSEMOTION:
+            if any(getattr(ev, "buttons", ())):
+                return False  # a drag passing over the bubble
             self.mouse = pos
+            self.hover = Hover()  # nothing under the bubble is hovered
             return True
-        if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
-            if b.next is not None and b.next.collidepoint(pos):
+        if ev.type == pygame.MOUSEBUTTONDOWN:
+            self._bubble_press = True
+            if ev.button == 1 and b.next is not None and b.next.collidepoint(pos):
                 self.tour_event("next")
-            elif b.skip.collidepoint(pos):
+            elif ev.button == 1 and b.skip.collidepoint(pos):
                 self.tour.skip()
-        return ev.type in (pygame.MOUSEBUTTONDOWN, pygame.MOUSEBUTTONUP, pygame.MOUSEWHEEL)
+            return True
+        return ev.type == pygame.MOUSEWHEEL
 
     # ---- tour anchors --------------------------------------------------------
 
