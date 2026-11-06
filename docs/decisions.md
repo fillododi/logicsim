@@ -309,3 +309,23 @@ Ambiguous spec points and the option chosen. Newest last.
 - `.tst` needs a way to load program ROM contents before milestone 8.
 - Future milestone numbers changed in the `tick`/`tock` error message, `docs/tst.md`, the primitives docstring and `CHANGELOG.md`. Earlier decision and journal entries keep their wording.
 
+
+## 2026-11-06 — Chip files: exporting and importing from the pause menu
+**Context:** milestone 4 asks for exporting the current level's chip to a `.hdl` file and importing one into a level's editor, from an in-game menu, in an exports folder beside the save dir. The entry above fixed the folder's place and that an import is unsaved text; the details were open.
+
+**Decision:**
+- **Folder:** `<save dir>-exports/` (default `~/.local/share/nandsim/save-exports/`), the same naming as `-backups`. A reset doesn't touch it, and `ChipLibrary` never searches it.
+- **Where in the game:** two items in the Esc pause menu, *Export this chip* and *Import a chip…*. None on the title screen, which has no current level.
+- **Export writes the editor's text**, saved or not, because that is what the player is looking at and expects to get. It does not save the level or mark the buffer saved. The file is `<Level>.hdl`. If that file exists with different contents, a *Replace?* dialog asks first, with Cancel selected; identical contents are rewritten silently.
+- **Import lists every `.hdl` file** in the folder (not subfolders, not other extensions), with the current level's file first and marked *(this level)*, the rest by name, case-insensitively. Files for other chips are listed too, so a renamed or shared file can still be loaded; a wrong `CHIP` name is then an ordinary build error, which already has a tip.
+- **Six files per page**, with Next and Previous page items, because `Menu` doesn't scroll and the window has no minimum size. Back from any page returns to the pause menu.
+- **An import replaces the editor's text as one undoable edit** (select all, then insert), leaving it unsaved. It counts only after Ctrl+S or Run tests, as the milestone requires, and Ctrl+Z restores the previous text. The cursor goes to the top.
+- **Errors are notices, never crashes:** an unreadable or non-UTF-8 file, or a failed write, shows a line in the sidebar and leaves the editor as it was.
+
+**Alternatives:**
+- Exporting the saved file instead of the editor's text: rejected, it would surprise a player who just typed something and exports it.
+- A text field for a file name on export: rejected for now, it needs a text-input widget in menus; renaming in the file manager covers it.
+- Listing only files named after the current level: rejected, it hides renamed or shared chips.
+- A scrolling menu: more work than paging for the same result.
+
+**Consequences:** `SaveStore` gained `exports`, `export_path`, `export`, `chip_files` and `read_chip_file`; `GameApp` gained `export_chip` and `import_chip`. Exported files are never cleaned up.

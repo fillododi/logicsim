@@ -101,7 +101,15 @@ def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) ->
     assert app.editing
     key(app, pygame.K_ESCAPE)
     assert app.menus and app.menus[0].title == "Paused" and not app.editing
-    assert labels(app) == ["Resume", "Replay the tour", "Main menu", "Reset game…", "Quit"]
+    assert labels(app) == [
+        "Resume",
+        "Replay the tour",
+        "Export this chip",
+        "Import a chip…",
+        "Main menu",
+        "Reset game…",
+        "Quit",
+    ]
     key(app, pygame.K_ESCAPE)  # Esc again resumes
     assert app.menus == [] and app.editing
 
@@ -183,3 +191,101 @@ def test_help_line_names_the_menu_key(tmp_path: Path) -> None:
     app = new_app(tmp_path / "save")
     assert app.help_text.startswith("Esc: menu  ·  F1: tour")
     assert "Esc: back" not in app.help_text  # the editor's Esc item doesn't apply in the game
+
+
+# ---- chip files --------------------------------------------------------------
+
+
+def test_export_writes_the_editor_text_and_asks_before_replacing(tmp_path: Path) -> None:
+    app = new_app(tmp_path / "save")
+    assert app.editor is not None
+    type_text(app, "// v1\n")  # unsaved text is exported as the player sees it
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Export this chip")
+    path = tmp_path / "save-exports" / "Wire.hdl"
+    assert path.read_text() == app.editor.buffer.text
+    assert app.menus == [] and app.editing and app.notice is not None
+    assert app.notice.startswith("Exported Wire to ")
+    assert app.editor.buffer.dirty  # exporting is not saving the level
+
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Export this chip")  # same text: nothing to confirm
+    assert app.menus == []
+
+    type_text(app, "// v2\n")
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Export this chip")
+    assert app.menus[-1].title == "Replace Wire.hdl?"
+    assert labels(app)[app.menus[-1].selected] == "Cancel"
+    key(app, pygame.K_RETURN)
+    assert app.menus[-1].title == "Paused" and "v2" not in path.read_text()
+    click_item(app, "Export this chip")
+    click_item(app, "Replace it")
+    assert path.read_text() == app.editor.buffer.text and app.menus == []
+
+
+def test_import_with_no_files_says_where_to_put_them(tmp_path: Path) -> None:
+    app = new_app(tmp_path / "save")
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Import a chip…")
+    assert labels(app) == ["Back"] and "save-exports" in app.menus[-1].message
+    click_item(app, "Back")
+    assert app.menus[-1].title == "Paused"
+
+
+def test_import_is_unsaved_undoable_text_until_saved_or_tested(tmp_path: Path) -> None:
+    save = tmp_path / "save"
+    store = SaveStore(load_levels(), save)
+    answer = LEVELS["Wire"].reference.read_text()
+    store.export(LEVELS["Wire"], answer)
+    store.export(LEVELS["Not"], "CHIP Not {}")
+    app = new_app(save)
+    assert app.editor is not None
+    before = app.editor.buffer.text
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Import a chip…")
+    assert app.menus[-1].title == "Import into Wire"
+    assert labels(app) == ["Wire.hdl  (this level)", "Not.hdl", "Back"]
+    click_item(app, "Wire.hdl  (this level)")
+    assert app.menus == [] and app.editing
+    assert app.editor.buffer.text == answer and app.editor.buffer.dirty
+    assert app.notice is not None and app.notice.startswith("Imported Wire.hdl")
+    # Importing alone neither saves nor solves the level.
+    assert not (save / "Wire.hdl").exists() and "Wire" not in app.game.store.solved
+
+    app.editor.buffer.undo()
+    assert app.editor.buffer.text == before
+    app.editor.buffer.redo()
+    app.run_tests()
+    assert "Wire" in app.game.store.solved and (save / "Wire.hdl").read_text() == answer
+
+
+def test_import_pages_through_many_files_and_reports_bad_ones(tmp_path: Path) -> None:
+    save = tmp_path / "save"
+    exports = tmp_path / "save-exports"
+    exports.mkdir()
+    for i in range(10):
+        (exports / f"C{i}.hdl").write_text(f"// {i}")
+    (exports / "Bad.hdl").write_bytes(b"\xff\xfe")
+    app = new_app(save)
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Import a chip…")
+    assert labels(app)[0] == "Bad.hdl" and labels(app)[-2:] == ["Next page", "Back"]
+    assert "Page 1 of 2." in app.menus[-1].message
+    click_item(app, "Next page")
+    assert labels(app) == [
+        "C5.hdl",
+        "C6.hdl",
+        "C7.hdl",
+        "C8.hdl",
+        "C9.hdl",
+        "Previous page",
+        "Back",
+    ]
+    click_item(app, "Back")  # back from any page returns to the pause menu
+    assert app.menus[-1].title == "Paused"
+    click_item(app, "Import a chip…")
+    text = app.editor.buffer.text if app.editor else ""
+    click_item(app, "Bad.hdl")
+    assert app.notice == "Couldn't import: Bad.hdl isn't a text file"
+    assert app.editor is not None and app.editor.buffer.text == text

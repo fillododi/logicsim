@@ -4,7 +4,8 @@ test results on the right.
 It reuses `ViewerApp` for the canvas, the editor pane, navigation and error display,
 and adds the level sidebar, the results panel, the "Run tests" action and the guided
 tour's bubbles (F1 replays the tour). Menus sit on top: the title screen at start,
-and the pause menu on Esc, from which the game can be reset.
+and the pause menu on Esc, from which the game can be reset and the current chip
+exported to, or imported from, a chip file in the exports folder.
 """
 
 from __future__ import annotations
@@ -27,6 +28,8 @@ from nandsim.gui.session import ChipSession
 from nandsim.gui.textbuffer import Pos, TextBuffer
 from nandsim.gui.tutorial import Tour, load_steps
 from nandsim.testing import Level, load_levels
+
+IMPORT_PAGE = 6  # chip files per page of the import menu, so it fits a small window
 
 SIDEBAR = 260
 RESULTS_H = 190
@@ -158,6 +161,8 @@ class GameApp(ViewerApp):
                 [
                     MenuItem("Resume", "resume"),
                     MenuItem("Replay the tour", "tour"),
+                    MenuItem("Export this chip", "export"),
+                    MenuItem("Import a chip…", "import"),
                     MenuItem("Main menu", "title"),
                     MenuItem("Reset game…", "reset"),
                     MenuItem("Quit", "quit"),
@@ -183,6 +188,40 @@ class GameApp(ViewerApp):
         # Cancel comes first, so Enter on a menu opened by mistake is harmless.
         items = [MenuItem("Cancel", BACK), MenuItem("Reset the game", "confirm_reset", True)]
         return Menu("Reset the game?", items, message=msg)
+
+    def _confirm_export_menu(self) -> Menu:
+        path = self.game.store.export_path(self.game.current)
+        msg = f"{_home_short(path)} already exists and holds a different chip."
+        items = [MenuItem("Cancel", BACK), MenuItem("Replace it", "confirm_export", True)]
+        return Menu(f"Replace {path.name}?", items, message=msg)
+
+    def _import_menu(self, page: int = 0) -> Menu:
+        level = self.game.current.name
+        files = self.game.store.chip_files(first=level)
+        where = _home_short(self.game.store.exports)
+        if not files:
+            msg = (
+                f"There are no chip files in {where} yet. Export a chip from this menu, "
+                "or copy .hdl files into that folder."
+            )
+            return Menu("Import a chip", [MenuItem("Back", BACK)], message=msg)
+        pages = (len(files) + IMPORT_PAGE - 1) // IMPORT_PAGE
+        page = max(0, min(page, pages - 1))
+        shown = files[page * IMPORT_PAGE : (page + 1) * IMPORT_PAGE]
+        mark = "  (this level)"
+        items = [
+            MenuItem(f.name + (mark if f.stem == level else ""), f"import_file:{f.name}")
+            for f in shown
+        ]
+        if page + 1 < pages:
+            items.append(MenuItem("Next page", f"import_page:{page + 1}"))
+        if page > 0:
+            items.append(MenuItem("Previous page", f"import_page:{page - 1}"))
+        items.append(MenuItem("Back", BACK))
+        msg = f"From {where}. The chip replaces the editor's text; Ctrl+Z brings it back."
+        if pages > 1:
+            msg += f"\n\nPage {page + 1} of {pages}."
+        return Menu(f"Import into {level}", items, message=msg)
 
     def _open_menu(self, menu: Menu) -> None:
         if not self.menus:
@@ -219,8 +258,67 @@ class GameApp(ViewerApp):
             self.reset_game()
             self._focus_before_menu = True  # a new game starts in the editor
             self._close_menus()
+        elif action == "export":
+            self.export_chip()
+        elif action == "confirm_export":
+            self.export_chip(replace=True)
+        elif action == "import":
+            self.menus.append(self._import_menu())
+        elif action.startswith("import_page:"):
+            self.menus[-1] = self._import_menu(int(action.split(":", 1)[1]))
+        elif action.startswith("import_file:"):
+            self.import_chip(self.game.store.exports / action.split(":", 1)[1])
         elif action == "quit":
             self.quit_requested = True
+
+    def export_chip(self, replace: bool = False) -> None:
+        """Write the editor's text to `<Level>.hdl` in the exports folder.
+
+        The editor's text, saved or not, is what the player sees, so that is what goes
+        out. An existing file with other contents is only replaced after a confirmation.
+        """
+        assert self.editor is not None
+        store, level = self.game.store, self.game.current
+        text = self.editor.buffer.text
+        path = store.export_path(level)
+        if not replace and path.is_file():
+            try:
+                same = store.read_chip_file(path) == text
+            except ValueError:
+                same = False
+            if not same:
+                self.menus.append(self._confirm_export_menu())
+                return
+        try:
+            store.export(level, text)
+        except OSError as e:
+            self.notice = f"Couldn't export {level.name}: {e.strerror or e}"
+        else:
+            self.notice = f"Exported {level.name} to {_home_short(path)}"
+        self._close_menus()
+
+    def import_chip(self, path: Path) -> None:
+        """Put a chip file's text in the editor, as unsaved text that Ctrl+Z can undo.
+
+        It only counts once the player saves it or runs the tests, like anything typed,
+        so importing a file never solves a level by itself.
+        """
+        assert self.editor is not None
+        try:
+            text = self.game.store.read_chip_file(path)
+        except ValueError as e:
+            self.notice = f"Couldn't import: {e}"
+        else:
+            buf = self.editor.buffer
+            buf.select_all()
+            buf.insert(text)
+            buf.set_cursor(Pos(0, 0))
+            self._focus_before_menu = True
+            self.notice = (
+                f"Imported {path.name}. Save it (Ctrl+S) or run the tests to use it; "
+                "Ctrl+Z undoes the import."
+            )
+        self._close_menus()
 
     def save(self) -> None:
         assert self.editor is not None
