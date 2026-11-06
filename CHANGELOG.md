@@ -6,42 +6,50 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 
 ## [Unreleased]
 
-### Added
-- **Tutorial levels, Wire and Hello:** two new first levels. Wire is solved with one connection,
-  `out = in;`, and introduces pins, connections and the editor. Hello is solved with a single
-  Nand line and introduces parts. Not is still open from the start, so you can skip them.
-- **Guided tour:** bubbles point at the level list, the brief, the editor, the circuit and the
-  Run tests button, and move on when you do what they explain. Skip it from any bubble, or press
-  **F1** to replay it. The tour remembers where you got to.
-- **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
-  missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
-  them, under the error and in the test results.
-- **Follow a signal:** hover a wire or a chip pin and every wire of that signal lights up, all
-  the way to each part it feeds.
-- **Junction dots** mark where a wire branches, so a fork no longer looks like two wires
-  crossing.
-- **Main menu:** the game opens on a title screen with Play (or Continue), Reset game and Quit.
-- **Pause menu:** press **Esc**, even while typing, to resume, replay the tour, go back to the
-  main menu, reset the game or quit.
-- **Reset game:** start over from the first level, after a confirmation. Your old chips and
-  progress aren't deleted: they move to a `save-backups/` folder next to your saves.
+## [0.3.0] — 2026-11-06
 
-- **Wires in the tour:** in the And level, the tour and the brief explain how to pass one
-  part's output into another through a wire of your own, then point at your wire on the
-  circuit.
+Milestone 3: the game teaches itself. A guided tour walks you from your first wire to your
+first gate made of gates, build errors come with tips, and big circuits are easier to read.
+
+### Added
+- **Learning to play:**
+  - **Two tutorial levels, Wire and Hello,** come before Not. Wire is solved with one
+    connection, `out = in;`, and introduces pins, connections and the editor. Hello is solved
+    with a single Nand line and introduces parts. Both are optional: Not is open from the
+    start.
+  - **Guided tour:** bubbles point at the level list, the brief, the editor, the circuit and
+    the Run tests button, and move on when you do what they explain. Skip it from any bubble,
+    or press **F1** to replay it. The tour remembers where you got to.
+  - **Wires:** in the And level, the tour and the brief show how to pass one part's output into
+    another through a wire you name, then point at your wire on the circuit.
+  - **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
+    missing `;`, a part the level doesn't allow, …) come with a one-line tip on how to fix
+    them, under the error and in the test results.
+- **Reading circuits:**
+  - **Follow a signal:** hover a wire or a chip pin and every wire of that signal lights up,
+    all the way to each part it feeds.
+  - **Junction dots** mark where a wire branches, so a fork no longer looks like two wires
+    crossing.
+- **Menus:**
+  - **Main menu:** the game opens on a title screen with Play (or Continue), Reset game and
+    Quit.
+  - **Pause menu:** press **Esc**, even while typing, to resume, replay the tour, go back to
+    the main menu, reset the game or quit.
+  - **Reset game:** start over from the first level, after a confirmation. Your old chips and
+    progress aren't deleted: they move to a `save-backups/` folder next to your saves.
 
 ### Changed
 - **Fewer wire crossings:** wires between two columns of parts are spread out so they cross
-  each other much less; a 64-part test chip went from about 2500 crossings to under 1000.
-- **Help line in narrow windows:** the shortcuts at the bottom wrap onto more lines instead of
-  running off the edge of the window.
+  much less. A 64-part test chip went from about 2500 crossings to under 1000.
+- **The help line fits narrow windows:** the shortcuts at the bottom wrap onto more lines
+  instead of running off the edge.
 - **Esc opens the pause menu** in the game instead of leaving the editor. Click the circuit to
   leave the editor. The developer viewer (`nandsim gui FILE`) keeps Esc as before.
 - On start, the game opens the first open level after the furthest one you solved, so skipping
   the tutorial doesn't send you back to it every time.
 
 ### Fixed
-- Closing the window no longer loses text you typed but hadn't saved; it is saved to the level,
+- Closing the window no longer loses text you typed but hadn't saved. It is saved to the level,
   as switching level already did.
 
 ## [0.2.0] — 2026-11-06
@@ -113,6 +121,7 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/fillododi/logicsim/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/fillododi/logicsim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fillododi/logicsim/releases/tag/v0.1.0
