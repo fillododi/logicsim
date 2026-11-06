@@ -1,0 +1,7 @@
+// Mux12: Selects a or b, 12 bits wide.
+// You may use: Nand, Mux, Mux4, Mux8
+CHIP Mux12 {
+    IN a[12], b[12], sel;
+    OUT out[12];
+    PARTS:
+}

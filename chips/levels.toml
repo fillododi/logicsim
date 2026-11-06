@@ -42,3 +42,71 @@ parts = ["Nand", "Not", "And", "Or", "Xor"]
 name = "DMux"
 group = "01_gates"
 parts = ["Nand", "Not", "And", "Or", "Xor", "Mux"]
+
+# Buses: the widths of the Intel 4004, 4-bit data, 8-bit instructions and register
+# pairs, 12-bit addresses. Each level needs only the gate it widens, so a bus level
+# opens as soon as that gate is solved.
+[[level]]
+name = "Not4"
+group = "02_buses"
+parts = ["Nand", "Not"]
+
+[[level]]
+name = "And4"
+group = "02_buses"
+parts = ["Nand", "And"]
+
+[[level]]
+name = "Or4"
+group = "02_buses"
+parts = ["Nand", "Or"]
+
+[[level]]
+name = "Xor4"
+group = "02_buses"
+parts = ["Nand", "Xor"]
+
+[[level]]
+name = "Mux4"
+group = "02_buses"
+parts = ["Nand", "Mux"]
+
+[[level]]
+name = "Mux8"
+group = "02_buses"
+parts = ["Nand", "Mux", "Mux4"]
+
+[[level]]
+name = "Mux12"
+group = "02_buses"
+parts = ["Nand", "Mux", "Mux4", "Mux8"]
+
+[[level]]
+name = "Or4Way"
+group = "02_buses"
+parts = ["Nand", "Or"]
+
+[[level]]
+name = "Mux4Way4"
+group = "02_buses"
+parts = ["Nand", "Mux4"]
+
+[[level]]
+name = "Mux8Way4"
+group = "02_buses"
+parts = ["Nand", "Mux4", "Mux4Way4"]
+
+[[level]]
+name = "Mux4Way12"
+group = "02_buses"
+parts = ["Nand", "Mux12"]
+
+[[level]]
+name = "DMux4Way"
+group = "02_buses"
+parts = ["Nand", "DMux"]
+
+[[level]]
+name = "DMux8Way"
+group = "02_buses"
+parts = ["Nand", "DMux", "DMux4Way"]

@@ -1,0 +1,7 @@
+// Or4Way: 1 if any of the 4 input bits is 1.
+// You may use: Nand, Or
+CHIP Or4Way {
+    IN in[4];
+    OUT out;
+    PARTS:
+}

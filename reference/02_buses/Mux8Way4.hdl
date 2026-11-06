@@ -1,0 +1,9 @@
+// Reference solution for Mux8Way4. Never shown to the player.
+CHIP Mux8Way4 {
+    IN a[4], b[4], c[4], d[4], e[4], f[4], g[4], h[4], sel[3];
+    OUT out[4];
+    PARTS:
+    Mux4Way4(a=a, b=b, c=c, d=d, sel=sel[0..1], out=low);
+    Mux4Way4(a=e, b=f, c=g, d=h, sel=sel[0..1], out=high);
+    Mux4(a=low, b=high, sel=sel[2], out=out);
+}

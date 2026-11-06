@@ -64,7 +64,7 @@ def test_wrong_solution_lists_failing_rows(game: GameState) -> None:
 def test_solving_unlocks_and_uses_the_players_chips(game: GameState) -> None:
     r = game.run_tests(solution("Not"))
     assert r.passed and r.summary == "All 2 checks passed"
-    assert r.lines == ["Unlocked: And"]
+    assert r.lines == ["Unlocked: And, Not4"]  # Not4 widens Not
     assert game.status(LEVELS["Not"]) == "solved"
     game.save(solution("Not"))
     assert game.select(LEVELS["And"])

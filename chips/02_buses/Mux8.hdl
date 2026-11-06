@@ -1,0 +1,7 @@
+// Mux8: Selects a or b, 8 bits wide.
+// You may use: Nand, Mux, Mux4
+CHIP Mux8 {
+    IN a[8], b[8], sel;
+    OUT out[8];
+    PARTS:
+}

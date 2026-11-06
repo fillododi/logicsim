@@ -1,0 +1,7 @@
+// Mux4: Selects a or b, 4 bits wide.
+// You may use: Nand, Mux
+CHIP Mux4 {
+    IN a[4], b[4], sel;
+    OUT out[4];
+    PARTS:
+}
