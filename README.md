@@ -2,7 +2,7 @@
 
 **Build a computer from a single NAND gate.** NAND Sim is a game: each level asks you to build a
 chip out of chips you have already built. It starts with `Not` from a `Nand` and ends with a
-working RISC-V CPU (an RV32I subset) that runs real programs.
+working Intel 4004, the first commercial microprocessor, running real 4004 programs.
 
 ![Solving the And level: level list and brief on the left, the circuit in the middle, the
 editor and test results on the right](docs/images/game-solved.png)
@@ -99,13 +99,14 @@ nandsim test chips/01_gates/Xor.tst
 |---|---|---|
 | 1. Core | HDL, simulator, tests, the gates Not to DMux | ✅ [0.1.0](https://github.com/fillododi/logicsim/releases/tag/v0.1.0) |
 | 2. GUI | the game screen, circuit view, editor, saves | ✅ [0.2.0](https://github.com/fillododi/logicsim/releases/tag/v0.2.0) |
-| 3. Tutorial and UI | a first level and guide bubbles that teach the game; readable large chips | next |
-| 4. Buses | 32-bit Not, And, Or, Mux, multi-way Mux and DMux | |
-| 5. Arithmetic | adders, a barrel shifter, the ALU | |
-| 6. Sequential logic | DFF, registers, register file, RAM, PC, clock controls | |
-| 7. CPU | a single-cycle RV32I that runs a hand-assembled program | |
+| 3. Tutorial and UI | a first level and guide bubbles that teach the game; readable large chips | ✅ [0.3.0](https://github.com/fillododi/logicsim/releases/tag/v0.3.0) |
+| 4. Chip files and sound | export and import single chips; sound effects | next |
+| 5. Buses | 4-, 8- and 12-bit Not, And, Or, Mux, multi-way Mux and DMux | |
+| 6. Arithmetic | adders, incrementers, the 4004 ALU with decimal adjust | |
+| 7. Sequential logic | DFF, registers, index registers, PC and stack, RAM, ROM, clock controls | |
+| 8. CPU | the Intel 4004: all 46 instructions, running a hand-assembled program | |
 
-NAND Sim is the first project in a series that retraces computing from the hardware up. Next come an emulator for the same CPU, an assembler, a ROM monitor, a compiler, an operating system, networking, and finally real machines (boot sector, BIOS, UEFI on QEMU). Targeting RISC-V means each step can be checked against the real toolchain.
+NAND Sim is the first project in a series that retraces computing from the hardware up. Next come an emulator for the same CPU, an assembler, a ROM monitor, a compiler, an operating system, networking, and finally real machines (boot sector, BIOS, UEFI on QEMU). Each step targets the same 4004, checked against Intel's MCS-4 documentation and existing 4004 programs.
 
 ## Development
 

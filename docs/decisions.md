@@ -284,3 +284,28 @@ Ambiguous spec points and the option chosen. Newest last.
 - Stop the game at the CPU and leave the rest to the later projects (emulator, OS…): not chosen. The user wants the game to carry on to a complete machine.
 
 **Consequences:** level and milestone design should keep the CPU reusable as a part of a larger machine (clean interfaces to instruction ROM, data RAM and future I/O), so the computer levels can be added without reworking it. The scope of the computer stage is still open and needs its own decision before work starts.
+
+## 2026-11-06 — The Intel 4004 replaces RV32I; new milestone 4, chip files and sound
+**Context:** the user asked for three changes to the milestones: saving and loading single chips, audio, and making the last goal a chip with the same requirements as an Intel 4004. Asked to choose, they picked the 4004 as *the* game CPU (replacing RV32I, not added after it) and export/import of chip files (not several save slots per level).
+
+**Decision:**
+- **CPU:** the Intel 4004, compatible at the instruction level: 4-bit accumulator and carry, 16 four-bit index registers (8 pairs), a 12-bit PC with a 3-level stack, all 46 instructions with their real encodings, and the 4001 ROM and 4002 RAM organization and I/O ports. Not modelled: the multiplexed 4-bit bus and the 8-phase clock. Our single clock fits the simulator's tick/tock semantics, and an instruction-level match is what a `.tst` can check.
+- **Timing:** one clock cycle per 4004 instruction cycle, so the two-word instructions (`JCN FIM JUN JMS ISZ`) and `FIN` take two cycles, as on the real chip. Test programs can then count cycles the way 4004 documentation does.
+- **The end of the game** is the 4004 (milestone 8). This replaces the "CPU, then a whole computer" aim of the entry above: the program ROM, data RAM and I/O ports of the CPU milestone already form a small MCS-4 computer. A stage after it would need a new decision.
+- **New milestone 4, "Chip files and sound",** before Buses, because it polishes what exists and is small. Renumbered: Buses 5, Arithmetic 6, Sequential logic 7, CPU 8. Releases stay one per milestone, up to `0.8.0`.
+- **Widths:** Buses, Arithmetic and Sequential logic are rescoped from 32 bits to the 4004's 4-bit data, 8-bit instructions and register pairs, and 12-bit addresses. The barrel shifter and RV32I comparisons are dropped; decimal adjust, rotate through carry and the 3-level stack are added.
+- **Chip files:** an exports folder beside the save dir, never inside it (`ChipLibrary` searches the save dir recursively, as found with backups), browsed from an in-game menu instead of a file dialog. An imported chip is unsaved editor text until Ctrl+S or Run tests, so importing alone never solves a level.
+- **Sound:** synthesized with numpy at startup and played with `pygame.mixer`, which is part of pygame-ce, so there is no new dependency and no asset licence. Mute and volume live in a settings file next to the saves; no audio device means silence, never a crash.
+
+**Alternatives:**
+- Keep RV32I and add the 4004 as a final open-ended challenge: recommended in the analysis, not chosen.
+- The 4004 as a step between sequential logic and RV32I: not chosen, the user wants the 4004 to be the goal.
+- Several named save slots per level instead of export/import: not chosen.
+- A tkinter file dialog or a typed path for chip files: rejected, tkinter and pygame mix badly on Linux, and typing paths is fiddly.
+- Cycle-accurate 4004 (multiplexed bus, clock phases): rejected, it would bend the single-clock simulation semantics for no gain in what the player learns about the ISA.
+
+**Consequences:**
+- The later projects in the series (emulator, assembler, ROM monitor, compiler, OS, networking) now target the 4004 and lose the RISC-V toolchain and QEMU as references; Intel's MCS-4 manuals, existing 4004 programs and open 4004 emulators replace them. A compiler and an OS for a 4-bit CPU with a 3-level stack and 4 KB of ROM are a stretch, and their scope should be revisited when those projects start. Project 8 (real machines, on QEMU) is unaffected.
+- `.tst` needs a way to load program ROM contents before milestone 8.
+- Future milestone numbers changed in the `tick`/`tock` error message, `docs/tst.md`, the primitives docstring and `CHANGELOG.md`. Earlier decision and journal entries keep their wording.
+

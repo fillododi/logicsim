@@ -2,9 +2,15 @@
 
 All notable changes to NAND Sim are listed here, newest first.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and each milestone is
-released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
+released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
+
+### Changed
+- **New goal: the Intel 4004.** The game now ends with the first commercial microprocessor
+  (4-bit data, 12-bit addresses, 46 instructions) instead of a RISC-V CPU. The bus, arithmetic
+  and memory levels ahead are resized to match.
+- **Roadmap:** the next release adds exporting and importing single chips, and sound.
 
 ## [0.3.0] — 2026-11-06
 
