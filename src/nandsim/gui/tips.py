@@ -12,6 +12,42 @@ from __future__ import annotations
 import re
 
 _TIPS: list[tuple[re.Pattern[str], str]] = [
+    # Buses: widths, slices and partly connected pins.
+    (
+        re.compile(
+            r"^width mismatch: pin '(?P<pin>[^']+)' of (?P<chip>\w+) has (?P<n>\d+ bits?) "
+            r"but '(?P<base>[\w.]+)[^']*' has (?P<m>\d+)(?: bits?)?$"
+        ),
+        "{chip}'s pin {pin} takes {n} but its signal has {m}. A slice picks bits out of a bus, "
+        "like {base}[0] or {base}[0..3]; a 1-bit part handles a bus one bit at a time.",
+    ),
+    (
+        re.compile(
+            r"^width mismatch: '(?P<target>[^']+)' has (?P<n>\d+ bits?) "
+            r"but '(?P<source>[^']+)' has (?P<m>\d+)(?: bits?)?$"
+        ),
+        "In {target} = {source}, the left side has {n} and the right side {m}. "
+        "Slice them so the widths match, like out[0..3] = in[4..7];",
+    ),
+    (
+        re.compile(r"^\S+ is out of range: '(?P<name>[^']+)' has \d+ bits? \((?P<range>[^)]+)\)$"),
+        "Bits are counted from 0, so {name} has bits {range}: the last one is the width minus 1.",
+    ),
+    (
+        re.compile(
+            r"^(?P<what>bits? .+?) of output pin '(?P<pin>[^']+)' of \w+ (?:is|are) not connected$"
+        ),
+        "Every bit of an OUT bus needs a driver, and nothing drives {what} of {pin} yet. "
+        "Drive each bit with a part (out={pin}[i]) or a connection ({pin}[i] = ...).",
+    ),
+    (
+        re.compile(
+            r"^(?P<what>bits? .+?) of input pin '(?P<pin>[^']+)' of (?P<chip>\w+) "
+            r"(?:is|are) not connected$"
+        ),
+        "Every bit of {chip}'s {pin} needs a value, and nothing connects {what} yet. "
+        "Connect {pin} whole ({pin}=signal) or cover every bit with slices.",
+    ),
     (
         re.compile(r"^output pin '(?P<pin>[^']+)' of \w+ is not connected$"),
         "Every OUT pin needs a driver: end a part with out={pin}, or write {pin} = <signal>;",
