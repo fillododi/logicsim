@@ -9,6 +9,9 @@ A game reset moves all of these into `<save dir>-backups/<time>/`, next to the
 save directory and never inside it: the chip library searches the save directory
 recursively, so a backup inside it would still be used as the player's chips.
 
+Chip files the player exports, or wants to import, live in `<save dir>-exports/`,
+beside the save directory for the same reason, and a reset leaves them alone.
+
 A level is *unlocked* when every level it may use as a part is solved; primitives
 are always available. *Solved* is sticky: it records that the chip passed its
 tests once, so later experiments never lock the player out of a level.
@@ -72,6 +75,37 @@ class SaveStore:
     def is_unlocked(self, level: Level) -> bool:
         needed = {p for p in level.parts if p not in PRIMITIVES}
         return needed <= self._solved
+
+    # ---- chip files ---------------------------------------------------
+
+    @property
+    def exports(self) -> Path:
+        return self.root.with_name(self.root.name + "-exports")
+
+    def export_path(self, level: Level) -> Path:
+        return self.exports / f"{level.name}.hdl"
+
+    def export(self, level: Level, text: str) -> Path:
+        """Write `text` as the level's chip file in the exports folder, replacing any old one."""
+        path = self.export_path(level)
+        atomic_write(path, text)
+        return path
+
+    def chip_files(self, first: str | None = None) -> list[Path]:
+        """The `.hdl` files in the exports folder: `<first>.hdl` leads, the rest by name."""
+        if not self.exports.is_dir():
+            return []
+        files = [p for p in self.exports.iterdir() if p.suffix == ".hdl" and p.is_file()]
+        return sorted(files, key=lambda p: (p.stem != first, p.name.lower()))
+
+    def read_chip_file(self, path: Path) -> str:
+        """The text of a chip file; ValueError, with a message for the player, if unreadable."""
+        try:
+            return path.read_text(encoding="utf-8")
+        except UnicodeDecodeError:
+            raise ValueError(f"{path.name} isn't a text file") from None
+        except OSError as e:
+            raise ValueError(f"couldn't read {path.name}: {e.strerror or e}") from None
 
     # ---- reset --------------------------------------------------------
 
