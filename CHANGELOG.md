@@ -11,12 +11,20 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   just start typing a number: `13`, `-1`, `0b1101` or `0x0D`, as in test files. **Enter**
   sets it and **Esc** cancels. Much quicker than clicking a 12-bit bus up to the value you
   want.
+- **The tour teaches the newer features.** In Hello it shows how to type an input's value;
+  in And it walks you through exporting your first chip and the *Your chips* list, including
+  how to use a chip someone shares with you. The welcome bubble mentions folding level groups.
+  If you already finished the tour, the new bubbles appear the next time you open Hello or
+  And.
 
 ### Changed
 - **Level groups fold up.** The level list shows your current group and the next one with a
   level to play; the others fold into one line with a count of solved levels, like
   `▸ TUTORIAL ✓ 2/2`. Click a group's name to open or close it. This leaves room for the
   brief as more levels arrive.
+
+### Fixed
+- **Ctrl+Enter over an input** no longer opens the value field when the circuit has the keys.
 
 ## [0.4.0] — 2026-11-06
 

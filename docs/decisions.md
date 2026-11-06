@@ -437,3 +437,20 @@ Ambiguous spec points and the option chosen. Newest last.
 - Prefilling the field with the current value: a value is usually replaced, not edited; an empty field is simpler.
 
 **Consequences:** `testing` exports `parse_pin_value`. The help line and README list the new control.
+
+## 2026-11-06 — The tour teaches typed values and exported chips
+**Context:** the tour was written before players could export chips, type input values or fold level groups, so it said nothing about them. The user asked for the tutorial to cover them. There is no chip import: exported chips are in every level's library, and a shared chip is used by copying its `.hdl` file into the exports folder.
+
+**Decision:**
+- **Hello, `type_value`** (after `output`): click an empty spot of the circuit so the keys go to it, point at `b`, type `1`, press Enter. It waits for a new event, `set_value`, reported when a typed value is applied. A `set_value` also completes a step waiting for `toggle` (a typed value changes the pin as a click does); a click doesn't complete a `set_value` step.
+- **And, `export`** (after `back_up`): export the chip from the Esc menu, keeping the suggested `MyAnd` or another name. It waits for a new event, `export`, reported when an export is written. Then **`your_chips`**, anchored on the *Your chips* list (new anchor `chips`), explains using the chip as a part, the × button, and sharing by copying files into the exports folder. Both are tied to And, so they never jump ahead of Not's steps for a new player.
+- **Folding groups** gets a sentence in `welcome` rather than a step of its own: it needs no practice.
+- **The bubble avoids the value field** while one is open, as well as its anchor, so the player sees what they type.
+- **Ctrl+Enter, Ctrl+S and other modified keys never open the value field.** After `type_value` the circuit has the keys, and the player's habit of Ctrl+Enter to run tests opened the field instead.
+
+**Alternatives:**
+- Teaching typed values in the first bus level (Not4), where they matter: that level doesn't exist yet, and Hello's one-bit pins are enough to learn the gesture. A short reminder can go in the bus briefs.
+- Ending the export step with Next instead of an actual export: the tour teaches by doing everywhere else, and the × removes the chip afterwards.
+- A level-less export step that would also reach players who are past And: for a new player it would show in Not, before the And steps it builds on.
+
+**Consequences:** players who finished the tour see the new bubbles when they next open Hello or And (the tour shows unseen steps of the open level). `Tour` events gained `set_value` and `export`, anchors gained `chips`; `ViewerApp.on_action` reports `set_value` instead of `toggle` for typed values, and the game still plays the toggle sound for it. `ViewerApp.field_rect` is where the field was last drawn.
