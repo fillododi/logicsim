@@ -484,3 +484,19 @@ Ambiguous spec points and the option chosen. Newest last.
 **Alternatives:** rewording the errors themselves to include the advice: the messages are shared with the CLI and stay short and exact, as `docs/hdl.md` lists them.
 
 **Consequences:** the width-mismatch patterns depend on the message giving a unit only after the first width (`has 1 bit but 'in' has 4`); a change there needs the pattern updated, which the tests catch.
+
+## 2026-11-06 — The level list scrolls; the brief keeps its room
+**Context:** with Buses open under Gates (which happens as soon as Not is solved), the level list is 22 rows and pushed most of And's brief off the sidebar at the default window size. The folding entry above had flagged this. The user asked to cap the list's height and scroll past it.
+
+**Decision:**
+- **The cap follows the brief:** the list gets the sidebar's height minus what the separator, the notice, *Your chips* and the whole brief need, rounded down to whole rows, and never fewer than 5 rows. A short brief leaves more room for levels; only a window too short for both cuts the brief (`GameApp.brief_cut`).
+- **Scrolling** is by whole rows with the mouse wheel over the list; elsewhere the wheel still zooms the canvas. A thin bar at the sidebar's right edge shows the position when the list scrolls.
+- **The list scrolls to show a row** when the row it should show changes: the current level, or the level a tour bubble points at (its group header if the group is folded). Between those changes the player's scrolling stays.
+- **Rows scrolled out are not drawn and not clickable**, and tour anchors only see visible rows.
+
+**Alternatives:**
+- A fixed share of the sidebar (tried first at a half): And's brief still lost its hint, and short briefs would waste room.
+- Scrolling the brief instead of the list: the brief is what the player reads while building; the list is glanced at.
+- Never opening a second group by default: hides the next level to play, which the folding rule exists to show.
+
+**Consequences:** `GameApp` has `list_scroll`, `list_rect`, `scroll_list()` and `brief_cut`; `clamp_scroll` and `scroll_into_view` are module functions. The brief is laid out twice per frame (measured, then drawn), which is cheap at its size.

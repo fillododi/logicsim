@@ -43,6 +43,22 @@ SILENT_ACTIONS = {"mute", "volume"}  # these play their own preview, if any
 
 GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 CHEVRON = {True: "▾", False: "▸"}  # a group header, open or closed
+BRIEF_BOTTOM = 6  # gap between the brief and the footer
+LIST_MIN_ROWS = 5  # the level list leaves the brief its room, but shows at least this many rows
+
+
+def clamp_scroll(scroll: int, content: int, view: int) -> int:
+    """A scroll offset that keeps the view inside the content."""
+    return max(0, min(scroll, content - view))
+
+
+def scroll_into_view(scroll: int, top: int, height: int, view: int) -> int:
+    """The nearest scroll offset that shows the row from `top` to `top + height`."""
+    if top < scroll:
+        return top
+    if top + height > scroll + view:
+        return top + height - view
+    return scroll
 
 
 class GameApp(ViewerApp):
@@ -58,6 +74,7 @@ class GameApp(ViewerApp):
         self.bubble: Bubble | None = None
         self._bubble_press = False  # a press started on the bubble; its release is ours too
         self._brief_rect = pygame.Rect(0, 0, 0, 0)
+        self.brief_cut = False  # the window was too short to draw the whole brief
         self._chips_rect: pygame.Rect | None = None  # the "Your chips" list, when shown
         session = ChipSession(self.game.loader())
         session.reload()
@@ -74,6 +91,9 @@ class GameApp(ViewerApp):
         self._group_rows: list[tuple[pygame.Rect, str]] = []  # group headers, as last drawn
         self.expanded: set[str] = set()  # level groups open in the sidebar
         self._expanded_for: tuple[str, frozenset[str]] | None = None
+        self.list_scroll = 0  # pixels of the level list scrolled past, in whole rows
+        self.list_rect = pygame.Rect(0, 0, 0, 0)  # the visible part of the list, as last drawn
+        self._scrolled_to: str | Level | None = None  # the row last scrolled into view
         self._exported = store.exported()  # the player's exported chips, for the sidebar
         self._chip_rows: list[tuple[pygame.Rect, str]] = []  # × buttons, as last drawn
         self._export_names: dict[str, str] = {}  # level -> name it was last exported as
@@ -459,6 +479,9 @@ class GameApp(ViewerApp):
             return
         if self._bubble_event(ev):
             return
+        if ev.type == pygame.MOUSEWHEEL and self.list_rect.collidepoint(self.mouse):
+            self.scroll_list(-ev.y)  # wheel up shows earlier levels
+            return
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
             if self.button_rect.collidepoint(ev.pos):
                 self.run_tests()
@@ -704,67 +727,144 @@ class GameApp(ViewerApp):
 
     def _draw_levels(self, surf: pygame.Surface, y: int) -> int:
         """The level list, group by group; a closed group is only its header. Returns the
-        y below it."""
+        y below it.
+
+        The list gets the room that the notice, "Your chips" and the brief below it don't
+        need, in whole rows (at least `LIST_MIN_ROWS`), and scrolls past that, so the brief
+        is shown whole whenever the window allows. When the row to show changes
+        (the current level, or a level a tour bubble points at), the list scrolls to it;
+        otherwise the player's own scrolling stays.
+        """
         self._sync_expanded()
         font = self.fonts.get(14)
         small = self.fonts.get(12, bold=True)
-        self._rows, self._group_rows = [], []
+        entries: list[tuple[str | Level, int]] = []  # a group name or a level, and its y
+        content = 0
         for group, levels in self.game.groups():
-            is_open = group in self.expanded
-            head = pygame.Rect(6, y, SIDEBAR - 12, ROW_H - 2)
-            if head.collidepoint(self.mouse) and not self.menus:
-                pygame.draw.rect(surf, theme.BG, head, border_radius=5)
-            chevron = small.render(CHEVRON[is_open], True, theme.TEXT_DIM)
-            surf.blit(chevron, (head.x + 8, head.centery - chevron.get_height() // 2))
-            label = small.render(group_label(group).upper(), True, theme.TEXT_DIM)
-            surf.blit(label, (head.x + 24, head.centery - label.get_height() // 2))
-            solved = sum(self.game.status(lv) == "solved" for lv in levels)
-            done = solved == len(levels)
-            count = small.render(
-                f"✓ {solved}/{len(levels)}" if done else f"{solved}/{len(levels)}",
-                True,
-                theme.WIRE_1 if done else theme.TEXT_DIM,
+            entries.append((group, content))
+            content += ROW_H
+            if group in self.expanded:
+                for level in levels:
+                    entries.append((level, content))
+                    content += ROW_H
+        room = self.size[1] - self.footer_height - y - self._below_list_height()
+        view = min(content, max(LIST_MIN_ROWS, room // ROW_H) * ROW_H)
+        target = self._scroll_target()
+        if target != self._scrolled_to:
+            self._scrolled_to = target
+            at = next((cy for e, cy in entries if e == target or e is target), None)
+            if at is not None:
+                self.list_scroll = scroll_into_view(self.list_scroll, at, ROW_H, view)
+        self.list_scroll = clamp_scroll(self.list_scroll, content, view)
+        self.list_rect = pygame.Rect(0, y, SIDEBAR, view)
+        self._rows, self._group_rows = [], []
+        clip = surf.get_clip()
+        surf.set_clip(self.list_rect.clip(clip) if clip else self.list_rect)
+        for entry, cy in entries:
+            top = y + cy - self.list_scroll
+            if top + ROW_H <= y or top >= y + view:
+                continue  # scrolled out of sight: not drawn, not clickable
+            rect = pygame.Rect(6, top, SIDEBAR - 12, ROW_H - 2)
+            if isinstance(entry, str):
+                self._draw_group_row(surf, entry, rect, small)
+                self._group_rows.append((rect, entry))
+            else:
+                self._draw_level_row(surf, entry, rect, font)
+                self._rows.append((rect, entry))
+        surf.set_clip(clip)
+        if content > view:  # a thin bar shows where the visible rows sit in the list
+            bar_h = max(ROW_H, view * view // content)
+            bar_y = y + (view - bar_h) * self.list_scroll // (content - view)
+            pygame.draw.rect(
+                surf, theme.PART_BORDER, (SIDEBAR - 5, bar_y, 3, bar_h), border_radius=2
             )
-            surf.blit(
-                count, (head.right - 8 - count.get_width(), head.centery - count.get_height() // 2)
-            )
-            self._group_rows.append((head, group))
-            y += ROW_H
-            if not is_open:
-                continue
-            for level in levels:
-                status = self.game.status(level)
-                rect = pygame.Rect(6, y, SIDEBAR - 12, ROW_H - 2)
-                if level is self.game.current:
-                    pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
-                color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[
-                    status
-                ]
-                glyph = font.render(GLYPH[status], True, color)
-                surf.blit(glyph, (rect.x + 8, rect.centery - glyph.get_height() // 2))
-                name = font.render(level.name, True, theme.TEXT if status != "locked" else color)
-                surf.blit(name, (rect.x + 30, rect.centery - name.get_height() // 2))
-                self._rows.append((rect, level))
-                y += ROW_H
-        return y
+        return y + view
 
-    def _draw_brief(self, surf: pygame.Surface, y: int) -> None:
+    def _scroll_target(self) -> str | Level:
+        """The row the list should show: a level a tour bubble points at, else the current one."""
+        step = self.tour.visible(self.game.current.name)
+        if step is not None and step.anchor.startswith("level:"):
+            name = step.anchor.removeprefix("level:")
+            level = next((lv for lv in self.game.levels if lv.name == name), None)
+            if level is not None:
+                return level if level.group in self.expanded else level.group
+        return self.game.current
+
+    def scroll_list(self, rows: int) -> None:
+        """Scroll the level list by whole rows (positive: down); clamped when drawn."""
+        self.list_scroll = max(0, self.list_scroll + rows * ROW_H)
+
+    def _draw_group_row(
+        self, surf: pygame.Surface, group: str, head: pygame.Rect, small: pygame.font.Font
+    ) -> None:
+        levels = next(lvs for g, lvs in self.game.groups() if g == group)
+        if head.collidepoint(self.mouse) and self.list_rect.collidepoint(self.mouse):
+            if not self.menus:
+                pygame.draw.rect(surf, theme.BG, head, border_radius=5)
+        chevron = small.render(CHEVRON[group in self.expanded], True, theme.TEXT_DIM)
+        surf.blit(chevron, (head.x + 8, head.centery - chevron.get_height() // 2))
+        label = small.render(group_label(group).upper(), True, theme.TEXT_DIM)
+        surf.blit(label, (head.x + 24, head.centery - label.get_height() // 2))
+        solved = sum(self.game.status(lv) == "solved" for lv in levels)
+        done = solved == len(levels)
+        count = small.render(
+            f"✓ {solved}/{len(levels)}" if done else f"{solved}/{len(levels)}",
+            True,
+            theme.WIRE_1 if done else theme.TEXT_DIM,
+        )
+        surf.blit(
+            count, (head.right - 8 - count.get_width(), head.centery - count.get_height() // 2)
+        )
+
+    def _draw_level_row(
+        self, surf: pygame.Surface, level: Level, rect: pygame.Rect, font: pygame.font.Font
+    ) -> None:
+        status = self.game.status(level)
+        if level is self.game.current:
+            pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
+        color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[status]
+        glyph = font.render(GLYPH[status], True, color)
+        surf.blit(glyph, (rect.x + 8, rect.centery - glyph.get_height() // 2))
+        name = font.render(level.name, True, theme.TEXT if status != "locked" else color)
+        surf.blit(name, (rect.x + 30, rect.centery - name.get_height() // 2))
+
+    def _below_list_height(self) -> int:
+        """Height the sidebar needs under the level list: separator, notice, chips, brief."""
+        font = self.fonts.get(14)
+        h = 8 + 10  # the separator line and its gaps
+        if self.notice:
+            lines = _wrap(self.notice, (SIDEBAR - 28) // font.size("M")[0])
+            h += len(lines) * font.get_linesize() + 8
+        if self._exported:
+            h += font.get_linesize() + 2 + len(self._exported) * CHIP_ROW_H + 8
+        return h + sum(step for *_, step in self._brief_layout()) + BRIEF_BOTTOM
+
+    def _brief_layout(self) -> list[tuple[str, str, pygame.font.Font, int]]:
+        """The brief's lines as (text, kind, font, height it takes)."""
         text_font = self.fonts.get(13)
         cols = (SIDEBAR - 28) // text_font.size("M")[0]
-        bottom = self.size[1] - self.footer_height - 6
-        top = y
-        md = self.game.current.brief.read_text()
-        for line, kind in brief_lines(md, cols):
+        out = []
+        for line, kind in brief_lines(self.game.current.brief.read_text(), cols):
             font = {
                 "title": self.fonts.get(16, bold=True),
                 "bold": self.fonts.get(13, bold=True),
             }.get(kind, text_font)
+            step = font.get_linesize() if kind != "blank" else font.get_linesize() // 2
+            out.append((line, kind, font, step))
+        return out
+
+    def _draw_brief(self, surf: pygame.Surface, y: int) -> None:
+        bottom = self.size[1] - self.footer_height - BRIEF_BOTTOM
+        top = y
+        self.brief_cut = False
+        for line, kind, font, step in self._brief_layout():
             if y + font.get_linesize() > bottom:
+                self.brief_cut = True
                 break
             color = theme.ACCENT if kind == "table" else theme.TEXT
             if line:
                 surf.blit(font.render(line, True, color), (14, y))
-            y += font.get_linesize() if kind != "blank" else font.get_linesize() // 2
+            y += step
         self._brief_rect = pygame.Rect(6, top - 4, SIDEBAR - 12, min(y, bottom) - top + 8)
 
     def _draw_results(self, surf: pygame.Surface) -> None:
