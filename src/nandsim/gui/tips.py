@@ -32,7 +32,8 @@ _TIPS: list[tuple[re.Pattern[str], str]] = [
     ),
     (
         re.compile(r"^'\w+' is not allowed in this level; \w+ may use: .*$"),
-        "Only the parts listed in the brief can be used here. Names are case-sensitive.",
+        "Only the parts in the brief and your exported chips can be used here. "
+        "Names are case-sensitive.",
     ),
     (
         re.compile(r"^'(?P<name>[^']+)' is not a pin of \w+ and nothing drives a wire"),

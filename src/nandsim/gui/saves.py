@@ -9,8 +9,9 @@ A game reset moves all of these into `<save dir>-backups/<time>/`, next to the
 save directory and never inside it: the chip library searches the save directory
 recursively, so a backup inside it would still be used as the player's chips.
 
-Chip files the player exports, or wants to import, live in `<save dir>-exports/`,
-beside the save directory for the same reason, and a reset leaves them alone.
+Chips the player exports under a name of their own live in `<save dir>-exports/`,
+beside the save directory for the same reason, and a reset leaves them alone. Every
+level may use them as parts, so they are part of the library.
 
 A level is *unlocked* when every level it may use as a part is solved; primitives
 are always available. *Solved* is sticky: it records that the chip passed its
@@ -24,9 +25,11 @@ import os
 from datetime import datetime
 from pathlib import Path
 
-from nandsim.netlist import PRIMITIVES, ChipLibrary
-from nandsim.paths import default_save_dir
-from nandsim.testing import Level
+from nandsim.hdl import ChipDef, HdlError, parse
+from nandsim.netlist import PRIMITIVES, ChipLibrary, Primitive, elaborate
+from nandsim.paths import default_save_dir, exports_dir
+from nandsim.testing import Level, exported_chips
+from nandsim.testing.levels import CHIP_NAME, KEYWORDS, RESERVED
 
 PROGRESS_VERSION = 1
 
@@ -59,7 +62,7 @@ class SaveStore:
         sources = {}
         if editing is not None and text is not None:
             sources[editing.name] = (text, str(self.path(editing)))
-        return ChipLibrary([self.root], sources)
+        return ChipLibrary([self.root, self.exports], sources)
 
     # ---- progress -----------------------------------------------------
 
@@ -76,36 +79,62 @@ class SaveStore:
         needed = {p for p in level.parts if p not in PRIMITIVES}
         return needed <= self._solved
 
-    # ---- chip files ---------------------------------------------------
+    # ---- exported chips -----------------------------------------------
 
     @property
     def exports(self) -> Path:
-        return self.root.with_name(self.root.name + "-exports")
+        return exports_dir(self.root)
 
-    def export_path(self, level: Level) -> Path:
-        return self.exports / f"{level.name}.hdl"
+    def exported(self) -> list[str]:
+        """The player's exported chips, by name: parts that every level may use."""
+        return exported_chips(self.exports, self.levels)
 
-    def export(self, level: Level, text: str) -> Path:
-        """Write `text` as the level's chip file in the exports folder, replacing any old one."""
-        path = self.export_path(level)
+    def export_path(self, name: str) -> Path:
+        return self.exports / f"{name}.hdl"
+
+    def name_problem(self, name: str) -> str | None:
+        """Why `name` can't be an exported chip's name, or None if it can."""
+        if not name:
+            return "Type a name for the chip."
+        if not CHIP_NAME.fullmatch(name):
+            return "A chip name starts with a letter and has only letters, digits and _."
+        if name in KEYWORDS:
+            return f"{name} is a word of the HDL. Pick another name."
+        if name in PRIMITIVES or name in RESERVED:
+            return f"{name} is a built-in chip. Pick another name."
+        if any(lv.name == name for lv in self.levels):
+            return f"{name} is a level's chip. Pick another name, like My{name}."
+        return None
+
+    def prepare_export(self, name: str, text: str) -> str:
+        """`text` renamed to `CHIP <name>`, once it is known to build.
+
+        Raises ValueError with a message for the player: a bad name, or the build
+        error (positions match the editor, since renaming keeps lines and columns
+        apart from the name itself).
+        """
+        problem = self.name_problem(name)
+        if problem:
+            raise ValueError(problem)
+        try:
+            chip = parse(text, f"{name}.hdl")
+            renamed = _rename(text, chip, name)
+            lib = ChipLibrary(
+                [self.root, self.exports], {name: (renamed, str(self.export_path(name)))}
+            )
+            top = lib.resolve(name)
+            assert not isinstance(top, Primitive)
+            elaborate(top, lib)
+        except HdlError as e:
+            where = f"line {e.pos.line}:{e.pos.col}: " if e.pos else ""
+            raise ValueError(f"It doesn't build yet: {where}{e.message}") from None
+        return renamed
+
+    def export(self, name: str, text: str) -> Path:
+        """Write `text`, as returned by `prepare_export`, to `<exports>/<name>.hdl`."""
+        path = self.export_path(name)
         atomic_write(path, text)
         return path
-
-    def chip_files(self, first: str | None = None) -> list[Path]:
-        """The `.hdl` files in the exports folder: `<first>.hdl` leads, the rest by name."""
-        if not self.exports.is_dir():
-            return []
-        files = [p for p in self.exports.iterdir() if p.suffix == ".hdl" and p.is_file()]
-        return sorted(files, key=lambda p: (p.stem != first, p.name.lower()))
-
-    def read_chip_file(self, path: Path) -> str:
-        """The text of a chip file; ValueError, with a message for the player, if unreadable."""
-        try:
-            return path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            raise ValueError(f"{path.name} isn't a text file") from None
-        except OSError as e:
-            raise ValueError(f"couldn't read {path.name}: {e.strerror or e}") from None
 
     # ---- reset --------------------------------------------------------
 
@@ -172,3 +201,14 @@ def atomic_write(path: Path, text: str) -> None:
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(text)
     os.replace(tmp, path)
+
+
+def _rename(text: str, chip: ChipDef, name: str) -> str:
+    """`text` with the name after CHIP replaced by `name`; everything else is kept."""
+    pos = chip.name_pos
+    assert pos is not None
+    lines = text.split("\n")
+    line = lines[pos.line - 1]
+    start = pos.col - 1
+    lines[pos.line - 1] = line[:start] + name + line[start + len(chip.name) :]
+    return "\n".join(lines)

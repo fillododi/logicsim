@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -93,39 +94,61 @@ def test_reset_moves_everything_to_a_backup(store: SaveStore) -> None:
     assert store.reset(now=when) == store.backups / "2026-11-06_153012-2"
 
 
-def test_chip_files_live_beside_the_saves_and_survive_a_reset(store: SaveStore) -> None:
+NOT_AS_BUF = (
+    "CHIP Not {\n    IN in;\n    OUT out;\n    PARTS:\n"
+    "    Not(in=in, out=n);\n    Not(in=n, out=out);\n}"
+)
+
+
+def solve_not(store: SaveStore) -> None:
+    store.save(LEVELS["Not"], LEVELS["Not"].reference.read_text())
+    store.mark_solved(LEVELS["Not"])
+
+
+def test_exported_chip_is_renamed_and_joins_the_library(store: SaveStore) -> None:
     assert store.exports == store.root.parent / "save-exports"
-    assert store.chip_files() == []  # no folder yet: nothing to list, nothing created
-    assert not store.exports.exists()
+    assert store.exported() == [] and not store.exports.exists()
+    solve_not(store)
+    text = store.prepare_export("Buf", NOT_AS_BUF)
+    assert text == NOT_AS_BUF.replace("CHIP Not", "CHIP Buf")  # only the name changes
+    path = store.export("Buf", text)
+    assert path == store.exports / "Buf.hdl" and path.read_text() == text
+    assert store.exported() == ["Buf"]
+    assert store.library().resolve("Buf").name == "Buf"
 
-    text = LEVELS["Not"].reference.read_text()
-    path = store.export(LEVELS["Not"], text)
-    assert path == store.exports / "Not.hdl" and store.read_chip_file(path) == text
-    store.export(LEVELS["Not"], "newer")  # exporting again replaces the file
-    assert store.read_chip_file(path) == "newer"
-
-    store.save(LEVELS["Not"], text)
-    store.reset()
-    assert store.chip_files() == [path]  # a reset only moves the save directory
-    # The library never sees exported files: only saves count as the player's chips.
+    store.reset()  # a reset only moves the save directory
+    assert store.exported() == ["Buf"]
+    # Buf is built from Not, which went to the backup with the rest of the saves.
     with pytest.raises(HdlError, match="unknown chip 'Not'"):
         store.library().resolve("Not")
 
 
-def test_chip_files_list_the_level_first_and_skip_other_files(store: SaveStore) -> None:
-    store.exports.mkdir(parents=True)
-    for name in ["and.hdl", "Mux.hdl", "Xor.hdl", "notes.txt", "Not.hdl.tmp"]:
-        (store.exports / name).write_text("x")
-    (store.exports / "sub.hdl").mkdir()
-    assert [p.name for p in store.chip_files()] == ["and.hdl", "Mux.hdl", "Xor.hdl"]
-    assert [p.name for p in store.chip_files("Xor")] == ["Xor.hdl", "and.hdl", "Mux.hdl"]
+@pytest.mark.parametrize(
+    ("name", "problem"),
+    [
+        ("", "Type a name for the chip."),
+        ("2Fast", "A chip name starts with a letter and has only letters, digits and _."),
+        ("My Chip", "A chip name starts with a letter and has only letters, digits and _."),
+        ("PARTS", "PARTS is a word of the HDL. Pick another name."),
+        ("Nand", "Nand is a built-in chip. Pick another name."),
+        ("DFF", "DFF is a built-in chip. Pick another name."),
+        ("Xor", "Xor is a level's chip. Pick another name, like MyXor."),
+    ],
+)
+def test_export_names_that_are_taken_or_invalid(store: SaveStore, name: str, problem: str) -> None:
+    assert store.name_problem(name) == problem
+    with pytest.raises(ValueError, match=f"^{re.escape(problem)}$"):
+        store.prepare_export(name, NOT_AS_BUF)
+    assert store.name_problem("my_Chip2") is None
 
 
-def test_unreadable_chip_file_is_a_message_not_a_crash(store: SaveStore) -> None:
-    store.exports.mkdir(parents=True)
-    binary = store.exports / "Blob.hdl"
-    binary.write_bytes(b"\xff\xfe\x00")
-    with pytest.raises(ValueError, match="^Blob.hdl isn't a text file$"):
-        store.read_chip_file(binary)
-    with pytest.raises(ValueError, match="^couldn't read Gone.hdl: "):
-        store.read_chip_file(store.exports / "Gone.hdl")
+def test_export_needs_a_chip_that_builds(store: SaveStore) -> None:
+    # Not isn't saved yet: the editor's positions are kept in the message.
+    with pytest.raises(ValueError, match=r"^It doesn't build yet: line 5:5: unknown chip 'Not'$"):
+        store.prepare_export("Buf", NOT_AS_BUF)
+    with pytest.raises(ValueError, match=r"^It doesn't build yet: line 1:6: expected a chip name"):
+        store.prepare_export("Buf", "CHIP {")
+    solve_not(store)
+    loop = NOT_AS_BUF.replace("Not(in=n", "Buf(in=n")  # Buf would contain itself
+    with pytest.raises(ValueError, match="^It doesn't build yet: .*Buf"):
+        store.prepare_export("Buf", loop)

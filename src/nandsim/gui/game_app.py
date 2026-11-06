@@ -4,8 +4,8 @@ test results on the right.
 It reuses `ViewerApp` for the canvas, the editor pane, navigation and error display,
 and adds the level sidebar, the results panel, the "Run tests" action and the guided
 tour's bubbles (F1 replays the tour). Menus sit on top: the title screen at start,
-and the pause menu on Esc, from which the game can be reset and the current chip
-exported to, or imported from, a chip file in the exports folder.
+and the pause menu on Esc, from which the game can be reset and the chip in the
+editor exported under a name of its own, as a part every level may use.
 """
 
 from __future__ import annotations
@@ -28,8 +28,6 @@ from nandsim.gui.session import ChipSession
 from nandsim.gui.textbuffer import Pos, TextBuffer
 from nandsim.gui.tutorial import Tour, load_steps
 from nandsim.testing import Level, load_levels
-
-IMPORT_PAGE = 6  # chip files per page of the import menu, so it fits a small window
 
 SIDEBAR = 260
 RESULTS_H = 190
@@ -61,6 +59,9 @@ class GameApp(ViewerApp):
         self.notice: str | None = "; ".join(warnings) or None
         self._attempted = store.has_save(self.game.current)
         self._rows: list[tuple[pygame.Rect, Level]] = []
+        self._exported = store.exported()  # the player's exported chips, for the sidebar
+        self._export_names: dict[str, str] = {}  # level -> name it was last exported as
+        self._pending_export: tuple[str, str] | None = None  # waiting for "Replace it"
         self._sync_error()
         self.fit()
         if title_screen:
@@ -161,8 +162,7 @@ class GameApp(ViewerApp):
                 [
                     MenuItem("Resume", "resume"),
                     MenuItem("Replay the tour", "tour"),
-                    MenuItem("Export this chip", "export"),
-                    MenuItem("Import a chip…", "import"),
+                    MenuItem("Export this chip as…", "export"),
                     MenuItem("Main menu", "title"),
                     MenuItem("Reset game…", "reset"),
                     MenuItem("Quit", "quit"),
@@ -189,39 +189,25 @@ class GameApp(ViewerApp):
         items = [MenuItem("Cancel", BACK), MenuItem("Reset the game", "confirm_reset", True)]
         return Menu("Reset the game?", items, message=msg)
 
-    def _confirm_export_menu(self) -> Menu:
-        path = self.game.store.export_path(self.game.current)
-        msg = f"{_home_short(path)} already exists and holds a different chip."
-        items = [MenuItem("Cancel", BACK), MenuItem("Replace it", "confirm_export", True)]
-        return Menu(f"Replace {path.name}?", items, message=msg)
-
-    def _import_menu(self, page: int = 0) -> Menu:
+    def _export_menu(self) -> Menu:
         level = self.game.current.name
-        files = self.game.store.chip_files(first=level)
         where = _home_short(self.game.store.exports)
-        if not files:
-            msg = (
-                f"There are no chip files in {where} yet. Export a chip from this menu, "
-                "or copy .hdl files into that folder."
-            )
-            return Menu("Import a chip", [MenuItem("Back", BACK)], message=msg)
-        pages = (len(files) + IMPORT_PAGE - 1) // IMPORT_PAGE
-        page = max(0, min(page, pages - 1))
-        shown = files[page * IMPORT_PAGE : (page + 1) * IMPORT_PAGE]
-        mark = "  (this level)"
-        items = [
-            MenuItem(f.name + (mark if f.stem == level else ""), f"import_file:{f.name}")
-            for f in shown
-        ]
-        if page + 1 < pages:
-            items.append(MenuItem("Next page", f"import_page:{page + 1}"))
-        if page > 0:
-            items.append(MenuItem("Previous page", f"import_page:{page - 1}"))
-        items.append(MenuItem("Back", BACK))
-        msg = f"From {where}. The chip replaces the editor's text; Ctrl+Z brings it back."
-        if pages > 1:
-            msg += f"\n\nPage {page + 1} of {pages}."
-        return Menu(f"Import into {level}", items, message=msg)
+        msg = (
+            "Name the chip in the editor. Every level can then use it as a part, "
+            f"like a chip you solved: Name(...).\n\nIt is written to {where}."
+        )
+        items = [MenuItem("Export", "export_named"), MenuItem("Cancel", BACK)]
+        name = self._export_names.get(level, f"My{level}")
+        return Menu("Export this chip", items, message=msg, text=name, allowed=r"\w")
+
+    def _confirm_export_menu(self, name: str) -> Menu:
+        path = self.game.store.export_path(name)
+        msg = (
+            f"You already exported a different {name}, in {_home_short(path)}. "
+            "Levels that use it will use the new one."
+        )
+        items = [MenuItem("Cancel", BACK), MenuItem("Replace it", "confirm_export", True)]
+        return Menu(f"Replace {name}?", items, message=msg)
 
     def _open_menu(self, menu: Menu) -> None:
         if not self.menus:
@@ -259,65 +245,50 @@ class GameApp(ViewerApp):
             self._focus_before_menu = True  # a new game starts in the editor
             self._close_menus()
         elif action == "export":
-            self.export_chip()
-        elif action == "confirm_export":
-            self.export_chip(replace=True)
-        elif action == "import":
-            self.menus.append(self._import_menu())
-        elif action.startswith("import_page:"):
-            self.menus[-1] = self._import_menu(int(action.split(":", 1)[1]))
-        elif action.startswith("import_file:"):
-            self.import_chip(self.game.store.exports / action.split(":", 1)[1])
+            self.menus.append(self._export_menu())
+        elif action == "export_named":
+            self.export_chip(self.menus[-1])
+        elif action == "confirm_export" and self._pending_export is not None:
+            self._write_export(*self._pending_export)
         elif action == "quit":
             self.quit_requested = True
 
-    def export_chip(self, replace: bool = False) -> None:
-        """Write the editor's text to `<Level>.hdl` in the exports folder.
+    def export_chip(self, dialog: Menu) -> None:
+        """Export the editor's text under the name typed in `dialog`, once it builds.
 
         The editor's text, saved or not, is what the player sees, so that is what goes
-        out. An existing file with other contents is only replaced after a confirmation.
+        out, renamed to the typed name. A problem (a taken name, a build error) shows
+        in the dialog; replacing a different chip of that name asks first.
         """
-        assert self.editor is not None
-        store, level = self.game.store, self.game.current
-        text = self.editor.buffer.text
-        path = store.export_path(level)
-        if not replace and path.is_file():
+        assert self.editor is not None and dialog.text is not None
+        store, name = self.game.store, dialog.text
+        try:
+            text = store.prepare_export(name, self.editor.buffer.text)
+        except ValueError as e:
+            dialog.error = str(e)
+            return
+        path = store.export_path(name)
+        if path.is_file():
             try:
-                same = store.read_chip_file(path) == text
-            except ValueError:
+                same = path.read_text(encoding="utf-8") == text
+            except (OSError, UnicodeDecodeError):
                 same = False
             if not same:
-                self.menus.append(self._confirm_export_menu())
+                self._pending_export = (name, text)
+                self.menus.append(self._confirm_export_menu(name))
                 return
+        self._write_export(name, text)
+
+    def _write_export(self, name: str, text: str) -> None:
+        self._pending_export = None
         try:
-            store.export(level, text)
+            self.game.store.export(name, text)
         except OSError as e:
-            self.notice = f"Couldn't export {level.name}: {e.strerror or e}"
+            self.notice = f"Couldn't export {name}: {e.strerror or e}"
         else:
-            self.notice = f"Exported {level.name} to {_home_short(path)}"
-        self._close_menus()
-
-    def import_chip(self, path: Path) -> None:
-        """Put a chip file's text in the editor, as unsaved text that Ctrl+Z can undo.
-
-        It only counts once the player saves it or runs the tests, like anything typed,
-        so importing a file never solves a level by itself.
-        """
-        assert self.editor is not None
-        try:
-            text = self.game.store.read_chip_file(path)
-        except ValueError as e:
-            self.notice = f"Couldn't import: {e}"
-        else:
-            buf = self.editor.buffer
-            buf.select_all()
-            buf.insert(text)
-            buf.set_cursor(Pos(0, 0))
-            self._focus_before_menu = True
-            self.notice = (
-                f"Imported {path.name}. Save it (Ctrl+S) or run the tests to use it; "
-                "Ctrl+Z undoes the import."
-            )
+            self._export_names[self.game.current.name] = name
+            self.notice = f"Exported {name}. Every level can now use it as a part: {name}(...)"
+        self._exported = self.game.store.exported()
         self._close_menus()
 
     def save(self) -> None:
@@ -579,6 +550,15 @@ class GameApp(ViewerApp):
             for line in _wrap(self.notice, (SIDEBAR - 28) // font.size("M")[0]):
                 t = font.render(line, True, theme.WIRE_X)
                 surf.blit(t, (14, y))
+                y += font.get_linesize()
+            y += 8
+        if self._exported:
+            label = self.fonts.get(13, bold=True).render("Your chips", True, theme.TEXT)
+            surf.blit(label, (14, y))
+            y += font.get_linesize()
+            names = ", ".join(self._exported) + " (every level)"
+            for line in _wrap(names, (SIDEBAR - 28) // font.size("M")[0]):
+                surf.blit(font.render(line, True, theme.ACCENT), (14, y))
                 y += font.get_linesize()
             y += 8
         self._draw_brief(surf, y)

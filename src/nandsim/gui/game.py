@@ -99,7 +99,7 @@ class GameState:
         level = self.current
         self.save(text)
         script = parse_tst(level.tst.read_text(), level.tst.name)
-        result = run_script(script, self.library(text), level)
+        result = run_script(script, self.library(text), level, exported=self.store.exported())
         report = _report(result)
         if result.passed:
             newly = level.name not in self.store.solved
