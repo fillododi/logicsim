@@ -13,7 +13,7 @@ from pathlib import Path  # noqa: E402
 import pygame  # noqa: E402
 import pytest  # noqa: E402
 
-from nandsim.gui.app import HEADER, ViewerApp  # noqa: E402
+from nandsim.gui.app import FOOTER, HEADER, HELP_PAD, HELP_SIZE, SEP, ViewerApp, wrap_items  # noqa: E402
 from nandsim.gui.session import ChipSession, FileWatcher, file_loader  # noqa: E402
 
 REF = Path(__file__).parents[2] / "reference" / "01_gates"
@@ -129,3 +129,38 @@ def test_screenshot_of_every_level(tmp_path: Path) -> None:
         app = ViewerApp(s, size=(900, 500))
         app.screenshot(tmp_path / f"{name}.png")
         assert (tmp_path / f"{name}.png").stat().st_size > 0
+
+
+def test_wrap_items_breaks_between_items_first() -> None:
+    def fits(s: str) -> bool:
+        return len(s) <= 12
+
+    assert wrap_items(["ab", "cd", "efg hij klm nop", "longerthan12", "r"], fits) == [
+        f"ab{SEP}cd",
+        "efg hij klm",  # an item too long for a line wraps between its words
+        "nop",
+        "longerthan12",  # a word too long for any line is kept whole rather than cut
+        "r",
+    ]
+    assert wrap_items(["ab", "cd"], lambda s: True) == [f"ab{SEP}cd"]
+
+
+def _words(s: str) -> list[str]:
+    return [w for w in s.split() if w != "·"]
+
+
+@pytest.mark.parametrize("width", [1280, 900, 640, 420])
+def test_help_line_fits_the_window(chips: Path, width: int) -> None:
+    app = make_app(chips)
+    app.size = (width, 600)
+    font = app.fonts.get(HELP_SIZE)
+    lines = app.help_lines()
+    assert _words(" ".join(lines)) == _words(app.help_text)  # nothing lost
+    assert all(font.size(line)[0] <= width - 2 * HELP_PAD for line in lines)
+    assert app.footer_height >= len(lines) * font.get_linesize()
+    assert app.canvas_area[3] == 600 - HEADER - app.footer_height
+    if width >= 1280:
+        assert len(lines) == 1 and app.footer_height == FOOTER
+    else:
+        assert len(lines) > 1
+    app.render(pygame.Surface(app.size))

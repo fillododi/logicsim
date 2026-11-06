@@ -1,4 +1,8 @@
-"""Draws one level of a chip: wires coloured by value, parts, pins and bus values."""
+"""Draws one level of a chip: wires coloured by value, parts, pins and bus values.
+
+The net under the mouse (a wire or a chip pin) is highlighted everywhere it goes,
+and dots mark where a wire branches.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +12,7 @@ import pygame
 
 from nandsim.gui import theme
 from nandsim.gui.camera import Camera
-from nandsim.gui.layout import NodeKey, Route
+from nandsim.gui.layout import NodeKey, Route, hovered_net, source_key
 from nandsim.gui.session import ChipSession
 
 
@@ -53,13 +57,24 @@ def draw_circuit(
     small = fonts.get(12 * s)
     label_font = fonts.get(13 * s, bold=True)
 
-    # Wires first, hovered wire last so it sits on top.
-    routes = [r for r in lay.routes if r is not hover.route] + (
-        [hover.route] if hover.route is not None else []
-    )
+    # Wires first; the hovered net last, over a halo, so it reads across the canvas.
+    net = hovered_net(lay, hover.node, hover.route)
+    lit = [
+        r
+        for r in lay.routes
+        if net is not None and source_key(r.edge) == net and len(r.points) >= 2
+    ]
+    lit_ids = {id(r) for r in lit}
+    routes = [r for r in lay.routes if id(r) not in lit_ids] + lit
     for r in routes:
+        if lit and r is lit[0]:
+            for h in lit:  # halo under every wire of the net, drawn once before them
+                _, hw = wire_style(session, h.edge.nets)
+                hpts = [cam.to_screen(p) for p in h.points]
+                halo = max(3, round((hw * 1.8 + 4) * s))
+                pygame.draw.lines(surf, theme.ACCENT, False, hpts, halo)
         color, w = wire_style(session, r.edge.nets)
-        width = max(1, round(w * s * (1.8 if r is hover.route else 1.0)))
+        width = max(1, round(w * s * (1.8 if id(r) in lit_ids else 1.0)))
         if r.label_at is not None:  # constant
             text = small.render(
                 r.edge.label, True, theme.bit_color(1 if r.edge.label == "true" else 0)
@@ -74,6 +89,11 @@ def draw_circuit(
             tag = small.render(val, True, color)
             x, y = pts[0]
             surf.blit(tag, (x + 4 * s, y - tag.get_height() - 1))
+
+    for p, r in lay.junctions:  # dots where a wire branches
+        color, w = wire_style(session, r.edge.nets)
+        grow = 1.8 if id(r) in lit_ids else 1.0
+        pygame.draw.circle(surf, color, cam.to_screen(p), max(2, round((w * grow + 2) * s)))
 
     parts = {p.index: p for p in view.parts}
     radius = max(2, round(6 * s))

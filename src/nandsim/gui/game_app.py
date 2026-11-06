@@ -14,7 +14,7 @@ from pathlib import Path
 import pygame
 
 from nandsim.gui import theme
-from nandsim.gui.app import FOOTER, HEADER, ViewerApp
+from nandsim.gui.app import HEADER, ViewerApp
 from nandsim.gui.brief import brief_lines
 from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
@@ -350,7 +350,7 @@ class GameApp(ViewerApp):
         if anchor == "results":
             return self.results_rect
         if anchor == "footer":
-            return pygame.Rect(0, h - FOOTER, w, FOOTER)
+            return pygame.Rect(0, h - self.footer_height, w, self.footer_height)
         if kind == "line":
             return self._line_rect(arg)
         if kind == "pin" or anchor == "part":
@@ -409,7 +409,7 @@ class GameApp(ViewerApp):
         if step is None:
             self.bubble = None
             return
-        bounds = pygame.Rect(0, 0, self.size[0], self.size[1] - FOOTER)
+        bounds = pygame.Rect(0, 0, self.size[0], self.size[1] - self.footer_height)
         anchor = self.anchor_rect(step.anchor)
         clear = anchor
         if anchor is not None and step.anchor.startswith("line:"):
@@ -422,7 +422,7 @@ class GameApp(ViewerApp):
 
     def _draw_sidebar(self, surf: pygame.Surface) -> None:
         h = self.size[1]
-        pygame.draw.rect(surf, theme.PANEL, (0, 0, SIDEBAR, h - FOOTER))
+        pygame.draw.rect(surf, theme.PANEL, (0, 0, SIDEBAR, h - self.footer_height))
         title = self.fonts.get(16, bold=True).render("NAND Sim", True, theme.TEXT)
         surf.blit(title, (14, (HEADER - title.get_height()) // 2))
         font = self.fonts.get(14)
@@ -461,7 +461,7 @@ class GameApp(ViewerApp):
     def _draw_brief(self, surf: pygame.Surface, y: int) -> None:
         text_font = self.fonts.get(13)
         cols = (SIDEBAR - 28) // text_font.size("M")[0]
-        bottom = self.size[1] - FOOTER - 6
+        bottom = self.size[1] - self.footer_height - 6
         top = y
         md = self.game.current.brief.read_text()
         for line, kind in brief_lines(md, cols):

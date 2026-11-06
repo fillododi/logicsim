@@ -10,6 +10,7 @@ A simplified Sugiyama layout:
 5. Place nodes (y aligned towards their sources, x by column widths).
 6. Route wires orthogonally; vertical runs get their own track in the channel
    between two columns, shared only by wires of the same source (fan-out).
+   Tracks are ordered left to right so their stubs cross few other tracks.
 
 Coordinates are in "view units" (pixels at zoom 1). Text width is estimated
 with `Style.char_w`, which the renderer's monospace font should match.
@@ -73,6 +74,7 @@ class Layout:
     width: float
     height: float
     layers: list[list[NodeKey]]
+    junctions: list[tuple[Point, Route]] = field(default_factory=list)  # see `junctions()`
 
 
 def _node(e: Endpoint) -> NodeKey:
@@ -269,7 +271,7 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
 
     # 6a. Channel tracks: one per (source group) that needs a vertical run.
     fb_edges = [e for e in wired if is_feedback(e)]
-    channel_groups: list[dict[tuple, list[float]]] = [{} for _ in range(len(columns))]
+    channel_groups: list[dict[tuple, _Trunk]] = [{} for _ in range(len(columns))]
 
     def group_of(e: Edge, k: int) -> tuple:
         # One trunk per source pin: slices of the same bus branch off a shared track.
@@ -281,16 +283,20 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
             y1 = anchor_y(u, _pin_frac(view, e.src, "out") if k == 0 else 0.5)
             y2 = anchor_y(v, _pin_frac(view, e.dst, "in") if k == len(chain) - 2 else 0.5)
             if abs(y1 - y2) > 1e-6:
-                channel_groups[layer[u]].setdefault(group_of(e, k), []).extend([y1, y2])
+                g = group_of(e, k)
+                trunk = channel_groups[layer[u]].setdefault(g, _Trunk(source_key(e), str(g)))
+                trunk.left.append(y1)
+                trunk.right.append(y2)
     for i, e in enumerate(fb_edges):
         u, v = _node(e.src), _node(e.dst)
-        channel_groups[layer[u]][("fb-out", i)] = [0.0]
-        channel_groups[layer[v] - 1][("fb-in", i)] = [0.0]
+        y1 = anchor_y(u, _pin_frac(view, e.src, "out"))
+        y2 = anchor_y(v, _pin_frac(view, e.dst, "in"))
+        # Feedback trunks run up to the lane above everything.
+        src = source_key(e)
+        channel_groups[layer[u]][("fb-out", i)] = _Trunk(src, f"fb-out{i}", [y1], [], _LANE)
+        channel_groups[layer[v] - 1][("fb-in", i)] = _Trunk(src, f"fb-in{i}", [], [y2], _LANE)
 
-    tracks: list[dict[tuple, int]] = []
-    for groups in channel_groups:
-        order = sorted(groups, key=lambda g: (min(groups[g]), max(groups[g]), str(g)))
-        tracks.append({g: i for i, g in enumerate(order)})
+    tracks = [{g: i for i, g in enumerate(_order_trunks(groups))} for groups in channel_groups]
 
     # 5b. x positions: column widths plus channels sized for their tracks.
     x = st.margin
@@ -383,10 +389,77 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
 
     width = max((b.right for b in boxes.values()), default=0.0) + st.margin
     height = max([b.bottom for b in boxes.values()] + [0.0]) + st.margin
-    return Layout(boxes, routes, width, height, columns)
+    lay = Layout(boxes, routes, width, height, columns)
+    lay.junctions = junctions(lay)
+    return lay
 
 
 # ---- helpers -------------------------------------------------------------
+
+SourceKey = tuple[str, int | None, str]
+_LANE = float("-inf")  # the top of a feedback trunk: above everything
+
+
+def source_key(e: Edge) -> SourceKey:
+    """Which signal source a wire carries: wires with the same key are one net."""
+    return (e.src.kind, e.src.part, e.src.pin)
+
+
+@dataclass
+class _Trunk:
+    """A vertical run in a channel and the horizontal stubs that join it.
+
+    `left` are the y's of stubs coming in from the column on the left, `right` the
+    y's of stubs leaving towards the column on the right.
+    """
+
+    src: SourceKey
+    name: str  # tie-breaker that keeps the order deterministic
+    left: list[float] = field(default_factory=list)
+    right: list[float] = field(default_factory=list)
+    top: float | None = None
+
+    @property
+    def span(self) -> tuple[float, float]:
+        ys = self.left + self.right + ([self.top] if self.top is not None else [])
+        return min(ys), max(ys)
+
+
+def _pair_cost(a: _Trunk, b: _Trunk) -> int:
+    """Crossings if trunk `a` takes a track left of trunk `b` in the same channel.
+
+    `a`'s right stubs run across `b`'s track and `b`'s left stubs run across
+    `a`'s, so each of those strictly inside the other trunk's span is a crossing.
+    """
+    if a.src == b.src:
+        return 0
+    blo, bhi = b.span
+    alo, ahi = a.span
+    return sum(blo < y < bhi for y in a.right) + sum(alo < y < ahi for y in b.left)
+
+
+def _order_trunks(groups: dict[tuple, _Trunk]) -> list[tuple]:
+    """Left-to-right track order for one channel, with few crossings.
+
+    Start from a ranking by pairwise wins, then swap neighbours while that helps.
+    """
+    keys = sorted(groups, key=lambda g: (groups[g].span, groups[g].name))
+    n = len(keys)
+    if n < 2:
+        return keys
+    cost = [[_pair_cost(groups[a], groups[b]) for b in keys] for a in keys]
+    wins = [sum(cost[i][j] < cost[j][i] for j in range(n)) for i in range(n)]
+    order = sorted(range(n), key=lambda i: -wins[i])  # stable: keeps the span order on ties
+    for _ in range(n):
+        swapped = False
+        for k in range(n - 1):
+            i, j = order[k], order[k + 1]
+            if cost[j][i] < cost[i][j]:
+                order[k], order[k + 1] = j, i
+                swapped = True
+        if not swapped:
+            break
+    return [keys[i] for i in order]
 
 
 def _value_chars(width: int) -> int:
@@ -453,11 +526,72 @@ def _simplify(pts: list[Point]) -> list[Point]:
     return out
 
 
+def junctions(lay: Layout) -> list[tuple[Point, Route]]:
+    """Where a wire branches off another wire of the same net, for drawing a dot.
+
+    A point is a junction when wires of one source leave it in three or more
+    directions. Branches always turn at a corner of one of the routes, so only
+    route corners are candidates. Each junction comes with the widest route
+    through it, whose style the dot should take.
+    """
+    by_src: dict[SourceKey, list[Route]] = {}
+    for r in lay.routes:
+        if len(r.points) >= 2:
+            by_src.setdefault(source_key(r.edge), []).append(r)
+    out: list[tuple[Point, Route]] = []
+    for routes in by_src.values():
+        if len(routes) < 2:
+            continue
+        segs = {
+            (r_i, a, b)
+            for r_i, r in enumerate(routes)
+            for a, b in zip(r.points, r.points[1:], strict=False)
+        }
+        candidates = sorted({p for r in routes for p in r.points[1:-1]})
+        for p in candidates:
+            dirs: set[tuple[int, int]] = set()
+            through: set[int] = set()
+            for r_i, a, b in segs:
+                for d in _directions_from(p, a, b):
+                    dirs.add(d)
+                    through.add(r_i)
+            if len(dirs) >= 3:
+                widest = max((routes[i] for i in through), key=lambda r: len(r.edge.nets))
+                out.append((p, widest))
+    return out
+
+
+def _directions_from(p: Point, a: Point, b: Point) -> list[tuple[int, int]]:
+    """Unit directions in which segment a-b leaves point p (none if p is off it)."""
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    if ax == bx == px and min(ay, by) <= py <= max(ay, by):
+        return [(0, 1 if y > py else -1) for y in (ay, by) if y != py]
+    if ay == by == py and min(ax, bx) <= px <= max(ax, bx):
+        return [(1 if x > px else -1, 0) for x in (ax, bx) if x != px]
+    return []
+
+
+def hovered_net(lay: Layout, node: NodeKey | None, route: Route | None) -> SourceKey | None:
+    """The net to highlight for what the mouse is over: a wire, or a chip pin."""
+    if route is not None:
+        return source_key(route.edge)
+    if node is None:
+        return None
+    kind, ident = node
+    if kind == "in":
+        return ("input", None, str(ident))
+    if kind == "out":
+        feeding = [r for r in lay.routes if r.edge.dst.kind == "output" and r.edge.dst.pin == ident]
+        if len(feeding) == 1:  # an output fed by slices of several sources is no one net
+            return source_key(feeding[0].edge)
+    return None
+
+
 def crossings(lay: Layout) -> int:
     """Count where wires of different sources cross (horizontal over vertical)."""
-    segs: list[tuple[float, float, float, float, str]] = []
+    segs: list[tuple[float, float, float, float, SourceKey]] = []
     for r in lay.routes:
-        g = f"{r.edge.src.kind}:{r.edge.src.part}:{r.edge.src.pin}"
+        g = source_key(r.edge)
         for (x1, y1), (x2, y2) in zip(r.points, r.points[1:], strict=False):
             segs.append((min(x1, x2), min(y1, y2), max(x1, x2), max(y1, y2), g))
     hs = [s for s in segs if s[1] == s[3] and s[0] != s[2]]

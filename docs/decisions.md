@@ -226,6 +226,22 @@ Ambiguous spec points and the option chosen. Newest last.
 
 **Consequences:** a new game opens Wire. Both tutorial levels stay optional, since Not depends on neither. `place_bubble` now lets a bubble beside its anchor slide up or down to stay in the window, because Wire's taller "connect" bubble otherwise dropped below the `PARTS:` line and covered the editor.
 
+## 2026-11-06 — UI polish: track order, net highlight, junctions, wrapped help
+**Context:** milestone 3 asks for fewer wire crossings on large chips, the hovered net highlighted across the canvas, junction dots where wires branch, and a help line that fits narrow windows.
+
+**Decision:**
+- **Crossings:** measured first. On a 64-part chip the column order accounted for about 500 crossings, but the drawn total was 2537: most came from the order of vertical tracks inside each channel, which was sorted by y. Tracks are now ordered by pairwise crossing cost (a trunk's stubs that run across another trunk's span), ranked by pairwise wins and then improved by neighbour swaps. Result: 944 on that chip, and 2 instead of 10 over all shipped levels. A transpose pass on the column order was also tried; it changed the drawn total by under 1%, so it was left out.
+- **Net:** what lights up is every wire from the same source pin, including slices of the same bus. Hovering a wire, an input pin, or an output fed by one source selects it. A part selects nothing, because it has several outputs.
+- **Junction:** a route corner where wires of one source leave in three or more directions. Junctions are computed once with the layout, not per frame.
+- **Help line:** it wraps between `·` items. Only an item wider than the window on its own wraps between words. The footer grows to fit, and every panel sizes against the real footer height.
+
+**Alternatives:**
+- Truncating the help with "…": rejected, because the hidden shortcuts were the reason for the item.
+- A global crossing minimisation (an ILP, or many random restarts): rejected for now, since the heuristic is linear in practice and the remaining crossings are mostly forced by the placement.
+- Highlighting only the exact nets (bits) of the hovered wire: rejected, because a slice would then light up only part of its bus trunk, which reads as a broken wire.
+
+**Consequences:** `layout.py` exposes `source_key`, `junctions`, `hovered_net` and `Layout.junctions`. `ViewerApp.footer_height` replaces the `FOOTER` constant wherever a panel is sized.
+
 ## 2026-11-06 — Main menu, Esc pause menu and game reset
 **Context:** the user asked for an escape screen, a main menu and a way to reset the game.
 
