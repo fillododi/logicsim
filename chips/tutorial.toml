@@ -5,10 +5,12 @@
 #   anchor  what the bubble points at (see docs/decisions.md for the list):
 #             levels, level:<Name>, brief, editor, line:<text>, canvas,
 #             pin:<name>, part, wire (the first part-to-part wire), header,
-#             run_button, results, footer
+#             run_button, results, footer, chips (the "Your chips" list)
 #   until   the player action that completes the step:
 #             next (the bubble's Next button), save, build_ok, toggle,
-#             open_part, up, run_tests, solved, open_level, open_level:<Name>
+#             set_value (an input's value typed in; it counts as a toggle too),
+#             open_part, up, run_tests, solved, open_level, open_level:<Name>,
+#             export (a chip exported from the Esc menu)
 #   text    what the bubble says; blank lines split paragraphs, and lines
 #           indented by four spaces are shown as code
 #
@@ -22,7 +24,7 @@ until = "next"
 text = """
 Welcome to NAND Sim! You will build a computer from a single kind of gate, the Nand.
 
-Each entry in this list is a chip to build. Solving one unlocks the chips that use it.
+Each entry in this list is a chip to build. Solving one unlocks the chips that use it. The levels come in groups: click a group's name to fold it away or open it again.
 """
 
 [[step]]
@@ -117,6 +119,17 @@ Now the output is computed: click a and b and watch it. It is 0 only when a and 
 """
 
 [[step]]
+id = "type_value"
+level = "Hello"
+anchor = "pin:b"
+until = "set_value"
+text = """
+You can also type an input's value. Click an empty spot of the circuit, so your keys go to it rather than to the editor. Then point at b, type 1 and press Enter.
+
+For one bit a click is quicker, but later chips have buses of up to 12 bits, and typing 0xABC beats clicking 2748 times. Values are written as in the tests: 13, 0b1101 or 0xD.
+"""
+
+[[step]]
 id = "run_hello"
 level = "Hello"
 anchor = "run_button"
@@ -193,6 +206,26 @@ anchor = "header"
 until = "up"
 text = """
 The breadcrumbs show where you are. Click And, or press Backspace, to go back up.
+"""
+
+[[step]]
+id = "export"
+level = "And"
+anchor = "footer"
+until = "export"
+text = """
+Any chip you build can become a part of your own, usable in every level. Press Esc, choose Export this chip as…, keep the name MyAnd or type another, and press Enter.
+"""
+
+[[step]]
+id = "your_chips"
+level = "And"
+anchor = "chips"
+until = "next"
+text = """
+Your chips are listed here. Use one like any other part, MyAnd(a=..., b=..., out=...), and the × deletes it.
+
+They are .hdl files in the save-exports folder next to your saves. To use a chip someone shares with you, copy its file there.
 """
 
 [[step]]

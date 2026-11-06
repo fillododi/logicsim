@@ -58,6 +58,7 @@ class GameApp(ViewerApp):
         self.bubble: Bubble | None = None
         self._bubble_press = False  # a press started on the bubble; its release is ours too
         self._brief_rect = pygame.Rect(0, 0, 0, 0)
+        self._chips_rect: pygame.Rect | None = None  # the "Your chips" list, when shown
         session = ChipSession(self.game.loader())
         session.reload()
         super().__init__(session, size=size)
@@ -387,6 +388,7 @@ class GameApp(ViewerApp):
         else:
             self._export_names[self.game.current.name] = name
             self.notice = f"Exported {name}. Every level can now use it as a part: {name}(...)"
+            self.tour_event("export")
         self._exported = self.game.store.exported()
         self._close_menus()
 
@@ -419,7 +421,7 @@ class GameApp(ViewerApp):
         self.tour.event(self.game.current.name, name, detail)
 
     def on_action(self, name: str) -> None:
-        if name == "toggle":
+        if name in ("toggle", "set_value"):  # a typed value sounds like a click on the pin
             self.sounds.play("toggle")
         self.tour_event(name)
 
@@ -548,6 +550,8 @@ class GameApp(ViewerApp):
             return next((r for r, g in self._group_rows if g == group), None)
         if anchor == "brief":
             return self._brief_rect
+        if anchor == "chips":
+            return self._chips_rect
         if anchor == "editor":
             return self.editor_rect
         if anchor == "canvas":
@@ -652,6 +656,8 @@ class GameApp(ViewerApp):
             # Keep the whole editor row free: the player is about to type on that line.
             e = self.editor_rect
             clear = pygame.Rect(e.x, anchor.y, e.width, anchor.height)
+        if clear is not None and self.field_rect is not None:
+            clear = clear.union(self.field_rect)  # the value being typed stays readable
         self.bubble = draw_bubble(
             surf, self.fonts, step, self.tour.position(step), anchor, bounds, self.mouse, clear
         )
@@ -673,7 +679,9 @@ class GameApp(ViewerApp):
                 y += font.get_linesize()
             y += 8
         self._chip_rows = []
+        self._chips_rect = None
         if self._exported:
+            top = y
             bold = self.fonts.get(13, bold=True)
             surf.blit(bold.render("Your chips", True, theme.TEXT), (14, y))
             hint = self.fonts.get(12).render("usable in every level", True, theme.TEXT_DIM)
@@ -690,6 +698,7 @@ class GameApp(ViewerApp):
                 surf.blit(cross, cross.get_rect(center=x_btn.center))
                 self._chip_rows.append((x_btn, name))
                 y += CHIP_ROW_H
+            self._chips_rect = pygame.Rect(6, top - 4, SIDEBAR - 12, y - top + 6)
             y += 8
         self._draw_brief(surf, y)
 

@@ -158,9 +158,33 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     assert app.session.error is None and step_id(app) == "output"
     app.screenshot(shots / "4-nand.png")
     press_next(app)
-    assert step_id(app) == "run_hello"
+
+    # Hello, "type_value": click an empty spot of the circuit, point at b, type 1, Enter.
+    assert step_id(app) == "type_value"
+    b = shown(app)
+    assert b is not None and b.next is None
+    canvas = pygame.Rect(*(round(v) for v in app.canvas_area))
+    spot = (canvas.x + 10, canvas.bottom - 10)
+    assert not b.rect.collidepoint(spot)
+    click(app, spot)
+    assert not app.editor.focused
+    pin_b = app.anchor_rect("pin:b")
+    assert pin_b is not None
+    app.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=pin_b.center, rel=(0, 0),
+                                  buttons=(0, 0, 0)))  # fmt: skip
+    app.handle(pygame.event.Event(pygame.KEYDOWN, key=pygame.K_1, mod=0, unicode="1"))
+    app.handle(pygame.event.Event(pygame.TEXTINPUT, text="1"))
+    b = shown(app)
+    assert b is not None and app.field_rect is not None
+    assert not b.rect.colliderect(app.field_rect)  # the value being typed stays readable
+    app.screenshot(shots / "4b-type-value.png")
+    keydown(app, pygame.K_RETURN)
+    assert app.session.inputs["b"] == 1 and step_id(app) == "run_hello"
+    assert "toggle" in app.sounds.played
+
+    # The keys now go to the circuit, so the tests run from the button.
     shown(app)
-    keydown(app, pygame.K_RETURN, CTRL)
+    click(app, app.button_rect.center)
     assert step_id(app) == "unlocked"
     shown(app)
     click_level(app, "Not")
@@ -200,7 +224,24 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     assert app.session.path == "And/Not#2" and step_id(app) == "back_up"
     shown(app)
     keydown(app, pygame.K_BACKSPACE)  # the canvas click took focus off the editor
-    assert app.session.path == "And" and step_id(app) == "done"
+    assert app.session.path == "And" and step_id(app) == "export"
+
+    # "export": Esc, Export this chip as…, keep the suggested name, Enter.
+    shown(app)
+    keydown(app, pygame.K_ESCAPE)
+    app.render(pygame.Surface(app.size))
+    menu = app.menus[-1]
+    item = next(i for i, it in enumerate(menu.items) if it.label == "Export this chip as…")
+    click(app, menu.rects[item].center)
+    assert app.menus[-1].text == "MyAnd"
+    keydown(app, pygame.K_RETURN)
+    assert app.menus == [] and (save.parent / "save-exports" / "MyAnd.hdl").is_file()
+    assert step_id(app) == "your_chips"
+    b = shown(app)  # pointing at the new "Your chips" list
+    assert b is not None and app.anchor_rect("chips") is not None
+    app.screenshot(shots / "8-your-chips.png")
+    press_next(app)
+    assert step_id(app) == "done"
     press_next(app)
     assert app.tour.current is None and shown(app) is None
     for p in shots.iterdir():

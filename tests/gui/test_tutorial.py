@@ -211,3 +211,25 @@ def test_level_names_are_checked(tmp_path: Path, entry: str, bad: str) -> None:
     with pytest.raises(ValueError, match=f"step 1 .a.: unknown {bad}"):
         load_steps(p, levels={"Hello", "Not", "And"})
     load_steps(p)  # without a level list, names aren't checked
+
+
+def test_a_typed_value_also_completes_a_toggle_step(tmp_path: Path) -> None:
+    steps = [
+        Step("flip", "Click it.", "pin:in", "toggle"),
+        Step("type", "Type it.", "pin:in", "set_value"),
+        Step("share", "Export it.", "footer", "export"),
+    ]
+    tour = Tour(steps, tmp_path / "tutorial.json")
+    assert tour.event("Hello", "set_value")  # a typed value changes the pin like a click
+    assert not tour.event("Hello", "toggle")  # but a click isn't typing a value
+    assert tour.event("Hello", "set_value")
+    assert tour.event("Hello", "export")
+    assert tour.current is None
+
+
+def test_the_tour_teaches_typed_values_and_your_chips() -> None:
+    by_id = {s.id: s for s in STEPS}
+    assert by_id["type_value"].level == "Hello" and by_id["type_value"].until == "set_value"
+    assert by_id["export"].until == "export" and by_id["your_chips"].anchor == "chips"
+    ids = [s.id for s in STEPS]
+    assert ids.index("export") < ids.index("your_chips") < ids.index("done")
