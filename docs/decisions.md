@@ -259,3 +259,18 @@ Ambiguous spec points and the option chosen. Newest last.
 - Esc leaves the editor first, then opens the menu: rejected, as explained above.
 
 **Consequences:** `ViewerApp` gained `quit_requested` and a `before_quit()` hook, and `SaveStore` gained `has_progress()`, `reset()` and `backups`. Old backups are never cleaned up automatically.
+
+## 2026-11-06 — Teaching internal wires in the And level
+**Context:** the user asked the And tutorial to teach how to connect a gate's output to another gate's input. And is the first level that needs two parts in a row, and until now neither the tour nor the brief explained internal wires.
+
+**Decision:**
+- **Two tour steps before `open_part`, both tied to And.** `wires` points at the `PARTS:` line, explains that a name of your own on a part's output is a wire that another part can read, and waits for `build_ok`, so the player builds their own And. `see_wire` then points at that wire on the circuit and invites the player to hover it (the net lights up) and to toggle `a` and `b`.
+- **The example isn't the answer.** The bubble and the brief show `Not(in=a, out=na); Not(in=na, out=out);`, a double Not, so the And puzzle and its hint ("what undoes a not?") stay the player's to solve. Hello's tour gives its answer because Hello is the syntax lesson; And is a real gate.
+- **A new `wire` anchor:** the first part-to-part wire on the canvas, framed together with the two parts it joins, so the bubble sits beside them rather than over them. Like `pin:` and `part`, it falls back to the whole canvas when there is no such wire.
+- **Code lines in a bubble:** consecutive indented lines now form one code block, drawn without blank rows between them. A blank line still separates two blocks.
+
+**Alternatives:**
+- Showing the And solution in the bubble: rejected, because it would solve the level for the player.
+- A separate tutorial level just for wires: rejected. And already needs exactly this, so it teaches by doing.
+
+**Consequences:** the tour has 19 steps. `wire` joins the anchor list in `chips/tutorial.toml` and `tutorial.ANCHORS`.
