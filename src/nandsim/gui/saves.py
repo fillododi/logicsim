@@ -28,7 +28,7 @@ from pathlib import Path
 
 from nandsim.hdl import ChipDef, HdlError, parse
 from nandsim.netlist import PRIMITIVES, ChipLibrary, Primitive, elaborate
-from nandsim.paths import default_save_dir, exports_dir
+from nandsim.paths import default_save_dir, exports_dir, settings_file
 from nandsim.testing import Level, exported_chips
 from nandsim.testing.levels import CHIP_NAME, KEYWORDS, RESERVED
 
@@ -85,6 +85,11 @@ class SaveStore:
     @property
     def exports(self) -> Path:
         return exports_dir(self.root)
+
+    @property
+    def settings_path(self) -> Path:
+        """Mute and volume (see `gui.settings`), beside the save dir so a reset keeps them."""
+        return settings_file(self.root)
 
     def exported(self) -> list[str]:
         """The player's exported chips, by name: parts that every level may use."""

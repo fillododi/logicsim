@@ -32,3 +32,11 @@ def exports_dir(save_dir: Path) -> Path:
     reset empties the save directory but must keep the exported chips.
     """
     return save_dir.with_name(save_dir.name + "-exports")
+
+
+def settings_file(save_dir: Path) -> Path:
+    """The player's settings (mute, volume): `<save dir>-settings.json`, beside the saves.
+
+    Outside the save directory, so a game reset doesn't turn the sound back on.
+    """
+    return save_dir.with_name(save_dir.name + "-settings.json")

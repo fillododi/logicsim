@@ -25,6 +25,7 @@ class TestReport:
     passed: bool
     summary: str
     lines: list[str]
+    newly_solved: bool = False  # passed for the first time: the level just got solved
 
 
 class GameState:
@@ -103,6 +104,7 @@ class GameState:
         report = _report(result)
         if result.passed:
             newly = level.name not in self.store.solved
+            report.newly_solved = newly
             self.store.mark_solved(level)
             unlocked = [
                 lv.name for lv in self.levels if newly and self.missing(lv) == [] and

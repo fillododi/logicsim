@@ -367,3 +367,35 @@ Ambiguous spec points and the option chosen. Newest last.
 - Keeping exports on reset: the user asked otherwise.
 
 **Consequences:** `SaveStore` gained `delete_export` and `users_of`; `reset` and `has_progress` include the exports folder; the backup-folder naming moved into `_new_backup`, shared by both.
+
+## 2026-11-06 — Sound effects, mute and volume
+**Context:** milestone 4 asks for sound effects synthesized with numpy at startup, with no asset files, played through `pygame.mixer`: toggles, build errors, tests passed and failed, level solved, menus. Mute and volume go in the menu and in a settings file next to the saves, and without an audio device the game runs silently.
+
+**Decision:**
+- **Three modules.** `gui/synth.py` (numpy only) holds the recipes and `to_mixer`, `gui/settings.py` (pure) holds mute and volume, and `gui/sound.py` is the only one that touches `pygame.mixer`. Synthesis is tested without a device.
+- **Eight sounds**, each 0.8 s at most and faded out at the end:
+
+  | sound | when |
+  |---|---|
+  | `toggle` | an input is clicked on the canvas |
+  | `error` | Ctrl+S with a build error, or a refused export name |
+  | `pass` | tests pass on a level already solved |
+  | `fail` | tests fail or don't build |
+  | `solved` | a level is solved for the first time (`TestReport.newly_solved`) |
+  | `move` | the menu selection changes |
+  | `select` | a menu item is chosen, the pause menu opens, a delete dialog opens |
+  | `back` | Esc or Cancel in a menu |
+
+  Typing in a menu's text field is silent.
+- **The mixer's real format.** If the mixer isn't open yet, `Sounds.load()` asks for 44.1 kHz, 16-bit, stereo. Then it builds every sound in whatever format the mixer actually reports, since a device may force another one. `to_mixer` handles signed and unsigned integers, float32, mono and stereo.
+- **Silence, never a crash.** A `pygame.error` while opening the mixer or building sounds disables them; `play` then does nothing and never raises.
+- **Settings** go in `<save dir>-settings.json`, beside the save directory like `-exports` and `-backups`, so a reset keeps them. An unreadable file means the defaults (on, 60%) and a sidebar warning; it's overwritten at the next change, since settings are cheap to lose.
+- **Menu items.** *Sound: On/Off* and *Volume: N%* sit above Quit on both the pause menu and the title screen. Volume steps through 20–100% by 20 and wraps around. Volume is applied when a sound plays, so changing it doesn't re-synthesize anything. Both items relabel in place and play a preview, and they are saved at once.
+- **The developer viewer** (`nandsim gui FILE`) is silent: it is a tool, not the game.
+
+**Alternatives:**
+- Sound files: ruled out by the milestone, and they would bring asset licences.
+- A volume slider widget: more UI for little gain over five steps.
+- Settings inside the save directory: rejected, a reset would undo the player's mute.
+
+**Consequences:** `GameApp` has `settings` and `sounds`; `sounds.played` logs recent sounds for tests. `SaveStore.settings_path` and `paths.settings_file` name the file.

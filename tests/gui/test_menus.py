@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 
 os.environ.setdefault("SDL_VIDEODRIVER", "dummy")
@@ -79,7 +80,12 @@ def test_menu_keyboard_and_mouse() -> None:
 
 def test_title_screen_plays_and_esc_does_not_leave_it(tmp_path: Path) -> None:
     app = new_app(tmp_path / "save", title=True)
-    assert app.on_title and labels(app) == ["Play", "Quit"]  # nothing to reset yet
+    assert app.on_title and labels(app) == [
+        "Play",
+        "Sound: On",
+        "Volume: 60%",
+        "Quit",
+    ]  # nothing to reset
     assert not app.editing
     key(app, pygame.K_ESCAPE)
     assert app.on_title  # nowhere to go back to
@@ -93,7 +99,7 @@ def test_title_offers_continue_and_reset_once_started(tmp_path: Path) -> None:
     save = tmp_path / "save"
     SaveStore(load_levels(), save).save(LEVELS["Wire"], "CHIP Wire {}")
     app = new_app(save, title=True)
-    assert labels(app) == ["Continue", "Reset game…", "Quit"]
+    assert labels(app) == ["Continue", "Reset game…", "Sound: On", "Volume: 60%", "Quit"]
 
 
 def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) -> None:
@@ -107,6 +113,8 @@ def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) ->
         "Export this chip as…",
         "Main menu",
         "Reset game…",
+        "Sound: On",
+        "Volume: 60%",
         "Quit",
     ]
     key(app, pygame.K_ESCAPE)  # Esc again resumes
@@ -362,3 +370,74 @@ def test_reset_takes_exported_chips_away(tmp_path: Path) -> None:
     key(app, pygame.K_ESCAPE)
     click_item(app, "Export this chip as…")
     assert app.menus[-1].text == "MyWire"  # the old export names are forgotten too
+
+
+# ---- sound ----------------------------------------------------------------------
+
+
+def test_game_events_play_their_sounds(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    assert app.editor is not None and app.sounds.enabled  # the dummy audio driver
+    app.tour.skip()  # its bubble would sit over the canvas
+    app.save()  # BUF builds: no error sound
+    assert "error" not in app.sounds.played
+    snap = app.session.snapshot
+    assert snap is not None
+    b = snap.layout.boxes[("in", "in")]
+    pos = app.screen_of((b.x + b.w / 2, b.y + b.h / 2))
+    click(app, pos)  # the first click on the circuit only leaves the editor
+    assert "toggle" not in app.sounds.played
+    click(app, pos)
+    assert app.sounds.played[-1] == "toggle"
+    app.run_tests()  # BUF is a buffer, not a Not
+    assert app.sounds.played[-1] == "fail"
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(LEVELS["Not"].reference.read_text())
+    app.run_tests()
+    assert app.sounds.played[-1] == "solved"
+    app.run_tests()  # already solved: a plain pass
+    assert app.sounds.played[-1] == "pass"
+    app.editor.buffer.insert("oops")
+    app.save()
+    assert app.sounds.played[-1] == "error"
+
+
+def test_menus_tick_blip_and_buzz(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    key(app, pygame.K_ESCAPE)
+    assert app.sounds.played[-1] == "select"  # the pause menu opens
+    key(app, pygame.K_DOWN)
+    assert app.sounds.played[-1] == "move"
+    click_item(app, "Export this chip as…")
+    assert app.sounds.played[-1] == "select"
+    field(app, "Xor")  # typing is silent
+    assert app.sounds.played[-1] == "select"
+    key(app, pygame.K_RETURN)
+    assert app.sounds.played[-1] == "error"  # a refused name
+    key(app, pygame.K_ESCAPE)
+    assert app.sounds.played[-1] == "back"
+
+
+def test_sound_and_volume_change_in_place_and_are_remembered(tmp_path: Path) -> None:
+    save = tmp_path / "save"
+    app = new_app(save)
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Volume: 60%")
+    assert labels(app)[app.menus[-1].selected] == "Volume: 80%"  # same row, new label
+    assert app.sounds.played[-1] == "select" and app.sounds.played.count("select") == 2
+    click_item(app, "Volume: 80%")
+    click_item(app, "Volume: 100%")
+    assert "Volume: 20%" in labels(app)  # wraps around
+    click_item(app, "Sound: On")
+    assert "Sound: Off" in labels(app) and app.settings.muted
+    before = list(app.sounds.played)
+    key(app, pygame.K_DOWN)
+    key(app, pygame.K_UP)
+    assert app.sounds.played == before  # muted: nothing more is played
+    settings = json.loads((tmp_path / "save-settings.json").read_text())
+    assert settings == {"version": 1, "muted": True, "volume": 0.2}
+
+    again = new_app(save, title=True)  # read back on the next start, on the title screen too
+    assert "Sound: Off" in labels(again) and "Volume: 20%" in labels(again)
+    click_item(again, "Sound: Off")
+    assert again.sounds.played == ["select"]  # unmuting plays the preview
