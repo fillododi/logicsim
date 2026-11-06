@@ -44,6 +44,10 @@ Your work is saved in `~/.local/share/nandsim/save/`. Pass `--save-dir` to use a
 To start over, choose **Reset game…** on the main menu or in the Esc menu. Your old files
 aren't deleted: they move to `~/.local/share/nandsim/save-backups/<date and time>/`.
 
+To keep or share a single chip, choose **Export this chip** in the Esc menu: it is written to
+`~/.local/share/nandsim/save-exports/<Chip>.hdl`. **Import a chip…** in the same menu loads any
+`.hdl` file from that folder into the editor. A reset leaves that folder alone.
+
 ### Controls
 
 | | |
