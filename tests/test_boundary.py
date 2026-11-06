@@ -14,7 +14,13 @@ import sys
 from pathlib import Path
 
 CORE_PACKAGES = ["nandsim.hdl", "nandsim.netlist", "nandsim.sim", "nandsim.testing"]
-PURE_GUI_MODULES = ["nandsim.gui.model", "nandsim.gui.layout", "nandsim.gui.saves"]
+PURE_GUI_MODULES = [
+    "nandsim.gui.model",
+    "nandsim.gui.layout",
+    "nandsim.gui.saves",
+    "nandsim.gui.session",
+    "nandsim.gui.camera",
+]
 GUI_DIR = Path(__file__).parents[1] / "src" / "nandsim" / "gui"
 
 

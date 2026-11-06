@@ -8,7 +8,8 @@ Work in progress — see `CLAUDE.md` for the full spec and milestones.
 
 ```bash
 uv sync
-uv run nandsim gui
+uv run nandsim test                                # run every level
+uv run nandsim gui reference/01_gates/Mux.hdl     # look inside a chip
 ```
 
 License: MIT.

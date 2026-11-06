@@ -29,6 +29,7 @@ Point = tuple[float, float]
 class Style:
     pitch: float = 24  # vertical distance between pins
     pad: float = 10  # padding above and below a part's pins
+    title: float = 18  # room for the part's name above its pins
     char_w: float = 8  # estimated width of one monospace character
     min_part_w: float = 72
     min_io_w: float = 56
@@ -217,11 +218,12 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
                 (len(_pin_label(q.name, q.width)) for q in p.outputs), default=0
             )
             w = max(st.min_part_w, st.char_w * (len(p.label) + 4), st.char_w * (names_w + 4))
-            boxes[n] = Box(n, 0, 0, w, rows * st.pitch + 2 * st.pad, lay)
+            boxes[n] = Box(n, 0, 0, w, rows * st.pitch + 2 * st.pad + st.title, lay)
         elif kind in ("in", "out"):
             pins = view.inputs if kind == "in" else view.outputs
             q = next(q for q in pins if q.name == ident)
-            w = max(st.min_io_w, st.char_w * (len(_pin_label(q.name, q.width)) + 3))
+            chars = len(_pin_label(q.name, q.width)) + 1 + _value_chars(q.width)
+            w = max(st.min_io_w, st.char_w * (chars + 2))
             boxes[n] = Box(n, 0, 0, w, st.pitch, lay)
         else:
             boxes[n] = Box(n, 0, 0, 0, st.pitch, lay)
@@ -229,8 +231,8 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
     def anchor_y(n: NodeKey, frac: float) -> float:
         b = boxes[n]
         if n[0] == "part":
-            rows = (b.h - 2 * st.pad) / st.pitch
-            return b.y + st.pad + frac * rows * st.pitch
+            rows = (b.h - 2 * st.pad - st.title) / st.pitch
+            return b.y + st.pad + st.title + frac * rows * st.pitch
         return b.y + b.h / 2
 
     def stack(col: list[NodeKey], want: dict[NodeKey, float]) -> None:
@@ -315,9 +317,12 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
         elif kind == "part":
             p = parts[int(ident)]
             for i, q in enumerate(p.inputs):
-                b.anchors[("in", q.name)] = (b.x, b.y + st.pad + (i + 0.5) * st.pitch)
+                b.anchors[("in", q.name)] = (b.x, b.y + st.pad + st.title + (i + 0.5) * st.pitch)
             for i, q in enumerate(p.outputs):
-                b.anchors[("out", q.name)] = (b.right, b.y + st.pad + (i + 0.5) * st.pitch)
+                b.anchors[("out", q.name)] = (
+                    b.right,
+                    b.y + st.pad + st.title + (i + 0.5) * st.pitch,
+                )
         else:
             b.anchors[("in", "")] = (b.x, b.y + b.h / 2)
             b.anchors[("out", "")] = (b.right, b.y + b.h / 2)
@@ -382,6 +387,13 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
 
 
 # ---- helpers -------------------------------------------------------------
+
+
+def _value_chars(width: int) -> int:
+    """Widest value text a pin can show: hex (0x..) or decimal, whichever is longer."""
+    if width == 1:
+        return 1
+    return max(len(str((1 << width) - 1)), (width + 3) // 4 + 2)
 
 
 def _pin_label(name: str, width: int) -> str:
