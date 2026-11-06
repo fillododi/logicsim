@@ -446,6 +446,8 @@ class GameApp(ViewerApp):
                 self.mouse = ev.pos
             self._menu_event(ev)
             return
+        if self._field_event(ev):  # Esc closes a value field before it opens the menu
+            return
         if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
             self.open_pause()
             self.sounds.play("select")

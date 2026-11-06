@@ -62,6 +62,7 @@ device the game runs silently.
 | | |
 |---|---|
 | Click an input | toggle it. On a bus, click counts up and right-click counts down. |
+| `Enter` or a digit over an input | type its value: `13`, `-1`, `0b1101` or `0x0D`, as in `.tst` files. Enter sets it, Esc cancels. |
 | `X` over an input | make it undefined (amber), to see how unknown values spread |
 | Click a part | open it and see its inside. The breadcrumbs or Backspace go back up. |
 | `F1` | replay the guided tour |
