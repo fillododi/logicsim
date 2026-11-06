@@ -1,6 +1,6 @@
 ---
 name: milestone
-description: Close a NAND Sim milestone — check every item from CLAUDE.md is done, run verify, write the journal entry, open the closing PR, and tag after merge. Use when asked to close, finish, or wrap up a milestone.
+description: Close a NAND Sim milestone — check every item from CLAUDE.md is done, run verify, write the journal entry, cut the changelog release, open the closing PR, and tag v0.N.0 after merge. Use when asked to close, finish, or wrap up a milestone.
 ---
 
 # Milestone
@@ -24,5 +24,6 @@ Argument: the milestone number N (1–6). If it is missing, infer it from `docs/
    ```
 
    For the numbers, measure; don't estimate. Say how each was measured.
-5. **PR:** commit the journal entry on the milestone branch (or a `docs/milestone-N` branch), then run `/pr`.
-6. **Tag:** after the user merges the PR, run `git switch main && git pull`, then `git tag -a mN -m "Milestone N: <name>"`. Push the tag only after the user confirms.
+5. **Release notes:** in `CHANGELOG.md`, rename `## [Unreleased]` to `## [0.N.0] — YYYY-MM-DD` and add a fresh empty `## [Unreleased]` above it. Tidy the entries so they read as release notes for a player. Update the link references at the bottom (`[Unreleased]` compares `v0.N.0...HEAD`; `[0.N.0]` compares to the previous tag). Set `version = "0.N.0"` in `pyproject.toml` and run `uv lock`.
+6. **PR:** commit the journal, changelog and version bump on the milestone branch (or a `docs/milestone-N` branch), then run `/pr`.
+7. **Tag:** after the user merges the PR, run `git switch main && git pull`, then `git tag -a v0.N.0 -m "Milestone N: <name>"`. Push the tag only after the user confirms.

@@ -36,6 +36,7 @@ description: Implement one scoped change to NAND Sim end to end — branch, smal
 
   Ask the user only about decisions that are hard to undo.
 - When behavior changes, update `docs/hdl.md`, `docs/tst.md`, or the in-game help in the same branch.
+- Add a line under `## [Unreleased]` in `CHANGELOG.md`, in the right group (`Added`, `Changed`, `Fixed`, `Removed`). Write it for a player or user reading the release notes, not as a commit message. Pure refactors and test-only changes don't need an entry.
 
 ## 5. Finish
 

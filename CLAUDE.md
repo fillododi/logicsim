@@ -63,6 +63,7 @@ chips/        level definitions: interface stub .hdl, brief .md, .tst
 reference/    hidden reference solutions, same layout as chips/
 docs/
   hdl.md  tst.md  decisions.md  journal.md
+CHANGELOG.md  release notes; one version 0.N.0 per milestone
 tests/
 ```
 
@@ -120,7 +121,7 @@ Each chip in `chips/` has a `.tst` file next to it.
 
 ## Milestones
 
-Complete them in order. Each one ends with green tests, updated docs and a journal entry.
+Complete them in order. Each one ends with green tests, updated docs, a journal entry and a `CHANGELOG.md` release `0.N.0` tagged `v0.N.0`. Every user-visible change adds a line under `[Unreleased]` as it lands.
 
 1. **Core:** HDL parser, elaboration, combinational simulation, `.tst` runner, CLI. Chips: Not, And, Or, Xor, Mux, DMux. No GUI yet.
 2. **Base GUI:** automatic layout, inputs and outputs that can be toggled, wire colors, hierarchical navigation, in-app HDL editor with inline errors, saves, level select.

@@ -37,3 +37,9 @@ Ambiguous spec points and the option chosen. Newest last.
 **Decision:** work on branches and use `/analyze → /make-change → /verify → /pr → /review`, and `/milestone` to close a milestone. `main` is protected and requires green CI.
 **Alternatives:** ad-hoc commits on `main` (rejected: no review point).
 **Consequences:** every change lands through a PR.
+
+## 2026-11-06 — Changelog and versioning
+**Context:** the user asked for a changelog; releases needed a numbering scheme.
+**Decision:** `CHANGELOG.md` in Keep a Changelog format. Every user-visible change adds a line under `[Unreleased]` in the same PR. Each milestone is a release `0.N.0`, tagged `v0.N.0` (replacing the earlier `mN` tags, which were never created).
+**Alternatives:** generating the changelog from commit messages (rejected: commits explain *why* for developers, release notes speak to players); separate milestone and version tags (rejected: redundant).
+**Consequences:** `/make-change` writes the entry, `/review` checks it, `/milestone` cuts the release and bumps `pyproject.toml`.
