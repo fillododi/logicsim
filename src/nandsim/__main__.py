@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from pathlib import Path
 
@@ -85,6 +86,7 @@ def main(argv: list[str] | None = None) -> int:
     if not args.file.is_file():
         print(f"nandsim gui: no such file: {args.file}", file=sys.stderr)
         return 1
+    os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")  # no banner in the terminal
     from nandsim.gui.app import open_viewer  # pygame is imported only for the GUI
 
     return open_viewer(args.file, args.search)
