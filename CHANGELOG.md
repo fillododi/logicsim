@@ -6,42 +6,48 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 6 = `0.6.0`).
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-06
+
+Milestone 2: the game. Play with `nandsim gui`: pick a level, write the chip, see its circuit,
+run the tests and unlock what comes next.
+
 ### Added
-- **Direct connections in HDL:**
-  - `out = a;` connects a signal straight to an output or a new wire, with no gate in between. It
-    also works for slices (`low[0..3] = in[4..7];`) and constants (`flag = true;`).
-  - `g1: Nand(a=a, b=b);` labels a part, so its output can be used directly as `g1.out`
-    without naming a wire.
-  - Both are drawn in the circuit view, and labelled parts show their label.
-- **The game:** `uv run nandsim gui` opens the level select.
+- **The game:** `nandsim gui` opens the level select.
   - The levels on the left show which are solved (✓), open (○) or locked (–). A locked level
     tells you which chips to solve first.
   - Under the list is the level's brief: what the chip does, its truth table and a hint.
-  - Write the chip in the editor. Ctrl+S saves it and draws the circuit.
-  - **Run tests** (or Ctrl+Enter) checks your chip against the level's tests. A failure shows
-    the row and inputs that broke it.
-  - Passing a level marks it solved and unlocks the levels that use it. Later levels are built
-    from your own chips, not ready-made ones.
-  - Your work and progress are saved in `~/.local/share/nandsim/save/` (choose another folder
-    with `--save-dir`). Switching level never loses unsaved text.
-- **Circuit viewer:** `nandsim gui path/to/Chip.hdl` draws a chip from its HDL, with no
-  positions to write.
-  - Wires are coloured by value: 0, 1 or undefined. Buses show their value; `H` switches between
-    hex and decimal, and hovering any wire shows its value.
+  - Write the chip in the editor. Ctrl+S saves it and draws its circuit.
+  - **Run tests** (or Ctrl+Enter) checks your chip. A failure lists the rows and inputs that broke
+    it.
+  - Passing a level unlocks the levels that use it. Later levels are built from your own chips,
+    not ready-made ones.
+  - Work and progress are saved in `~/.local/share/nandsim/save/` (or `--save-dir`). Switching
+    level never loses unsaved text.
+- **The circuit:** drawn automatically from your HDL.
+  - Wires are coloured by value: 0, 1 or undefined.
+  - Buses show their value; `H` switches between hex and decimal, and hovering a wire shows its
+    name and value.
   - Click an input to toggle it. On a bus, click counts up and right-click counts down. `X` makes
-    an input undefined, so you can see how undefined values spread (or don't).
-  - Click a part to open its inside, and use the breadcrumbs or Backspace to go back up.
-  - Zoom with the mouse wheel, drag to pan, and press `F` to fit.
-  - Saving the file, or any chip next to it, reloads the view. Mistakes show as a banner with
-    their line and column while the last working circuit stays on screen.
-- **HDL editor:** `nandsim gui Chip.hdl` opens the chip's source next to its circuit.
-  - Ctrl+S saves and rebuilds. A mistake is underlined at its exact spot, its line number turns
-    red, and the full message appears below the circuit.
-  - Syntax colours, line numbers, mouse selection (double-click selects a word), copy, cut and
-    paste.
-  - Undo and redo. Auto-indent after `{`, and a closing brace dedents itself. Tab and Shift+Tab
-    indent and dedent, and Ctrl+/ comments lines out or back in.
-  - Press Esc to go back to the circuit's shortcuts. `--no-edit` shows the circuit alone.
+    it undefined, so you can watch unknown values spread (or not).
+  - Click a part to see inside it, and use the breadcrumbs or Backspace to come back.
+  - Zoom with the wheel, drag to pan, and press `F` to fit.
+  - If a change doesn't build, the error shows with its line and column while the last working
+    circuit stays on screen.
+- **The editor:**
+  - syntax colours and line numbers;
+  - the mistake underlined where it is;
+  - mouse selection, with double-click for a word; copy, cut and paste;
+  - undo and redo;
+  - auto-indent: Tab / Shift+Tab, and a closing brace that dedents itself;
+  - Ctrl+/ to comment lines out or back in;
+  - Esc to hand the keys back to the circuit.
+- **Direct connections in the HDL:**
+  - `out = a;` wires a signal straight to an output or a new wire, with no gate in between. It
+    also works for slices (`low[0..3] = in[4..7];`) and constants (`flag = true;`).
+  - `g1: Nand(a=a, b=b);` labels a part, so its output can be used as `g1.out` without naming a
+    wire.
+- **For chip authors:** `nandsim gui path/to/Chip.hdl` opens one file in the editor next to its
+  circuit and reloads when any chip next to it changes. `--no-edit` shows only the circuit.
 
 ## [0.1.0] — 2026-11-06
 
@@ -69,5 +75,6 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/fillododi/logicsim/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/fillododi/logicsim/releases/tag/v0.1.0
