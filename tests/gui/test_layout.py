@@ -115,6 +115,17 @@ def test_ordering_removes_avoidable_crossings() -> None:
     assert crossings(lay) == 0
 
 
+def test_channel_tracks_avoid_crossings() -> None:
+    # With channel tracks sorted by y, Xor's wires crossed 4 times.
+    for name in ("Xor", "And", "Or"):
+        assert crossings(layout(view_of(name))) == 0, name
+
+
+def test_large_chip_has_few_crossings() -> None:
+    # Measured 2537 with tracks sorted by y, 944 with cost-ordered tracks.
+    assert crossings(layout(view_of(big_chip()))) < 1100
+
+
 def test_part_level_cycle_is_drawn_as_feedback() -> None:
     v = view_of(CYCLE)
     lay = layout(v)
