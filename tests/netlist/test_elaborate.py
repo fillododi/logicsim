@@ -1,0 +1,153 @@
+"""Elaboration tests: flattening, aliasing through the hierarchy, and every wiring error."""
+
+from __future__ import annotations
+
+import pytest
+
+from nandsim.hdl import HdlError, parse
+from nandsim.netlist import FALSE_NET, TRUE_NET, ChipLibrary, elaborate
+
+NOT = "CHIP Not { IN in; OUT out; PARTS: Nand(a=in, b=in, out=out); }"
+AND = "CHIP And { IN a, b; OUT out; PARTS: Nand(a=a, b=b, out=n); Not(in=n, out=out); }"
+NOT2 = (
+    "CHIP Not2 { IN in[2]; OUT out[2]; PARTS:"
+    " Not(in=in[0], out=out[0]); Not(in=in[1], out=out[1]); }"
+)
+
+
+def lib(**extra: str) -> ChipLibrary:
+    sources = {"Not": NOT, "And": AND, "Not2": NOT2, **extra}
+    return ChipLibrary(sources={k: (v, f"{k}.hdl") for k, v in sources.items()})
+
+
+def build(src: str, library: ChipLibrary | None = None):
+    return elaborate(parse(src, "Top.hdl"), library or lib())
+
+
+def test_flattens_to_primitives_through_two_levels() -> None:
+    nl = build("CHIP Top { IN a, b; OUT o; PARTS: And(a=a, b=b, out=o); }")
+    assert nl.gate_count == 2
+    assert len(nl.levels) == 2
+    # Top output aliases through And's output to the Nand inside Not.
+    assert nl.outputs["o"] == nl.wires["Top/And#1/Not#2/out"] == nl.wires["Top/And#1/out"]
+    assert nl.wires["Top/And#1/a"] == nl.inputs["a"]
+
+
+def test_parts_in_any_order_and_constants() -> None:
+    nl = build(
+        "CHIP Top { IN a; OUT o, t; PARTS: Not(in=x, out=o); Nand(a=a, b=true, out=x);"
+        " Nand(a=false, b=false, out=t); }"
+    )
+    nand_in = nl.gates["Nand"].inputs
+    assert TRUE_NET in nand_in[1].tolist() and FALSE_NET in nand_in[0].tolist()
+    assert len(nl.levels) == 2
+
+
+def test_buses_and_reading_own_output() -> None:
+    nl = build(
+        "CHIP Top { IN a[2]; OUT o[2], echo; PARTS: Not2(in=a, out=o); Not(in=o[1], out=echo); }"
+    )
+    assert len(nl.outputs["o"]) == 2
+    assert nl.wires["Top/Not#2/in"] == [nl.outputs["o"][1]]
+
+
+def test_unused_part_output_is_allowed() -> None:
+    build("CHIP Top { IN a; OUT o; PARTS: Not2(in[0]=a, in[1]=a, out[0]=o); }")
+
+
+ERRORS = [
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Foo(in=a, out=o); }",
+        "Top.hdl:1:32: error: unknown chip 'Foo'",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, c=a, out=o); }",
+        "Top.hdl:1:42: error: Nand has no pin 'c' (its pins are: a, b, out)",
+    ),
+    (
+        "CHIP Top { IN a[2]; OUT o; PARTS: Not(in=a, out=o); }",
+        "Top.hdl:1:42: error: width mismatch: pin 'in' of Not has 1 bit but 'a' has 2",
+    ),
+    (
+        "CHIP Top { IN a[2]; OUT o; PARTS: Not(in=a[2], out=o); }",
+        "Top.hdl:1:42: error: a[2] is out of range: 'a' has 2 bits (0..1)",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not2(in[2]=a, out[0]=o); }",
+        "Top.hdl:1:37: error: in[2] is out of range: pin 'in' of Not2 has 2 bits (0..1)",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not(in=a, out=a); }",
+        "Top.hdl:1:46: error: 'a' is an input pin of Top: a part output cannot drive it",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not(in=a, out=true); }",
+        "Top.hdl:1:46: error: output pin 'out' of Not cannot be connected to a constant",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS:\n Not(in=a, out=o);\n Not(in=a, out=o); }",
+        "Top.hdl:3:16: error: 'o' is already driven by Not at line 2",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not(in=w, out=o); }",
+        "Top.hdl:1:39: error: 'w' is not a pin of Top and no part output drives a wire "
+        "with that name",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, out=o); }",
+        "Top.hdl:1:32: error: input pin 'b' of Nand is not connected",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not2(in[0]=a, out[0]=o); }",
+        "Top.hdl:1:32: error: bit 1 of input pin 'in' of Not2 is not connected",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, a=a, b=a, out=o); }",
+        "Top.hdl:1:42: error: pin 'a' of Nand is connected more than once",
+    ),
+    (
+        "CHIP Top { IN a;\n OUT o; PARTS: }",
+        "Top.hdl:2:6: error: output pin 'o' of Top is not connected",
+    ),
+    (
+        "CHIP Top { IN a; OUT o[4]; PARTS: Not(in=a, out=o[1]); }",
+        "Top.hdl:1:22: error: bits 0, 2..3 of output pin 'o' of Top are not connected",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not(in=a, out=w[0]); Not(in=w, out=o); }",
+        "Top.hdl:1:46: error: internal wire 'w' cannot be sliced where it is created; "
+        "write 'out=w'",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, b=y, out=x); Not(in=x, out=y);"
+        " Not(in=y, out=o); }",
+        "Top.hdl:1:55: error: combinational loop (a signal depends on itself without a DFF): "
+        "y -> x -> y",
+    ),
+]
+
+
+@pytest.mark.parametrize(("src", "message"), ERRORS)
+def test_wiring_errors(src: str, message: str) -> None:
+    with pytest.raises(HdlError) as exc:
+        build(src)
+    assert str(exc.value) == message
+
+
+def test_circular_dependency_between_chips() -> None:
+    library = lib(
+        A="CHIP A { IN a; OUT o; PARTS: B(a=a, o=o); }",
+        B="CHIP B { IN a; OUT o; PARTS: A(a=a, o=o); }",
+    )
+    with pytest.raises(HdlError) as exc:
+        build("CHIP Top { IN a; OUT o; PARTS: A(a=a, o=o); }", library)
+    assert (
+        str(exc.value) == "B.hdl:1:30: error: circular dependency between chips: Top -> A -> B -> A"
+    )
+
+
+def test_file_defining_wrong_chip() -> None:
+    library = lib(Bad="CHIP Other { OUT o; PARTS: Nand(a=true, b=true, out=o); }")
+    with pytest.raises(HdlError) as exc:
+        build("CHIP Top { OUT o; PARTS: Bad(o=o); }", library)
+    assert str(exc.value) == "Bad.hdl:1:1: error: file for chip 'Bad' defines chip 'Other' instead"
