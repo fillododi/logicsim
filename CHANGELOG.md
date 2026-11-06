@@ -12,6 +12,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   Mux4Way4, Mux8Way4 and Mux4Way12 pick one of four or eight buses; DMux4Way and DMux8Way send
   a bit to one of four or eight outputs. Each opens as soon as the gate it builds on is solved,
   and Not4's brief introduces bus notation.
+- **Tips for bus mistakes.** A pin given the wrong number of bits, a bit past the end of a
+  bus, or a bus left partly unconnected now comes with a tip on how to fix it, like using
+  `in[0]` to give a one-bit part one bit of a bus.
 - **Type a value into an input.** Point at an input on the circuit and press **Enter**, or
   just start typing a number: `13`, `-1`, `0b1101` or `0x0D`, as in test files. **Enter**
   sets it and **Esc** cancels. Much quicker than clicking a 12-bit bus up to the value you
