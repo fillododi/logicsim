@@ -6,7 +6,7 @@ import time
 
 import pytest
 
-from nandsim.gui.layout import Layout, crossings, layout
+from nandsim.gui.layout import Layout, crossings, hovered_net, layout, source_key
 from nandsim.gui.model import ChipView, build_view
 from nandsim.hdl import parse
 from nandsim.netlist import elaborate
@@ -124,6 +124,53 @@ def test_channel_tracks_avoid_crossings() -> None:
 def test_large_chip_has_few_crossings() -> None:
     # Measured 2537 with tracks sorted by y, 944 with cost-ordered tracks.
     assert crossings(layout(view_of(big_chip()))) < 1100
+
+
+FANOUT = (
+    "CHIP F { IN a, b; OUT x, y, z; PARTS: Not(in=a, out=x); Not(in=a, out=y); Not(in=b, out=z); }"
+)
+
+
+def test_fan_out_gets_one_junction_on_its_trunk() -> None:
+    lay = layout(view_of(FANOUT))
+    assert len(lay.junctions) == 1
+    (x, y), r = lay.junctions[0]
+    assert source_key(r.edge) == ("input", None, "a")
+    upper, lower = sorted(
+        (r for r in lay.routes if source_key(r.edge) == ("input", None, "a")),
+        key=lambda r: r.points[-1][1],
+    )
+    # The upper wire turns off where the lower one carries on down the shared track.
+    assert (x, y) in upper.points and (x, y) not in lower.points
+    assert any(
+        a[0] == b[0] == x and min(a[1], b[1]) < y < max(a[1], b[1])
+        for a, b in zip(lower.points, lower.points[1:], strict=False)
+    )
+
+
+def test_no_junctions_without_fan_out() -> None:
+    lay = layout(view_of("CHIP S { IN a; OUT o; PARTS: Not(in=a, out=n); Not(in=n, out=o); }"))
+    assert lay.junctions == []
+
+
+@pytest.mark.parametrize("name", [lv.name for lv in load_levels()])
+def test_junctions_lie_on_wires_of_their_net(name: str) -> None:
+    lay = layout(view_of(name))
+    for p, r in lay.junctions:
+        net = [q for q in lay.routes if source_key(q.edge) == source_key(r.edge)]
+        assert len(net) >= 2
+        assert any(p in q.points for q in net)
+
+
+def test_hovered_net_from_wire_and_pins() -> None:
+    lay = layout(view_of(FANOUT))
+    wire = next(r for r in lay.routes if r.edge.dst.kind == "part" and r.edge.src.pin == "a")
+    assert hovered_net(lay, None, wire) == ("input", None, "a")
+    assert hovered_net(lay, ("in", "b"), None) == ("input", None, "b")
+    out_x = hovered_net(lay, ("out", "x"), None)
+    assert out_x is not None and out_x[0] == "part"
+    assert hovered_net(lay, ("part", 1), None) is None
+    assert hovered_net(lay, None, None) is None
 
 
 def test_part_level_cycle_is_drawn_as_feedback() -> None:

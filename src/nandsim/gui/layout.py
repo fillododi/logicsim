@@ -74,6 +74,7 @@ class Layout:
     width: float
     height: float
     layers: list[list[NodeKey]]
+    junctions: list[tuple[Point, Route]] = field(default_factory=list)  # see `junctions()`
 
 
 def _node(e: Endpoint) -> NodeKey:
@@ -388,7 +389,9 @@ def layout(view: ChipView, style: Style | None = None) -> Layout:
 
     width = max((b.right for b in boxes.values()), default=0.0) + st.margin
     height = max([b.bottom for b in boxes.values()] + [0.0]) + st.margin
-    return Layout(boxes, routes, width, height, columns)
+    lay = Layout(boxes, routes, width, height, columns)
+    lay.junctions = junctions(lay)
+    return lay
 
 
 # ---- helpers -------------------------------------------------------------
@@ -521,6 +524,67 @@ def _simplify(pts: list[Point]) -> list[Point]:
                 continue
         out.append(p)
     return out
+
+
+def junctions(lay: Layout) -> list[tuple[Point, Route]]:
+    """Where a wire branches off another wire of the same net, for drawing a dot.
+
+    A point is a junction when wires of one source leave it in three or more
+    directions. Branches always turn at a corner of one of the routes, so only
+    route corners are candidates. Each junction comes with the widest route
+    through it, whose style the dot should take.
+    """
+    by_src: dict[SourceKey, list[Route]] = {}
+    for r in lay.routes:
+        if len(r.points) >= 2:
+            by_src.setdefault(source_key(r.edge), []).append(r)
+    out: list[tuple[Point, Route]] = []
+    for routes in by_src.values():
+        if len(routes) < 2:
+            continue
+        segs = {
+            (r_i, a, b)
+            for r_i, r in enumerate(routes)
+            for a, b in zip(r.points, r.points[1:], strict=False)
+        }
+        candidates = sorted({p for r in routes for p in r.points[1:-1]})
+        for p in candidates:
+            dirs: set[tuple[int, int]] = set()
+            through: set[int] = set()
+            for r_i, a, b in segs:
+                for d in _directions_from(p, a, b):
+                    dirs.add(d)
+                    through.add(r_i)
+            if len(dirs) >= 3:
+                widest = max((routes[i] for i in through), key=lambda r: len(r.edge.nets))
+                out.append((p, widest))
+    return out
+
+
+def _directions_from(p: Point, a: Point, b: Point) -> list[tuple[int, int]]:
+    """Unit directions in which segment a-b leaves point p (none if p is off it)."""
+    (px, py), (ax, ay), (bx, by) = p, a, b
+    if ax == bx == px and min(ay, by) <= py <= max(ay, by):
+        return [(0, 1 if y > py else -1) for y in (ay, by) if y != py]
+    if ay == by == py and min(ax, bx) <= px <= max(ax, bx):
+        return [(1 if x > px else -1, 0) for x in (ax, bx) if x != px]
+    return []
+
+
+def hovered_net(lay: Layout, node: NodeKey | None, route: Route | None) -> SourceKey | None:
+    """The net to highlight for what the mouse is over: a wire, or a chip pin."""
+    if route is not None:
+        return source_key(route.edge)
+    if node is None:
+        return None
+    kind, ident = node
+    if kind == "in":
+        return ("input", None, str(ident))
+    if kind == "out":
+        feeding = [r for r in lay.routes if r.edge.dst.kind == "output" and r.edge.dst.pin == ident]
+        if len(feeding) == 1:  # an output fed by slices of several sources is no one net
+            return source_key(feeding[0].edge)
+    return None
 
 
 def crossings(lay: Layout) -> int:

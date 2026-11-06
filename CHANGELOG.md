@@ -16,6 +16,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 - **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
   missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
   them, under the error and in the test results.
+- **Follow a signal:** hover a wire or a chip pin and every wire of that signal lights up, all
+  the way to each part it feeds.
+- **Junction dots** mark where a wire branches, so a fork no longer looks like two wires
+  crossing.
 
 ### Changed
 - **Fewer wire crossings:** wires between two columns of parts are spread out so they cross
