@@ -22,7 +22,7 @@ def test_new_player_sees_stub_and_only_first_level_unlocked(store: SaveStore) ->
     assert store.load(LEVELS["Not"]) == LEVELS["Not"].stub.read_text()
     assert not store.has_save(LEVELS["Not"])
     unlocked = [lv.name for lv in store.levels if store.is_unlocked(lv)]
-    assert unlocked == ["Hello", "Not"]  # the tutorial is optional
+    assert unlocked == ["Wire", "Hello", "Not"]  # the tutorial is optional
 
 
 def test_save_round_trip_and_cli_compatible(store: SaveStore) -> None:

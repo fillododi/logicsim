@@ -100,42 +100,62 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     shots = tmp_path / "shots"
     shots.mkdir()
     app = new_app(save)
-    assert app.game.current.name == "Hello" and step_id(app) == "welcome"
+    assert app.game.current.name == "Wire" and step_id(app) == "welcome"
     app.screenshot(shots / "1-welcome.png")
     press_next(app)
     assert step_id(app) == "brief"
     press_next(app)
 
-    # "write": click at the end of PARTS:, type the line from the bubble, Ctrl+S.
-    assert step_id(app) == "write"
+    # Wire, "connect": click at the end of PARTS:, type the connection, Ctrl+S.
+    assert step_id(app) == "connect"
     b = shown(app)
     assert b is not None and b.next is None  # completed by doing it, not by a button
     anchor = app.anchor_rect("line:PARTS:")
     assert app.editor is not None and anchor is not None and app.editor.rect.contains(anchor)
     assert b.rect.right <= app.editor.rect.x  # never over the text being typed
-    app.screenshot(shots / "2-write.png")
+    app.screenshot(shots / "2-connect.png")
     click(app, (app.editor.rect.right - 20, anchor.centery))  # past the end of the line
     assert app.editor.buffer.cursor == Pos(5, len("    PARTS:"))
-    type_text(app, "\nNand(a=a, b=b, out=out);")
+    type_text(app, "\nout = in;")
     keydown(app, pygame.K_s, CTRL)
     assert app.session.error is None and step_id(app) == "circuit"
     press_next(app)
 
-    # "toggle": click input a on the canvas.
+    # "toggle": click the input; the output follows it.
     assert step_id(app) == "toggle"
     shown(app)
-    pin = app.anchor_rect("pin:a")
+    pin = app.anchor_rect("pin:in")
     assert pin is not None
     click(app, pin.center)
-    assert app.session.inputs["a"] == 0 and step_id(app) == "output"  # undefined → 0 first
-    app.screenshot(shots / "3-output.png")
-    press_next(app)
+    assert app.session.inputs["in"] == 0 and step_id(app) == "run"  # undefined → 0 first
+    click(app, pin.center)
+    assert app.session.sim is not None and app.session.sim.get("out") == 1
+    app.screenshot(shots / "3-wire.png")
 
-    # "run": the Run tests button solves the level; then open Not from the list.
-    assert step_id(app) == "run"
+    # "run": the Run tests button solves Wire; then open Hello from the list.
     shown(app)
     click(app, app.button_rect.center)
     assert app.game.report is not None and app.game.report.passed
+    assert step_id(app) == "to_hello"
+    shown(app)
+    click_level(app, "Hello")
+    assert app.game.current.name == "Hello" and step_id(app) == "nand"
+    press_next(app)
+
+    # Hello, "write": the first part, typed under PARTS: the same way.
+    assert step_id(app) == "write"
+    b = shown(app)
+    anchor = app.anchor_rect("line:PARTS:")
+    assert b is not None and anchor is not None and b.rect.right <= app.editor.rect.x
+    click(app, (app.editor.rect.right - 20, anchor.centery))
+    type_text(app, "\nNand(a=a, b=b, out=out);")
+    keydown(app, pygame.K_s, CTRL)
+    assert app.session.error is None and step_id(app) == "output"
+    app.screenshot(shots / "4-nand.png")
+    press_next(app)
+    assert step_id(app) == "run_hello"
+    shown(app)
+    keydown(app, pygame.K_RETURN, CTRL)
     assert step_id(app) == "unlocked"
     shown(app)
     click_level(app, "Not")
@@ -159,7 +179,7 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     shown(app)
     part = app.anchor_rect("part")
     assert part is not None
-    app.screenshot(shots / "4-open-part.png")
+    app.screenshot(shots / "5-open-part.png")
     click(app, part.center)  # the Not part, not the Nand
     assert app.session.path == "And/Not#2" and step_id(app) == "back_up"
     shown(app)
@@ -170,11 +190,11 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     for p in shots.iterdir():
         assert p.stat().st_size > 0
 
-    # Restarting remembers the finished tour; F1 replays it from the tutorial level.
+    # Restarting remembers the finished tour; F1 replays it from the first tutorial level.
     again = new_app(save)
     assert again.tour.current is None
     keydown(again, pygame.K_F1)
-    assert again.game.current.name == "Hello" and step_id(again) == "welcome"
+    assert again.game.current.name == "Wire" and step_id(again) == "welcome"
 
 
 def test_skip_hides_the_tour_for_good(tmp_path: Path) -> None:
@@ -221,7 +241,7 @@ def test_leaving_the_tutorial_early_keeps_the_tour_going(tmp_path: Path) -> None
     app = new_app(tmp_path / "save")
     click_level(app, "Not")
     assert bubble_id(app) == "on_your_own" and shown(app) is not None
-    click_level(app, "Hello")
+    click_level(app, "Wire")
     assert bubble_id(app) == "welcome"  # the tutorial picks up where it was left
 
 
@@ -230,18 +250,14 @@ def test_solving_before_the_run_bubble_still_counts(tmp_path: Path) -> None:
     app = new_app(tmp_path / "save")
     press_next(app)
     press_next(app)
-    paste(
-        app,
-        "CHIP Hello {\n    IN a, b;\n    OUT out;\n    PARTS:\n    Nand(a=a, b=b, out=out);\n}\n",
-    )
+    paste(app, "CHIP Wire {\n    IN in;\n    OUT out;\n    PARTS:\n    out = in;\n}\n")
     keydown(app, pygame.K_RETURN, CTRL)  # builds and solves at once
     assert bubble_id(app) == "circuit"
     press_next(app)
-    pin = app.anchor_rect("pin:a")
+    pin = app.anchor_rect("pin:in")
     assert pin is not None
-    click(app, pin.center)
-    press_next(app)  # "output"; "run" is already done, so the next bubble is "unlocked"
-    assert bubble_id(app) == "unlocked"
+    click(app, pin.center)  # "toggle"; "run" is already done, so the next bubble is "to_hello"
+    assert bubble_id(app) == "to_hello"
 
 
 def test_a_drag_ending_on_the_bubble_still_ends(tmp_path: Path) -> None:

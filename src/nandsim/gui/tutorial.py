@@ -220,8 +220,9 @@ def place_bubble(anchor: Box | None, size: tuple[int, int], bounds: Box, gap: in
     """Where to draw a bubble of `size` so it sits next to `anchor` without covering it.
 
     Tries right, left, below and above the anchor, and takes the first spot that
-    fits inside `bounds`. If none fits, it takes the one that covers the least of
-    the anchor once clamped into `bounds`. With no anchor, the bubble is centred.
+    fits inside `bounds`, sliding along the anchor's side if needed. If none fits, it
+    takes the one that covers the least of the anchor once clamped into `bounds`.
+    With no anchor, the bubble is centred.
     """
     w, h = size
     bx, by, bw, bh = bounds
@@ -240,8 +241,11 @@ def place_bubble(anchor: Box | None, size: tuple[int, int], bounds: Box, gap: in
         (mid_x, ay + ah + gap),
         (mid_x, ay - gap - h),
     ]
-    for x, y in candidates:
-        if bx <= x and x + w <= bx + bw and by <= y and y + h <= by + bh:
+    # A spot beside the anchor only has to fit across (it slides up or down to stay in
+    # the window); a spot above or below only has to fit vertically.
+    for i, (x, y) in enumerate(candidates):
+        fits = bx <= x and x + w <= bx + bw if i < 2 else by <= y and y + h <= by + bh
+        if fits and h <= bh and w <= bw:
             return clamp(x, y)
     return min((clamp(x, y) for x, y in candidates), key=lambda b: _overlap(b, anchor))
 

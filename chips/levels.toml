@@ -1,7 +1,13 @@
 # Levels in unlock order. `parts` lists the chips each level may use.
 
 # The tutorial: the guide bubbles in tutorial.toml walk through it. Not doesn't
-# need it, so a player can skip straight to the gates.
+# need it, so a player can skip straight to the gates. Wire teaches connections,
+# Hello teaches parts.
+[[level]]
+name = "Wire"
+group = "00_tutorial"
+parts = []
+
 [[level]]
 name = "Hello"
 group = "00_tutorial"

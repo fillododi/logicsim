@@ -15,15 +15,19 @@ STEPS = load_steps()
 
 def test_shipped_tour_is_valid() -> None:
     names = {lv.name for lv in load_levels()}
-    assert STEPS[0].id == "welcome" and STEPS[0].level == "Hello"
+    assert STEPS[0].id == "welcome" and STEPS[0].level == "Wire"
     for s in STEPS:
         assert s.level is None or s.level in names, s.id
         if s.anchor.startswith("level:"):
             assert s.anchor.removeprefix("level:") in names, s.id
         if s.until.startswith("open_level:"):
             assert s.until.removeprefix("open_level:") in names, s.id
-    hello = next(s for s in STEPS if s.id == "write")
-    assert "    Nand(a=a, b=b, out=out);" in hello.text  # the tutorial level's one-line answer
+    # The two tutorial levels' one-line answers: a connection first, then a part.
+    connect = next(s for s in STEPS if s.id == "connect")
+    assert connect.level == "Wire" and "    out = in;" in connect.text
+    write = next(s for s in STEPS if s.id == "write")
+    assert write.level == "Hello" and "    Nand(a=a, b=b, out=out);" in write.text
+    assert STEPS.index(connect) < STEPS.index(write)
 
 
 def small_tour(tmp_path: Path) -> Tour:
@@ -125,6 +129,8 @@ def test_bubble_sits_beside_its_anchor() -> None:
     assert place_bubble((900, 300, 90, 20), (200, 100), bounds) == (686, 260, 200, 100)
     # A wide anchor: goes below it.
     assert place_bubble((0, 100, 1000, 40), (200, 100), bounds) == (400, 154, 200, 100)
+    # A tall bubble next to an anchor near the top slides down instead of moving below it.
+    assert place_bubble((500, 40, 60, 20), (200, 300), bounds) == (574, 0, 200, 300)
     # No anchor: centred.
     assert place_bubble(None, (200, 100), bounds) == (400, 350, 200, 100)
 

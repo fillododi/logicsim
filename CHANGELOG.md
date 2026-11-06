@@ -7,8 +7,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 ## [Unreleased]
 
 ### Added
-- **Tutorial level, Hello:** a new first level, solved with a single Nand line, that introduces
-  pins, parts and the editor. Not is still open from the start, so you can skip it.
+- **Tutorial levels, Wire and Hello:** two new first levels. Wire is solved with one connection,
+  `out = in;`, and introduces pins, connections and the editor. Hello is solved with a single
+  Nand line and introduces parts. Not is still open from the start, so you can skip them.
 - **Guided tour:** bubbles point at the level list, the brief, the editor, the circuit and the
   Run tests button, and move on when you do what they explain. Skip it from any bubble, or press
   **F1** to replay it. The tour remembers where you got to.
