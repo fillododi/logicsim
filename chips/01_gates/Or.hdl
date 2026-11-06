@@ -1,0 +1,7 @@
+// Or: Outputs 1 when at least one input is 1.
+// You may use: Nand, Not, And
+CHIP Or {
+    IN a, b;
+    OUT out;
+    PARTS:
+}

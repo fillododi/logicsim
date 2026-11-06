@@ -1,0 +1,7 @@
+// Reference solution for Not. Never shown to the player.
+CHIP Not {
+    IN in;
+    OUT out;
+    PARTS:
+    Nand(a=in, b=in, out=out);
+}
