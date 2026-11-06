@@ -305,3 +305,60 @@ def test_sidebar_lists_exported_chips(tmp_path: Path) -> None:
     (exports / "Not.hdl").write_text("CHIP Not {}")  # a level's name: never a chip of yours
     app = new_app(tmp_path / "save")
     assert app._exported == ["Buf"]
+
+
+def click(app: GameApp, pos: tuple[int, int]) -> None:
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=pos, button=1))
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=pos, button=1))
+    app.render(pygame.Surface(app.size))
+
+
+def export_buf(app: GameApp) -> None:
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Export this chip as…")
+    field(app, "Buf")
+    click_item(app, "Export")
+
+
+def test_delete_button_asks_then_takes_the_chip_out(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    assert app.editor is not None
+    export_buf(app)
+    assert [name for _, name in app._chip_rows] == ["Buf"]
+    # Not now uses Buf: the dialog says so, and Cancel keeps everything.
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(
+        "CHIP Not { IN in; OUT out; PARTS: Buf(in=in, out=b); Nand(a=b, b=b, out=out); }"
+    )
+    app.save()
+    assert app.session.error is None
+    click(app, app._chip_rows[0][0].center)
+    dialog = app.menus[-1]
+    assert dialog.title == "Delete Buf?" and "Used by Not:" in dialog.message
+    assert labels(app)[dialog.selected] == "Cancel"
+    key(app, pygame.K_RETURN)
+    assert app.menus == [] and (tmp_path / "save-exports" / "Buf.hdl").is_file()
+
+    click(app, app._chip_rows[0][0].center)
+    click_item(app, "Delete it")
+    assert app.menus == [] and app._exported == [] and app._chip_rows == []
+    assert not (tmp_path / "save-exports" / "Buf.hdl").exists()
+    backups = list((tmp_path / "save-backups").glob("*/exports/Buf.hdl"))
+    assert len(backups) == 1  # moved, not destroyed
+    assert app.notice is not None and app.notice.startswith("Deleted Buf. Its file is in ")
+    # The circuit on screen used Buf: it is rebuilt, and no longer builds.
+    assert app.session.error is not None and "unknown chip 'Buf'" in app.session.error.message
+
+
+def test_reset_takes_exported_chips_away(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    export_buf(app)
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Reset game…")
+    assert "the chips you exported" in app.menus[-1].message
+    click_item(app, "Reset the game")
+    assert app._exported == [] and not list((tmp_path / "save-exports").iterdir())
+    assert list((tmp_path / "save-backups").glob("*/exports/Buf.hdl"))
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Export this chip as…")
+    assert app.menus[-1].text == "MyWire"  # the old export names are forgotten too
