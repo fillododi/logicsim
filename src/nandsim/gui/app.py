@@ -23,6 +23,7 @@ from nandsim.gui.model import breadcrumbs
 from nandsim.gui.session import ChipSession, FileWatcher
 from nandsim.gui.textbuffer import Pos, TextBuffer
 from nandsim.gui.tips import tip_for
+from nandsim.gui.valuefield import ValueField
 from nandsim.hdl import HdlError
 
 HEADER = 36
@@ -33,7 +34,8 @@ SEP = "  ·  "  # between help items: the only places the help line may wrap
 CLICK_SLOP = 4  # pixels a press may move and still count as a click
 POLL_SECONDS = 0.5
 HELP = (
-    "click input: toggle (right-click: count down, X: undefined)  ·  click part: open  ·  "
+    "click input: toggle (right-click: count down, Enter: type a value, X: undefined)  ·  "
+    "click part: open  ·  "
     "Backspace: up  ·  wheel: zoom  ·  drag: pan  ·  F: fit  ·  H: hex/dec"
 )
 EDITOR_HELP = (
@@ -68,6 +70,7 @@ class ViewerApp:
         self.quit_requested = False  # set to leave `run()` after the current frame
         self.edit_path = edit_path
         self.editor: EditorWidget | None = None
+        self.value_field: ValueField | None = None  # a value being typed for an input pin
         if edit_path is not None:
             buffer = TextBuffer(edit_path.read_text())
             self.editor = EditorWidget(buffer, self.fonts, self.editor_rect)
@@ -146,6 +149,8 @@ class ViewerApp:
     # ---- events ----------------------------------------------------------
 
     def handle(self, ev: pygame.event.Event) -> None:
+        if self._field_event(ev):
+            return
         if self.editor is not None and self._editor_event(ev):
             return
         if ev.type == pygame.MOUSEMOTION:
@@ -171,7 +176,52 @@ class ViewerApp:
             self.cam.zoom_at(self.mouse, 1.15**ev.y)
             self._update_hover()
         elif ev.type == pygame.KEYDOWN:
-            self._key(ev.key)
+            self._key(ev.key, getattr(ev, "unicode", ""))
+
+    def _field_event(self, ev: pygame.event.Event) -> bool:
+        """Typing into the value field, if one is open. True if the event was used for it.
+
+        Every key goes to the field while it is open, so typing `b` or `x` in a value
+        never toggles hex mode or sets a pin undefined. A click anywhere closes it
+        without setting anything, and still does what it would have done.
+        """
+        field = self.value_field
+        if field is None:
+            return False
+        if ev.type == pygame.MOUSEBUTTONDOWN:
+            self.value_field = None
+            return False
+        if ev.type == pygame.TEXTINPUT:
+            field.type(ev.text)
+            return True
+        if ev.type != pygame.KEYDOWN:
+            return False
+        if ev.key == pygame.K_ESCAPE:
+            self.value_field = None
+        elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            self._apply_field(field)
+        elif ev.key == pygame.K_BACKSPACE:
+            field.backspace(everything=bool(getattr(ev, "mod", 0) & pygame.KMOD_CTRL))
+        return True
+
+    def _apply_field(self, field: ValueField) -> None:
+        """Enter: set the pin to the typed value; an empty field just closes."""
+        if field.empty:
+            self.value_field = None
+            return
+        value = field.value()
+        if value is None:
+            return  # the field stays open and shows why
+        self.value_field = None
+        if self.session.at_top and self.session.netlist is not None:
+            if field.pin in self.session.netlist.inputs:
+                self.session.set_input(field.pin, value)
+                self.on_action("toggle")
+
+    def open_value_field(self, pin: str) -> None:
+        """Start typing a value for one of the top chip's input pins."""
+        assert self.session.netlist is not None
+        self.value_field = ValueField(pin, len(self.session.netlist.inputs[pin]))
 
     def _editor_event(self, ev: pygame.event.Event) -> bool:
         """Route an event to the editor if it belongs there. True if consumed."""
@@ -269,7 +319,15 @@ class ViewerApp:
                 self.on_action("open_part")
         self._update_hover()
 
-    def _key(self, key: int) -> None:
+    def _key(self, key: int, char: str = "") -> None:
+        on_input = self.hover.node is not None and self.hover.node[0] == "in"
+        if on_input and self.session.at_top and self.session.netlist is not None:
+            # Enter, or the first character of a value, opens the field; that character
+            # then arrives as the TEXTINPUT event that follows its KEYDOWN.
+            if key in (pygame.K_RETURN, pygame.K_KP_ENTER) or (char and char in "0123456789-"):
+                assert self.hover.node is not None
+                self.open_value_field(str(self.hover.node[1]))
+                return
         if key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
             if self.session.up():
                 self.fit()
@@ -328,9 +386,36 @@ class ViewerApp:
             r = self.editor.rect
             border = theme.ACCENT if self.editor.focused else theme.PART_BORDER
             pygame.draw.line(surf, border, (r.x - 1, r.y), (r.x - 1, r.bottom), 2)
+        self._draw_value_field(surf)
         self._draw_header(surf)
         self._draw_footer(surf)
         self._draw_tooltip(surf)
+
+    def _draw_value_field(self, surf: pygame.Surface) -> None:
+        """The value field, just under its input pin, kept inside the canvas."""
+        field = self.value_field
+        snap = self.session.snapshot
+        box = None if snap is None else snap.layout.boxes.get(("in", field.pin)) if field else None
+        if field is None or box is None or not self.session.at_top:
+            self.value_field = None  # its pin is gone: rebuilt, or navigated away
+            return
+        font = self.fonts.get(15)
+        small = self.fonts.get(12)
+        label = f"{field.pin}[{field.width}] = " if field.width > 1 else f"{field.pin} = "
+        typed = font.render(label + field.text + "▏", True, theme.TEXT)
+        hint = small.render(field.hint, True, theme.WIRE_X if field.error else theme.TEXT_DIM)
+        w = max(typed.get_width(), hint.get_width()) + 20
+        h = typed.get_height() + hint.get_height() + 16
+        cx, cy, cw, ch = (round(v) for v in self.canvas_area)
+        x, y = self.cam.to_screen((box.x, box.bottom))
+        x = max(cx + 4, min(round(x), cx + cw - w - 4))
+        y = max(cy + 4, min(round(y) + 6, cy + ch - h - 4))
+        rect = pygame.Rect(x, y, w, h)
+        pygame.draw.rect(surf, theme.PANEL, rect, border_radius=6)
+        border = theme.WIRE_X if field.error else theme.ACCENT
+        pygame.draw.rect(surf, border, rect, 2, border_radius=6)
+        surf.blit(typed, (x + 10, y + 6))
+        surf.blit(hint, (x + 10, y + 10 + typed.get_height()))
 
     def _draw_header(self, surf: pygame.Surface) -> None:
         w = self.size[0]
