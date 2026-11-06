@@ -12,7 +12,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from nandsim.hdl import ChipDef, Const, HdlError, Part, PinRef, SourcePos
+from nandsim.hdl import Assign, ChipDef, Const, HdlError, Part, PinRef, SourcePos
 from nandsim.netlist.levelize import levelize
 from nandsim.netlist.library import ChipLibrary, Interface, interface_of
 from nandsim.netlist.netlist import FALSE_NET, TRUE_NET, GateArrays, Netlist
@@ -32,6 +32,7 @@ class _Scope:
     chip: ChipDef
     signals: dict[str, list[int]] = field(default_factory=dict)
     driven: dict[str, list[_Driver | None]] = field(default_factory=dict)
+    labels: dict[str, tuple[Part, Interface]] = field(default_factory=dict)
 
 
 def _bit_ranges(bits: list[int]) -> str:
@@ -128,6 +129,8 @@ class _Builder:
             target = self.lib.resolve(part.chip, part.pos)
             iface = interface_of(target)
             resolved.append((target, iface))
+            if part.label is not None:
+                self._add_label(scope, part, iface)
             for c in part.connections:
                 width = iface.width(c.inner.name)
                 if width is None:
@@ -141,6 +144,7 @@ class _Builder:
                 is_new_wire = (
                     c.inner.name in iface.outputs
                     and isinstance(outer, PinRef)
+                    and outer.part is None
                     and outer.name not in scope.signals
                 )
                 if is_new_wire:
@@ -154,11 +158,15 @@ class _Builder:
                     scope.signals[outer.name] = self.nets(hi - lo + 1)
                     scope.driven[outer.name] = [None] * (hi - lo + 1)
 
-        # Pass 2: connect inputs, instantiate each part, bind its outputs.
+        self._create_assigned_wires(scope)
+
+        # Pass 2: connect inputs, instantiate each part, bind its outputs, then assignments.
         for index, (part, (target, iface)) in enumerate(
             zip(chip.parts, resolved, strict=True), start=1
         ):
             self._part(scope, part, target, iface, f"{path}/{part.chip}#{index}", top_pos)
+        for a in chip.assigns:
+            self._assign(scope, a)
 
         for o in chip.outputs:
             missing = [b for b, d in enumerate(scope.driven[o.name]) if d is None]
@@ -221,6 +229,12 @@ class _Builder:
         outs = self.instantiate(target, path, ready, top_pos or part.pos)
         for inner, outer, lo, hi in outputs:
             self._bind(scope, part, inner, outer, outs[inner.name][lo : hi + 1])
+        if part.label is not None:
+            for pin, nets in outs.items():
+                key = f"{part.label}.{pin}"
+                for k, net in enumerate(nets):
+                    self.alias[scope.signals[key][k]] = net
+                    scope.driven[key][k] = _Driver(part.chip, part.pos)
 
     # ---- helpers -------------------------------------------------------
 
@@ -239,23 +253,142 @@ class _Builder:
     def _source(
         self, scope: _Scope, outer: PinRef | Const, width: int, inner: PinRef, part: str
     ) -> list[int]:
+        return self._read(scope, outer, width, f"pin '{inner}' of {part}")
+
+    def _read(self, scope: _Scope, outer: PinRef | Const, width: int, what: str) -> list[int]:
+        """The nets of a signal read by `what`, which has `width` bits."""
         if isinstance(outer, Const):
             return [TRUE_NET if outer.value else FALSE_NET] * width
-        nets = scope.signals.get(outer.name)
+        self._check_part_ref(scope, outer)
+        nets = scope.signals.get(outer.key)
         if nets is None:
             raise HdlError(
-                f"'{outer.name}' is not a pin of {scope.chip.name} and no part output "
-                f"drives a wire with that name",
+                f"'{outer.name}' is not a pin of {scope.chip.name} and nothing drives a "
+                f"wire with that name",
                 outer.pos,
             )
-        lo, hi = self._bounds(outer, len(nets), f"'{outer.name}'")
+        lo, hi = self._bounds(outer, len(nets), f"'{outer.key}'")
         if hi - lo + 1 != width:
             raise HdlError(
-                f"width mismatch: pin '{inner}' of {part} has {width} bit"
+                f"width mismatch: {what} has {width} bit"
                 f"{'s' if width > 1 else ''} but '{outer}' has {hi - lo + 1}",
                 outer.pos,
             )
         return nets[lo : hi + 1]
+
+    def _check_part_ref(self, scope: _Scope, ref: PinRef) -> None:
+        """Errors for `label.pin` references that don't name a labelled part's output."""
+        if ref.part is None:
+            return
+        found = scope.labels.get(ref.part)
+        if found is None:
+            raise HdlError(f"no part is labelled '{ref.part}' in {scope.chip.name}", ref.pos)
+        part, iface = found
+        if ref.name in iface.inputs:
+            raise HdlError(
+                f"'{ref.key}' is an input pin of {part.chip}: only a part's outputs can be "
+                f"read this way",
+                ref.pos,
+            )
+        if ref.name not in iface.outputs:
+            raise HdlError(
+                f"{part.chip} has no pin '{ref.name}' (its pins are: {iface.pin_list()})",
+                ref.pos,
+            )
+
+    def _add_label(self, scope: _Scope, part: Part, iface: Interface) -> None:
+        label = part.label
+        assert label is not None
+        if label in scope.labels:
+            first = scope.labels[label][0]
+            raise HdlError(
+                f"label '{label}' is already used at line {first.pos.line}", part.label_pos
+            )
+        if scope.chip.pin(label) is not None:
+            raise HdlError(
+                f"label '{label}' is also a pin of {scope.chip.name}; use another name",
+                part.label_pos,
+            )
+        scope.labels[label] = (part, iface)
+        for pin, width in iface.outputs.items():
+            scope.signals[f"{label}.{pin}"] = self.nets(width)
+            scope.driven[f"{label}.{pin}"] = [None] * width
+
+    def _create_assigned_wires(self, scope: _Scope) -> None:
+        """Create the new internal wires that assignments drive, taking the source's width."""
+        pending = [
+            a
+            for a in scope.chip.assigns
+            if a.target.part is None
+            and a.target.name not in scope.signals
+            and scope.chip.pin(a.target.name) is None
+        ]
+        while pending:
+            progress = False
+            for a in list(pending):
+                t, src = a.target, a.source
+                if t.name in scope.signals:  # created by an earlier assignment this round
+                    pending.remove(a)
+                    continue
+                if t.sliced:
+                    raise HdlError(
+                        f"internal wire '{t.name}' cannot be sliced where it is created; "
+                        f"write '{t.name} = ...'",
+                        t.pos,
+                    )
+                if isinstance(src, Const):
+                    raise HdlError(
+                        f"the width of new wire '{t.name}' can't come from a constant; "
+                        f"connect the constant to a pin instead",
+                        src.pos,
+                    )
+                if src.key not in scope.signals:
+                    continue  # its source may be created by another assignment
+                self._check_part_ref(scope, src)
+                lo, hi = self._bounds(src, len(scope.signals[src.key]), f"'{src.key}'")
+                scope.signals[t.name] = self.nets(hi - lo + 1)
+                scope.driven[t.name] = [None] * (hi - lo + 1)
+                pending.remove(a)
+                progress = True
+            if not progress:
+                break  # the remaining sources don't exist; _assign reports them
+
+    def _assign(self, scope: _Scope, a: Assign) -> None:
+        t = a.target
+        if t.part is not None:
+            raise HdlError(f"'{t.key}' is driven by part '{t.part}' and cannot be assigned", t.pos)
+        if scope.chip.is_input(t.name):
+            raise HdlError(
+                f"'{t.name}' is an input pin of {scope.chip.name}: it cannot be assigned", t.pos
+            )
+        nets = scope.signals.get(t.name)
+        if nets is None:  # its source was missing: report that
+            self._read(scope, a.source, 1, f"'{t}'")
+            raise AssertionError("unreachable")
+        lo, hi = self._bounds(t, len(nets), f"'{t.name}'")
+        src = self._read(scope, a.source, hi - lo + 1, f"'{t}'")
+        driven = scope.driven[t.name]
+        for b in range(lo, hi + 1):
+            prev = driven[b]
+            if prev is not None:
+                raise HdlError(
+                    f"'{t}' is already driven by {prev.part} at line {prev.pos.line}", t.pos
+                )
+        for k, net in enumerate(src):
+            target = nets[lo + k]
+            n = net
+            while True:  # an assignment chain must not lead back to its own target
+                if n == target:
+                    raise HdlError(
+                        f"'{t}' would be driven only by itself: assignments form a loop "
+                        f"with nothing driving it",
+                        t.pos,
+                    )
+                if n not in self.alias:
+                    break
+                n = self.alias[n]
+            self.alias[target] = net
+            driven[lo + k] = _Driver("the connection", a.pos)
 
     def _bind(
         self,
@@ -268,6 +401,11 @@ class _Builder:
         if isinstance(outer, Const):
             raise HdlError(
                 f"output pin '{inner}' of {part.chip} cannot be connected to a constant",
+                outer.pos,
+            )
+        if outer.part is not None:
+            raise HdlError(
+                f"'{outer.key}' is driven by part '{outer.part}' and cannot be driven again",
                 outer.pos,
             )
         if scope.chip.is_input(outer.name):

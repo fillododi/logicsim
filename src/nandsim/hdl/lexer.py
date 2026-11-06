@@ -28,7 +28,7 @@ class Token:
         return f"'{self.text}'"
 
 
-_PUNCT = ("..", "{", "}", "(", ")", "[", "]", ";", ",", "=", ":")
+_PUNCT = ("..", "{", "}", "(", ")", "[", "]", ";", ",", "=", ":", ".")
 
 
 def tokenize(text: str, filename: str) -> list[Token]:
