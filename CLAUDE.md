@@ -132,7 +132,7 @@ Complete them in order. Each one ends with green tests, updated docs, a journal 
    - Short tips for the most common build errors.
    - UI polish: fewer wire crossings on large chips, the hovered net highlighted across the canvas, junction dots where wires branch, and a help line that fits narrow windows.
 4. **Chip files and sound:**
-   - Export the current level's chip to a `.hdl` file, and import one into a level's editor. Files live in an exports folder beside the save dir (never inside it), listed in an in-game menu, so no file dialog is needed. An import is unsaved editor text: it counts only after Ctrl+S or Run tests.
+   - Export the editor's chip under a name the player types, to a `.hdl` file in an exports folder beside the save dir (never inside it), with no file dialog. Exported chips are in the library: every level may use them as parts, and there is no import. The sidebar lists them with a delete button; deleting and resetting move them to the backups folder.
    - Sound effects synthesized with numpy at startup (no asset files) through `pygame.mixer`: toggles, build errors, tests passed and failed, level solved, menus. Mute and volume in the menu, stored in a settings file next to the saves. Without an audio device the game runs silently.
 5. **Buses (4, 8 and 12 bits):** Not4, And4, Or4, Xor4, Mux4, Mux8, Mux12, Or4Way, Mux4Way4, Mux8Way4, Mux4Way12, DMux4Way, DMux8Way.
 6. **Arithmetic:** HalfAdder, FullAdder, Add4 (carry in and out), Inc4, Inc12 (for the PC), and the 4004 ALU: add and subtract with carry/borrow, increment and decrement, complement, rotate through carry, decimal adjust (DAA), KBP, TCS, with the zero and carry flags that JCN tests.

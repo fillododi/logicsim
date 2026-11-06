@@ -105,7 +105,9 @@ Every error shows `file:line:col` and stops at the first problem.
 
 A level adds two more rules:
 - Your chip must keep the pins of the level's starting text.
-- It may use only the parts the level lists, such as `'Mux' is not allowed in this level; Xor may use: Nand, Not, And, Or`.
+- It may use only the parts the level lists, plus the chips you exported under a name of your own (*Export this chip as…* in the Esc menu), such as `'Mux' is not allowed in this level; Xor may use: Nand, Not, And, Or, MyAnd`.
+
+An exported chip's name must be an identifier that isn't an HDL word (`CHIP IN OUT PARTS true false`), a primitive (`Nand`, `DFF`) or a level's chip.
 
 ## Values
 
