@@ -3,7 +3,8 @@ test results on the right.
 
 It reuses `ViewerApp` for the canvas, the editor pane, navigation and error display,
 and adds the level sidebar, the results panel, the "Run tests" action and the guided
-tour's bubbles (F1 replays the tour).
+tour's bubbles (F1 replays the tour). Menus sit on top: the title screen at start,
+and the pause menu on Esc, from which the game can be reset.
 """
 
 from __future__ import annotations
@@ -19,6 +20,7 @@ from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
 from nandsim.gui.game import GameState
 from nandsim.gui.guide import Bubble, draw_bubble
+from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import ChipSession
@@ -35,10 +37,15 @@ GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 
 
 class GameApp(ViewerApp):
-    def __init__(self, store: SaveStore, size: tuple[int, int] = (1440, 860)) -> None:
+    def __init__(
+        self, store: SaveStore, size: tuple[int, int] = (1440, 860), title_screen: bool = False
+    ) -> None:
         self.game = GameState(store)
-        names = {lv.name for lv in store.levels}
-        self.tour = Tour(load_steps(levels=names), store.root / "tutorial.json")
+        self._level_names = {lv.name for lv in store.levels}
+        self.tour = self._new_tour()
+        self.menus: list[Menu] = []  # open menus, topmost last; while any is open it takes input
+        self.on_title = False  # the title screen replaces the game, the pause menu overlays it
+        self._focus_before_menu = True
         self.bubble: Bubble | None = None
         self._bubble_press = False  # a press started on the bubble; its release is ours too
         self._brief_rect = pygame.Rect(0, 0, 0, 0)
@@ -53,6 +60,11 @@ class GameApp(ViewerApp):
         self._rows: list[tuple[pygame.Rect, Level]] = []
         self._sync_error()
         self.fit()
+        if title_screen:
+            self.open_title()
+
+    def _new_tour(self) -> Tour:
+        return Tour(load_steps(levels=self._level_names), self.game.store.root / "tutorial.json")
 
     # ---- geometry ------------------------------------------------------------
 
@@ -77,7 +89,10 @@ class GameApp(ViewerApp):
 
     @property
     def help_text(self) -> str:
-        return "F1: tour  ·  " + super().help_text
+        # Esc opens the menu in the game, even from the editor (a click on the circuit
+        # leaves the editor instead), so the viewer's "Esc: ..." item doesn't apply.
+        items = [i for i in super().help_text.split("  ·  ") if not i.startswith("Esc")]
+        return "  ·  ".join(["Esc: menu", "F1: tour", *items])
 
     @property
     def show_errors(self) -> bool:
@@ -99,14 +114,113 @@ class GameApp(ViewerApp):
             self.game.save(self.editor.buffer.text)
         self.game.select(level)
         self.tour.catch_up(level.name)  # its next step may be something already done here
+        self._load_current()
+
+    def _load_current(self) -> None:
+        """Show the current level: its text in the editor, its circuit on the canvas."""
+        assert self.editor is not None
         self.editor.buffer.set_text(self.game.text())
         self.editor.focused = True
-        self._attempted = self.game.store.has_save(level)
+        self._attempted = self.game.store.has_save(self.game.current)
         self.edit_path = Path(self.game.path)
         self.session = ChipSession(self.game.loader())
         self.session.reload()
         self._sync_error()
         self.fit()
+
+    def reset_game(self) -> None:
+        """Start over from the first level; the old files are kept in a backup folder.
+
+        The editor's unsaved text is dropped on purpose: saving it would put a chip
+        back into the save directory that was just emptied.
+        """
+        backup = self.game.store.reset()
+        self.game = GameState(self.game.store)
+        self.tour = self._new_tour()
+        self._load_current()
+        self.notice = f"New game. Your old chips are in {_home_short(backup)}" if backup else None
+
+    def before_quit(self) -> None:
+        """Never lose typing: unsaved editor text goes to the level's save file."""
+        if self.editor is not None and self.editor.buffer.dirty:
+            self.game.save(self.editor.buffer.text)
+
+    # ---- menus ---------------------------------------------------------------
+
+    def open_title(self) -> None:
+        self.on_title = True
+        self._open_menu(self._title_menu())
+
+    def open_pause(self) -> None:
+        self._open_menu(
+            Menu(
+                "Paused",
+                [
+                    MenuItem("Resume", "resume"),
+                    MenuItem("Replay the tour", "tour"),
+                    MenuItem("Main menu", "title"),
+                    MenuItem("Reset game…", "reset"),
+                    MenuItem("Quit", "quit"),
+                ],
+            )
+        )
+
+    def _title_menu(self) -> Menu:
+        started = self.game.store.has_progress()
+        items = [MenuItem("Continue" if started else "Play", "play")]
+        if started:
+            items.append(MenuItem("Reset game…", "reset"))
+        items.append(MenuItem("Quit", "quit"))
+        msg = "Build a computer, starting from a single kind of gate: the Nand."
+        return Menu("NAND Sim", items, message=msg, big_title=True)
+
+    def _confirm_reset_menu(self) -> Menu:
+        where = _home_short(self.game.store.backups)
+        msg = (
+            "Every chip you wrote, the levels you solved and the tour start over from the "
+            f"first level.\n\nYour files aren't deleted: they move to {where}."
+        )
+        # Cancel comes first, so Enter on a menu opened by mistake is harmless.
+        items = [MenuItem("Cancel", BACK), MenuItem("Reset the game", "confirm_reset", True)]
+        return Menu("Reset the game?", items, message=msg)
+
+    def _open_menu(self, menu: Menu) -> None:
+        if not self.menus:
+            assert self.editor is not None
+            self._focus_before_menu = self.editor.focused
+            self.editor.focused = False
+        self.menus = [menu]
+        self.hover = Hover()
+
+    def _close_menus(self) -> None:
+        assert self.editor is not None
+        self.menus = []
+        self.on_title = False
+        self.editor.focused = self._focus_before_menu
+
+    def menu_action(self, action: str) -> None:
+        """Carry out what the player chose in the topmost menu."""
+        if action == BACK:
+            if len(self.menus) > 1:
+                self.menus.pop()
+            elif not self.on_title:  # the title screen has nothing to go back to
+                self._close_menus()
+        elif action in ("play", "resume"):
+            self._close_menus()
+        elif action == "tour":
+            self._close_menus()
+            self.replay_tour()
+        elif action == "title":
+            self.on_title = True
+            self.menus = [self._title_menu()]
+        elif action == "reset":
+            self.menus.append(self._confirm_reset_menu())
+        elif action == "confirm_reset":
+            self.reset_game()
+            self._focus_before_menu = True  # a new game starts in the editor
+            self._close_menus()
+        elif action == "quit":
+            self.quit_requested = True
 
     def save(self) -> None:
         assert self.editor is not None
@@ -154,6 +268,16 @@ class GameApp(ViewerApp):
     # ---- events --------------------------------------------------------------
 
     def handle(self, ev: pygame.event.Event) -> None:
+        if self.menus:
+            if hasattr(ev, "pos"):
+                self.mouse = ev.pos
+            action = self.menus[-1].handle(ev)
+            if action is not None:
+                self.menu_action(action)
+            return
+        if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
+            self.open_pause()
+            return
         if ev.type == pygame.KEYDOWN and ev.key == pygame.K_F1:
             self.replay_tour()
             return
@@ -268,10 +392,17 @@ class GameApp(ViewerApp):
     # ---- drawing -------------------------------------------------------------
 
     def render(self, surf: pygame.Surface) -> None:
-        super().render(surf)
-        self._draw_sidebar(surf)
-        self._draw_results(surf)
-        self._draw_tour(surf)
+        if self.on_title:
+            surf.fill(theme.BG)
+        else:
+            super().render(surf)
+            self._draw_sidebar(surf)
+            self._draw_results(surf)
+            self._draw_tour(surf)
+            if self.menus:
+                dim(surf)
+        if self.menus:
+            self.menus[-1].draw(surf, self.fonts, pygame.Rect(0, 0, *self.size))
 
     def _draw_tour(self, surf: pygame.Surface) -> None:
         step = self.tour.visible(self.game.current.name)
@@ -383,6 +514,14 @@ class GameApp(ViewerApp):
                 y += font.get_linesize()
 
 
+def _home_short(path: Path) -> str:
+    """`path` with the home directory written as ~, so it fits a sidebar or a dialog."""
+    try:
+        return "~/" + str(path.relative_to(Path.home()))
+    except ValueError:
+        return str(path)
+
+
 def _wrap(text: str, cols: int) -> list[str]:
     import textwrap
 
@@ -392,5 +531,5 @@ def _wrap(text: str, cols: int) -> list[str]:
 def open_game(save_dir: Path | None = None) -> int:
     """`nandsim gui`: the game."""
     store = SaveStore(load_levels(), save_dir)
-    GameApp(store).run(title="NAND Sim")
+    GameApp(store, title_screen=True).run(title="NAND Sim")
     return 0
