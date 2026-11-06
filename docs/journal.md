@@ -37,3 +37,57 @@ One entry per milestone: what was built, problems, what was learned, numbers.
 | Engine, deep | 257 NAND, depth 257: 1175 evals/s (0.3 M gate-evals/s) | chain of 257 `Not`s, same method |
 
 **Next:** milestone 2, the base GUI. It starts with a pygame window that draws a chip from its netlist with a layered layout (inputs left, outputs right, parts in levels) and colours wires by 0, 1 or undefined. Then: clickable inputs, hierarchical navigation, the in-app editor with inline errors, saves, and the level select.
+
+## Milestone 2 — Base GUI (2026-11-06)
+
+**Built:** `nandsim gui` is now a game.
+- **Levels:**
+  - a level list showing solved, open and locked, with the reason a level is locked;
+  - each level's brief: description, truth table and hint;
+  - unlocking by parts: a level opens when every chip it may use is solved, and later levels are built from the player's own saved chips.
+- **Circuit:**
+  - an automatically laid-out circuit (Sugiyama-style layers, barycenter ordering, orthogonal wires on separate tracks, buses as one trunk, feedback drawn as loops over the top);
+  - wires coloured 0, 1 or undefined; bus values in hex or decimal;
+  - clickable inputs; clicking into parts, with breadcrumbs; zoom and pan.
+- **Editor:**
+  - written from scratch: syntax colours, undo, auto-indent, selection, clipboard;
+  - Ctrl+S builds and underlines errors at their `line:col`;
+  - Run tests (button or Ctrl+Enter) reports failing rows with their inputs.
+- **Saves:** progress lives in the user data dir and survives restarts.
+- **Developer mode:** `nandsim gui FILE` edits and views a single file, reloading on save.
+- **HDL:** gained direct connections (`out = a;`, `low[0..3] = in[4..7];`) and labelled parts (`g1: Nand(...)`, read as `g1.out`), at the user's request.
+
+**Problems and how they were solved:**
+- *Testing a GUI without a screen.* Every pygame class takes events through `handle()` and draws through `render()`. Tests feed it real `KEYDOWN`, `TEXTINPUT` and mouse events under `SDL_VIDEODRIVER=dummy`. Everything that isn't drawing lives in pure modules (model, layout, camera, session, text buffer, syntax, brief, game rules), and a boundary test keeps pygame out of them. The playtest solves Not and And with real events only.
+- *The playtest found real bugs.* Switching level saved the unsaved text into the *new* level's file. A chip that grew after a rebuild no longer fit the canvas. Both were fixed with the test as the regression check.
+- *Readable wiring.* At first, each bit of a bus got its own vertical track, which made wide chips unreadable. Grouping tracks by source pin turned a bus into one trunk with taps. A bit swap was drawn as `b[1..0]` until bits merged only when their source bits run in order.
+- *Fonts.* `SysFont("monospace")` returned a proportional font on the dev machine, so DejaVu Sans Mono is bundled, with its licence.
+- *Errors that greet you.* A fresh level's starting text "isn't connected" by design. Errors now appear only after the player first saves or runs that level.
+- *Hidden solutions.* A test forbids any GUI code from touching `reference/`. The game builds and tests only with the player's own chips.
+
+**Learned:**
+- Separating "what to show" from "how to draw it" paid off immediately. The editor, game rules and layout were tested headless in milliseconds, and most bugs were found there rather than on screen.
+- Scripted playtests with screenshots are the closest thing to a user test without a user. The two bugs they caught would have been the first things a player hit.
+- **Layout quality degrades on large, deeply connected chips.** The 64-part ripple chip has about 2500 wire crossings. Correct and fast, but hard to read. Milestones 3–4 (32-bit buses, adders, ALU) will make this the main GUI issue. The levers: better track ordering in channels, dummy-node straightening, and highlighting the hovered net across the whole canvas.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 200 | `uv run pytest`: hdl 15, netlist 42, sim 15, testing 26, gui 75, levels 19, cli 4, boundary 4 |
+| GUI tests | 75 | model 8, layout 13, saves 5, session 7, app 5, text buffer 13, syntax 4, editor 8, brief 3, game 6, playtest 3 |
+| Levels | 6/6 pass against their references | `uv run nandsim test` |
+| Source LOC | 4035 (gui 2480, netlist 696, hdl 352, testing 333, sim 81) | non-blank lines of `src/**/*.py` |
+| Test LOC | 1591 | non-blank lines of `tests/**/*.py` |
+| Work since 0.1.0 | 6 merged PRs, 25 commits | `git log v0.1.0..HEAD` |
+| Layout time | Mux (4 parts) 0.5 ms; 16-bit ripple chip (64 parts) 33 ms | best of 5 `layout()` calls |
+| Crossings | Mux 3; 64-part chip 2537 | `layout.crossings()` |
+| Rebuild time | 64-part chip: 44 ms for parse, elaborate and layout | best of 3 `ChipSession.reload()` |
+| Frame time | game screen 0.9 ms; viewer with the 64-part chip 1.5 ms | best of 30 / 10 `render()` calls at 1440×860, headless software surface |
+
+**Next:** release 0.2.0, then the tutorial agreed for after it:
+- a first level that wires a single Nand;
+- guide bubbles anchored to the editor, canvas, Run tests button and sidebar, driven by `chips/tutorial.toml`;
+- progress in `tutorial.json`.
+
+Then milestone 3, buses: Not32, And32, Or32, Mux32, Or8Way, Mux4Way32, Mux8Way32, DMux4Way, DMux8Way. Improving layout readability for 32-bit chips comes with it.
