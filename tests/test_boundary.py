@@ -20,6 +20,8 @@ PURE_GUI_MODULES = [
     "nandsim.gui.saves",
     "nandsim.gui.session",
     "nandsim.gui.camera",
+    "nandsim.gui.textbuffer",
+    "nandsim.gui.syntax",
 ]
 GUI_DIR = Path(__file__).parents[1] / "src" / "nandsim" / "gui"
 
