@@ -16,10 +16,21 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 - **Tips for build errors:** the most common mistakes (an unconnected pin, a wrong pin name, a
   missing `;`, a part the level doesn't allow, …) now come with a one-line tip on how to fix
   them, under the error and in the test results.
+- **Main menu:** the game opens on a title screen with Play (or Continue), Reset game and Quit.
+- **Pause menu:** press **Esc**, even while typing, to resume, replay the tour, go back to the
+  main menu, reset the game or quit.
+- **Reset game:** start over from the first level, after a confirmation. Your old chips and
+  progress aren't deleted: they move to a `save-backups/` folder next to your saves.
 
 ### Changed
+- **Esc opens the pause menu** in the game instead of leaving the editor. Click the circuit to
+  leave the editor. The developer viewer (`nandsim gui FILE`) keeps Esc as before.
 - On start, the game opens the first open level after the furthest one you solved, so skipping
   the tutorial doesn't send you back to it every time.
+
+### Fixed
+- Closing the window no longer loses text you typed but hadn't saved; it is saved to the level,
+  as switching level already did.
 
 ## [0.2.0] — 2026-11-06
 

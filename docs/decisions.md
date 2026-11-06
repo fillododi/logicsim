@@ -225,3 +225,21 @@ Ambiguous spec points and the option chosen. Newest last.
 - Teaching `pin=signal` first and connections later: rejected, because a connection is the simpler idea and part pins build on it.
 
 **Consequences:** a new game opens Wire. Both tutorial levels stay optional, since Not depends on neither. `place_bubble` now lets a bubble beside its anchor slide up or down to stay in the window, because Wire's taller "connect" bubble otherwise dropped below the `PARTS:` line and covered the editor.
+
+## 2026-11-06 — Main menu, Esc pause menu and game reset
+**Context:** the user asked for an escape screen, a main menu and a way to reset the game.
+
+**Decision:**
+- **Title screen** at start (`nandsim gui` only). It offers Play, or Continue once there is progress, then Reset game… (only when there is something to reset) and Quit. `GameApp(title_screen=False)` stays the default, so tests and hooks open straight into a level.
+- **Esc pauses from anywhere in the game, the editor included.** The editor has focus nearly all the time, so Esc that first left the editor would need two presses to reach the menu. Leaving the editor is a click on the circuit. Resume gives focus back to where it was. Esc on the pause menu resumes. On the title screen it does nothing. The developer viewer keeps Esc for leaving the editor.
+- **The pause menu** offers Resume, Replay the tour, Main menu, Reset game… and Quit.
+- **A reset is a move, not a delete.** Every file in the save directory goes to `<save dir>-backups/<YYYY-MM-DD_HHMMSS>/`, so a mistaken reset can be undone by moving the files back. Backups live beside the save directory, not inside it, because `ChipLibrary` searches its directories recursively and would keep using the backed-up chips. A regression test pins this.
+- **Confirmation** first, with Cancel as the default selection, so Enter on a menu opened by mistake does nothing. The dialog says where the files go. After a reset, the game opens the first level with the tour started over, and the sidebar names the backup folder.
+- **Unsaved editor text:** quitting (from the menu or by closing the window) saves it to the level, as switching level already did. A reset drops it, because saving it would put a chip back into the directory that was just emptied.
+
+**Alternatives:**
+- Deleting the save files on reset: rejected. Losing a player's work for good is the kind of thing that is hard to undo.
+- Teaching `ChipLibrary` to skip a `backups/` folder: rejected. The core shouldn't know about the GUI's save layout.
+- Esc leaves the editor first, then opens the menu: rejected, as explained above.
+
+**Consequences:** `ViewerApp` gained `quit_requested` and a `before_quit()` hook, and `SaveStore` gained `has_progress()`, `reset()` and `backups`. Old backups are never cleaned up automatically.
