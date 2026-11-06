@@ -184,6 +184,8 @@ class EditorWidget:
         if ctrl:
             if k == pygame.K_s:
                 return "save"
+            if k in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                return "run"
             if k == pygame.K_z:
                 b.redo() if shift else b.undo()
             elif k == pygame.K_y:

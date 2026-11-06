@@ -20,6 +20,7 @@ from nandsim.gui.editor import EditorError, EditorWidget
 from nandsim.gui.model import breadcrumbs
 from nandsim.gui.session import ChipSession, FileWatcher
 from nandsim.gui.textbuffer import Pos, TextBuffer
+from nandsim.hdl import HdlError
 
 HEADER = 36
 FOOTER = 26
@@ -70,7 +71,14 @@ class ViewerApp:
 
     @property
     def editor_width(self) -> int:
-        return 0 if self.edit_path is None else max(380, int(self.size[0] * 0.42))
+        if self.editor is None and self.edit_path is None:
+            return 0
+        return max(380, int((self.size[0] - self.left_width) * 0.45))
+
+    @property
+    def left_width(self) -> int:
+        """Width of a panel left of the canvas (the game's sidebar); 0 in the viewer."""
+        return 0
 
     @property
     def editor_rect(self) -> pygame.Rect:
@@ -81,7 +89,17 @@ class ViewerApp:
     @property
     def canvas_area(self) -> tuple[float, float, float, float]:
         w, h = self.size
-        return (0.0, float(HEADER), float(w - self.editor_width), float(h - HEADER - FOOTER))
+        x = float(self.left_width)
+        return (x, float(HEADER), float(w - self.editor_width) - x, float(h - HEADER - FOOTER))
+
+    @property
+    def show_errors(self) -> bool:
+        """Whether to display the current build error (the game hides it on untouched stubs)."""
+        return True
+
+    def in_canvas(self, pos: tuple[int, int]) -> bool:
+        x, y, w, h = self.canvas_area
+        return x <= pos[0] < x + w and y <= pos[1] < y + h
 
     @property
     def editing(self) -> bool:
@@ -154,9 +172,15 @@ class ViewerApp:
         if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
             ed.focused = False
             return True
-        if ed.handle(ev) == "save":
-            self.save()
+        action = ed.handle(ev)
+        if action is not None:
+            self.on_editor_action(action)
         return True
+
+    def on_editor_action(self, action: str) -> None:
+        """Editor shortcuts the host handles: "save" (Ctrl+S), "run" (Ctrl+Enter)."""
+        if action == "save":
+            self.save()
 
     def save(self) -> None:
         """Write the editor's text, rebuild the circuit and mark any error in the editor."""
@@ -170,17 +194,17 @@ class ViewerApp:
         self._rebuild()
 
     def _rebuild(self) -> None:
-        self.session.reload()
+        built = self.session.reload()
         self._sync_error()
-        if self.session.path != self._fitted_path:
-            self.fit()
+        if built or self.session.path != self._fitted_path:
+            self.fit()  # a new circuit may have a different size
         self._update_hover()
 
     def _sync_error(self) -> None:
         """Show the session's error in the editor when it points into the edited file."""
         if self.editor is None or self.edit_path is None:
             return
-        err = self.session.error
+        err = self.session.error if self.show_errors else None
         if err is not None and err.pos is not None and _same_file(err.pos.file, self.edit_path):
             self.editor.set_error(
                 EditorError(Pos.from_source(err.pos.line, err.pos.col), err.message)
@@ -199,7 +223,7 @@ class ViewerApp:
                 self._navigate(path)
                 return
         snap = self.session.snapshot
-        if snap is None or pos[1] < HEADER:
+        if snap is None or not self.in_canvas(pos):
             return
         key = box_at(snap.layout, self.cam.to_layout(pos))
         if key is None:
@@ -231,7 +255,7 @@ class ViewerApp:
 
     def _update_hover(self) -> None:
         snap = self.session.snapshot
-        if snap is None or self.mouse[1] < HEADER:
+        if snap is None or not self.in_canvas(self.mouse):
             self.hover = Hover()
             return
         p = self.cam.to_layout(self.mouse)
@@ -277,7 +301,7 @@ class ViewerApp:
         w = self.size[0]
         pygame.draw.rect(surf, theme.PANEL, (0, 0, w, HEADER))
         font = self.fonts.get(15, bold=True)
-        x = 12
+        x = self.left_width + 12
         self._crumbs = []
         crumbs = breadcrumbs(self.session.path) if self.session.path else []
         for i, (label, path) in enumerate(crumbs):
@@ -306,7 +330,7 @@ class ViewerApp:
 
     def _draw_footer(self, surf: pygame.Surface) -> None:
         w, h = self.size
-        err = self.session.error
+        err = self.session.error if self.show_errors else None
         if err is not None:
             font = self.fonts.get(13)
             note = (
@@ -314,13 +338,16 @@ class ViewerApp:
                 if self.session.snapshot is not None
                 else "(the circuit appears once the chip compiles)"
             )
-            lines = str(err).splitlines() + [note]
+            lines = _short_error(err).splitlines() + [note]
             height = 10 + len(lines) * (font.get_linesize())
             top = h - FOOTER - height
-            pygame.draw.rect(surf, theme.ERROR_BG, (0, top, w - self.editor_width, height))
+            left = self.left_width
+            pygame.draw.rect(
+                surf, theme.ERROR_BG, (left, top, w - self.editor_width - left, height)
+            )
             for i, line in enumerate(lines):
                 t = font.render(line, True, theme.ERROR_TEXT)
-                surf.blit(t, (12, top + 5 + i * font.get_linesize()))
+                surf.blit(t, (left + 12, top + 5 + i * font.get_linesize()))
         pygame.draw.rect(surf, theme.PANEL, (0, h - FOOTER, w, FOOTER))
         t = self.fonts.get(12).render(EDITOR_HELP if self.editing else HELP, True, theme.TEXT_DIM)
         surf.blit(t, (12, h - FOOTER + (FOOTER - t.get_height()) // 2))
@@ -362,6 +389,13 @@ class ViewerApp:
             self.render(screen)
             pygame.display.flip()
             clock.tick(60)
+
+
+def _short_error(err: HdlError) -> str:
+    """The error with just the file name: players don't need the save directory's path."""
+    if err.pos is None:
+        return str(err)
+    return f"{Path(err.pos.file).name}:{err.pos.line}:{err.pos.col}: error: {err.message}"
 
 
 def _same_file(a: str, b: Path) -> bool:
