@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from nandsim.hdl.ast import ChipDef, Connection, Const, Part, PinDecl, PinRef
+from nandsim.hdl.ast import Assign, ChipDef, Connection, Const, Part, PinDecl, PinRef
 from nandsim.hdl.errors import HdlError, SourcePos
 from nandsim.hdl.lexer import Kind, Token, tokenize
 
@@ -64,16 +64,21 @@ class _Parser:
         self.expect("PARTS", "'PARTS:'")
         self.expect(":")
         parts: list[Part] = []
+        assigns: list[Assign] = []
         while not self.at("}"):
             if self.tok.kind is Kind.EOF:
                 raise HdlError("expected '}' to close the chip, found end of file", self.tok.pos)
-            parts.append(self.part())
+            stmt = self.statement()
+            if isinstance(stmt, Part):
+                parts.append(stmt)
+            else:
+                assigns.append(stmt)
         self.next()
         if self.tok.kind is not Kind.EOF:
             raise HdlError(
                 f"unexpected {self.tok.describe()} after the end of the chip", self.tok.pos
             )
-        return ChipDef(name, tuple(inputs), tuple(outputs), tuple(parts), start.pos)
+        return ChipDef(name, tuple(inputs), tuple(outputs), tuple(parts), start.pos, tuple(assigns))
 
     def pin_decls(self, seen: dict[str, PinDecl]) -> list[PinDecl]:
         decls: list[PinDecl] = []
@@ -99,8 +104,29 @@ class _Parser:
             self.expect(";", "',' or ';'")
             return decls
 
-    def part(self) -> Part:
+    def statement(self) -> Part | Assign:
+        """A part (`Nand(...)`), a labelled part (`g1: Nand(...)`) or an assignment (`out = a`)."""
         t = self.ident("a part name")
+        if self.at(":"):
+            self.next()
+            return self.part(self.ident("a part name after the label"), t)
+        if self.at("("):
+            return self.part(t, None)
+        if self.at("=") or self.at("[") or self.at("."):
+            self.i -= 1  # re-read the name as the assignment's target
+            target = self.pin_ref(allow_const=False)
+            assert isinstance(target, PinRef)
+            self.expect("=")
+            source = self.pin_ref(allow_const=True)
+            self.expect(";")
+            return Assign(target, source, t.pos)
+        raise HdlError(
+            f"expected '(' for a part, ':' after a label, or '=' to connect, "
+            f"found {self.tok.describe()}",
+            self.tok.pos,
+        )
+
+    def part(self, t: Token, label: Token | None) -> Part:
         self.expect("(")
         conns: list[Connection] = []
         if not self.at(")"):
@@ -112,23 +138,30 @@ class _Parser:
                 break
         self.expect(")", "',' or ')'")
         self.expect(";")
-        return Part(t.text, tuple(conns), t.pos)
+        if label is None:
+            return Part(t.text, tuple(conns), t.pos)
+        return Part(t.text, tuple(conns), t.pos, label.text, label.pos)
 
     def connection(self) -> Connection:
-        inner = self.pin_ref(allow_const=False)
+        inner = self.pin_ref(allow_const=False, allow_part=False)
         assert isinstance(inner, PinRef)
         self.expect("=")
         outer = self.pin_ref(allow_const=True)
         return Connection(inner, outer, inner.pos)
 
-    def pin_ref(self, allow_const: bool) -> PinRef | Const:
+    def pin_ref(self, allow_const: bool, allow_part: bool = True) -> PinRef | Const:
         t = self.tok
         if allow_const and t.kind is Kind.IDENT and t.text in ("true", "false"):
             self.next()
             return Const(t.text == "true", t.pos)
         name = self.ident("a pin name")
+        part: str | None = None
+        if allow_part and self.at("."):
+            self.next()
+            part, name = name.text, self.ident(f"an output pin of '{name.text}'")
+            name = Token(name.kind, name.text, t.pos)
         if not self.at("["):
-            return PinRef(name.text, None, None, name.pos)
+            return PinRef(name.text, None, None, name.pos, part)
         self.next()
         lo = self.number("a bit index")
         hi = lo
@@ -141,7 +174,7 @@ class _Parser:
                     f"slice {name.text}[{lo}..{hi}] is reversed: write [{hi}..{lo}]", hpos
                 )
         self.expect("]")
-        return PinRef(name.text, lo, hi, name.pos)
+        return PinRef(name.text, lo, hi, name.pos, part)
 
 
 def parse(text: str, filename: str = "<input>") -> ChipDef:

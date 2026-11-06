@@ -129,3 +129,12 @@ def test_forward_reference_is_not_feedback() -> None:
     lay = layout(v)
     check_invariants(v, lay)
     assert not any(r.feedback for r in lay.routes)
+
+
+def test_direct_connections_lay_out() -> None:
+    v = view_of(
+        "CHIP D { IN a, b; OUT o, k, n; PARTS: o = a; k = false; g: Nand(a=a, b=b); n = g.out; }"
+    )
+    lay = layout(v)
+    check_invariants(v, lay)
+    assert any(r.edge.src.kind == "input" and r.edge.dst.kind == "output" for r in lay.routes)

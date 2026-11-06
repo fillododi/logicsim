@@ -149,3 +149,18 @@ Ambiguous spec points and the option chosen. Newest last.
 - open locked levels read-only (rejected: confusing about what can be done).
 
 **Consequences:** the playtest test drives this whole loop with real events, and stays the regression check for future GUI changes.
+
+## 2026-11-06 — Direct connections: `target = source;` and labelled parts
+**Context:** the user asked to connect an input straight to an output, and one chip straight to another. Before this, an `OUT` pin could only be driven by a part output, and two parts could only meet through a named wire. Passing a signal through, setting an output to a constant, or reordering bits needed a dummy gate.
+
+**Decision:**
+- **Connection statements:** `target = source;` statements inside PARTS. The target is an `OUT` pin, a slice of one, or a new internal wire whose width comes from the source; it can't be an input pin, a constant, or a labelled part's output. The source is any readable signal or constant. They are elaborated as pure aliases (no gates). A chain that loops back to its own target is an error.
+- **Labelled parts:** `label: Chip(...)`, whose outputs are readable as `label.pin`, sliced if needed. Labels are unique per chip and can't shadow a pin. Reading a part's input this way, or driving a labelled output, is an error.
+- **Level rules:** unchanged. Connections are not parts, so they never count against a level's allowed parts.
+
+**Alternatives:**
+- Nested part expressions (`Not(in=Nand(a=a, b=b))`): rejected. They are harder to read, and multi-output parts need names anyway.
+- Implicit labels such as `Nand#1.out`: rejected. They are fragile when parts are reordered.
+- Keep nand2tetris's rule that only parts drive outputs: rejected. It forces meaningless gates.
+
+**Consequences:** the circuit view tracks drivers per bit, for inputs, labelled outputs and constants too. Wire paths gain `label.pin` entries such as `Top/g1.out`.

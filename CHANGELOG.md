@@ -7,6 +7,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 6 = `0.6.0`).
 ## [Unreleased]
 
 ### Added
+- **Direct connections in HDL:**
+  - `out = a;` connects a signal straight to an output or a new wire, with no gate in between. It
+    also works for slices (`low[0..3] = in[4..7];`) and constants (`flag = true;`).
+  - `g1: Nand(a=a, b=b);` labels a part, so its output can be used directly as `g1.out`
+    without naming a wire.
+  - Both are drawn in the circuit view, and labelled parts show their label.
 - **The game:** `uv run nandsim gui` opens the level select.
   - The levels on the left show which are solved (✓), open (○) or locked (–). A locked level
     tells you which chips to solve first.

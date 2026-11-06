@@ -35,6 +35,34 @@ A part is `ChipName(pin=signal, pin=signal, ...)`:
 
 Parts can appear in any order: hardware has no "before" and "after". You may read your chip's own `OUT` pins as inputs to other parts. You don't have to connect a part's outputs if you don't need them.
 
+## Direct connections
+
+Two shortcuts save you from inventing wire names or adding gates that do nothing.
+
+**Connect a signal straight to another** with `target = source;` inside PARTS:
+
+```
+out = a;                 // an input straight to an output
+low[0..3] = in[4..7];    // move bits around
+flag = true;             // a constant
+copy = out;              // the same signal on two outputs
+```
+
+- These are plain wires, not gates: they cost nothing.
+- The target is one of your `OUT` pins (or a slice of one), or a new internal wire. A new wire takes the width of its source, so it can't be created from a constant.
+- The source is anything a part input could read: a pin, a wire, a constant, or a labelled part's output.
+
+**Label a part** to use its outputs without naming a wire:
+
+```
+g1: Nand(a=a, b=b);
+Not(in=g1.out, out=out);
+```
+
+- `g1.out` reads the output `out` of the part labelled `g1`, and can be sliced (`alu.out[0..7]`).
+- Labels must be unique and different from your pin names. A labelled part may still connect its outputs the usual way (`out=n`) as well.
+- In the circuit, the part is titled `g1: Nand`.
+
 ## Buses, slices and constants
 
 - `IN a[8]` declares an 8-bit bus. Bit 0 is the least significant bit.
@@ -57,7 +85,7 @@ Every error shows `file:line:col` and stops at the first problem.
 | unknown pin on a part | `Nand has no pin 'c' (its pins are: a, b, out)` |
 | width mismatch | `width mismatch: pin 'in' of Not has 1 bit but 'a' has 2` |
 | slice out of range | `a[2] is out of range: 'a' has 2 bits (0..1)` |
-| reading a signal nothing drives | `'w' is not a pin of Top and no part output drives a wire with that name` |
+| reading a signal nothing drives | `'w' is not a pin of Top and nothing drives a wire with that name` |
 | driving an input pin | `'a' is an input pin of Top: a part output cannot drive it` |
 | driving a constant | `output pin 'out' of Not cannot be connected to a constant` |
 | two drivers | `'o' is already driven by Not at line 2` |
@@ -66,6 +94,14 @@ Every error shows `file:line:col` and stops at the first problem.
 | chip output left open | `output pin 'out' of Xor is not connected` |
 | chips using each other | `circular dependency between chips: Top -> A -> B -> A` |
 | combinational loop | `combinational loop (a signal depends on itself without a DFF): y -> x -> y` |
+| connecting to an input | `'a' is an input pin of T: it cannot be assigned` |
+| new wire from a constant | `the width of new wire 'w' can't come from a constant; connect the constant to a pin instead` |
+| connections in a loop | `'p' would be driven only by itself: assignments form a loop with nothing driving it` |
+| unknown label | `no part is labelled 'g' in T` |
+| reading a part's input | `'g.in' is an input pin of Not: only a part's outputs can be read this way` |
+| driving a labelled output | `'g.out' is driven by part 'g' and cannot be assigned` |
+| label used twice | `label 'g' is already used at line 1` |
+| label that is a pin name | `label 'a' is also a pin of T; use another name` |
 
 A level adds two more rules:
 - Your chip must keep the pins of the level's starting text.

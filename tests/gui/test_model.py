@@ -81,3 +81,27 @@ def test_bus_driven_by_several_parts_and_constants() -> None:
     assert ("#2.out", "#3.b") in shown
     const = next(e for e in v.edges if e.src.kind == "const")
     assert const.label == "true" and const.nets == (TRUE_NET,)
+
+
+def test_direct_connections_and_labels_in_view() -> None:
+    lib = ChipLibrary(
+        sources={
+            "Not": ("CHIP Not { IN in; OUT out; PARTS: Nand(a=in, b=in, out=out); }", "Not.hdl"),
+        }
+    )
+    src = (
+        "CHIP T { IN a, b[2]; OUT o, k, swap[2], n; PARTS:"
+        " o = a; k = true; swap[0] = b[1]; swap[1] = w; w = b[0];"
+        " g: Nand(a=a, b=a); n = g.out; }"
+    )
+    lib.sources["T"] = (src, "T.hdl")
+    nl = elaborate(parse(src, "T.hdl"), lib)
+    v = build_view(nl, lib, "T")
+    shown = {(str(e.src), str(e.dst), e.label) for e in v.edges}
+    assert ("a", "o", "o") in shown  # input straight to output
+    assert ("true", "k", "true") in shown  # constant drawn at the output
+    assert ("b[1..1]", "swap[0..0]", "swap") in shown
+    assert ("b[0..0]", "swap[1..1]", "swap") in shown  # through the wire w
+    assert ("#1.out", "n", "n") in shown  # labelled part read as g.out
+    assert v.part(1).label == "g: Nand"
+    assert "w" in v.wires and not any("." in name for name in v.wires)

@@ -90,8 +90,7 @@ ERRORS = [
     ),
     (
         "CHIP Top { IN a; OUT o; PARTS: Not(in=w, out=o); }",
-        "Top.hdl:1:39: error: 'w' is not a pin of Top and no part output drives a wire "
-        "with that name",
+        "Top.hdl:1:39: error: 'w' is not a pin of Top and nothing drives a wire with that name",
     ),
     (
         "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, out=o); }",
