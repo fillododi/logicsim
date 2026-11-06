@@ -356,7 +356,34 @@ class GameApp(ViewerApp):
         if kind == "pin" or anchor == "part":
             box = self._box_rect(arg if kind == "pin" else None)
             return box.clip(canvas) if box is not None and box.colliderect(canvas) else canvas
+        if anchor == "wire":
+            r = self._wire_rect()
+            return r.clip(canvas) if r is not None and r.colliderect(canvas) else canvas
         return None
+
+    def _wire_rect(self) -> pygame.Rect | None:
+        """Around the first internal wire (from a part's output to another part) and both parts.
+
+        The parts are included so the bubble never covers the chips the wire joins.
+        """
+        snap = self.session.snapshot
+        if snap is None:
+            return None
+        route = next(
+            (
+                r
+                for r in snap.layout.routes
+                if r.edge.src.kind == "part" and r.edge.dst.kind == "part" and r.points
+            ),
+            None,
+        )
+        if route is None:
+            return None
+        boxes = [snap.layout.boxes[("part", e.part)] for e in (route.edge.src, route.edge.dst)]
+        corners = [p for b in boxes for p in ((b.x, b.y), (b.right, b.bottom))] + route.points
+        pts = [self.screen_of(p) for p in corners]
+        xs, ys = [x for x, _ in pts], [y for _, y in pts]
+        return pygame.Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
 
     def _line_rect(self, text: str) -> pygame.Rect:
         ed = self.editor
