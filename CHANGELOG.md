@@ -25,8 +25,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 ### Changed
 - **Level groups fold up.** The level list shows your current group and the next one with a
   level to play; the others fold into one line with a count of solved levels, like
-  `▸ TUTORIAL ✓ 2/2`. Click a group's name to open or close it. This leaves room for the
-  brief as more levels arrive.
+  `▸ TUTORIAL ✓ 2/2`. Click a group's name to open or close it. When the list is still
+  longer than the room the brief leaves, it scrolls with the mouse wheel and keeps the level
+  you're on in sight, so the brief is always shown whole.
 
 ### Fixed
 - **Ctrl+Enter over an input** no longer opens the value field when the circuit has the keys.

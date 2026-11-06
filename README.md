@@ -67,6 +67,7 @@ device the game runs silently.
 | Click a part | open it and see its inside. The breadcrumbs or Backspace go back up. |
 | `F1` | replay the guided tour |
 | Mouse wheel, drag, `F` | zoom, pan, fit to the window |
+| Mouse wheel over the level list | scroll it, when it's longer than the sidebar |
 | `H` | show buses in hex or decimal |
 | Hover a wire | show its name and value |
 | Ctrl+S, Ctrl+Enter | build, run the tests |
