@@ -14,7 +14,14 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="nandsim", description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
 
-    gui = sub.add_parser("gui", help="play: level select and HDL editor")
+    gui = sub.add_parser("gui", help="open a chip in the circuit viewer")
+    gui.add_argument("file", nargs="?", type=Path, help=".hdl file to view (developer mode)")
+    gui.add_argument(
+        "--search",
+        type=Path,
+        action="append",
+        help="directory to look for parts in (repeatable; default: next to the file and one up)",
+    )
     gui.add_argument("--save-dir", type=Path, help="where the player's chips are stored")
 
     test = sub.add_parser("test", help="run .tst files (default: every level)")
@@ -68,8 +75,19 @@ def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     if args.command == "test":
         return cmd_test(args)
-    print("nandsim gui: the GUI arrives in milestone 2", file=sys.stderr)
-    return 2
+    if args.file is None:
+        print(
+            "nandsim gui: the level select arrives later in milestone 2; "
+            "for now open a chip file, e.g. nandsim gui reference/01_gates/Mux.hdl",
+            file=sys.stderr,
+        )
+        return 2
+    if not args.file.is_file():
+        print(f"nandsim gui: no such file: {args.file}", file=sys.stderr)
+        return 1
+    from nandsim.gui.app import open_viewer  # pygame is imported only for the GUI
+
+    return open_viewer(args.file, args.search)
 
 
 if __name__ == "__main__":
