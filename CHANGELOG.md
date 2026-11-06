@@ -17,6 +17,14 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 6 = `0.6.0`).
   - Zoom with the mouse wheel, drag to pan, and press `F` to fit.
   - Saving the file, or any chip next to it, reloads the view. Mistakes show as a banner with
     their line and column while the last working circuit stays on screen.
+- **HDL editor:** `nandsim gui Chip.hdl` opens the chip's source next to its circuit.
+  - Ctrl+S saves and rebuilds. A mistake is underlined at its exact spot, its line number turns
+    red, and the full message appears below the circuit.
+  - Syntax colours, line numbers, mouse selection (double-click selects a word), copy, cut and
+    paste.
+  - Undo and redo. Auto-indent after `{`, and a closing brace dedents itself. Tab and Shift+Tab
+    indent and dedent, and Ctrl+/ comments lines out or back in.
+  - Press Esc to go back to the circuit's shortcuts. `--no-edit` shows the circuit alone.
 
 ## [0.1.0] — 2026-11-06
 
