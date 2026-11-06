@@ -116,11 +116,44 @@ def test_exported_chip_is_renamed_and_joins_the_library(store: SaveStore) -> Non
     assert store.exported() == ["Buf"]
     assert store.library().resolve("Buf").name == "Buf"
 
-    store.reset()  # a reset only moves the save directory
+
+def test_reset_moves_exported_chips_to_the_backup_too(store: SaveStore) -> None:
+    store.exports.mkdir(parents=True)
+    (store.exports / "Buf.hdl").write_text("CHIP Buf {}")
+    (store.exports / "notes.txt").write_text("mine")  # the folder ends up empty
+    assert store.has_progress()  # exported chips alone are something to lose
+    dest = store.reset(now=datetime(2026, 11, 6, 20, 0, 0))
+    assert dest is not None
+    assert sorted(p.name for p in (dest / "exports").iterdir()) == ["Buf.hdl", "notes.txt"]
+    assert list(store.exports.iterdir()) == [] and store.exported() == []
+    assert not store.has_progress()
+    with pytest.raises(HdlError, match="unknown chip 'Buf'"):
+        store.library().resolve("Buf")
+
+
+def test_delete_export_moves_it_to_a_backup(store: SaveStore) -> None:
+    solve_not(store)
+    store.export("Buf", store.prepare_export("Buf", NOT_AS_BUF))
+    store.export("Two", "CHIP Two { IN in; OUT out; PARTS: Buf(in=in, out=out); }")
+    when = datetime(2026, 11, 6, 20, 0, 0)
+    gone = store.delete_export("Two", now=when)
+    assert gone == store.backups / "2026-11-06_200000" / "exports" / "Two.hdl"
+    assert gone.read_text().startswith("CHIP Two")  # kept, not destroyed
     assert store.exported() == ["Buf"]
-    # Buf is built from Not, which went to the backup with the rest of the saves.
-    with pytest.raises(HdlError, match="unknown chip 'Not'"):
-        store.library().resolve("Not")
+    gone = store.delete_export("Buf", now=when)  # same second: a folder of its own
+    assert gone == store.backups / "2026-11-06_200000-2" / "exports" / "Buf.hdl"
+    assert store.exported() == [] and store.has_progress()  # Not is still saved
+
+
+def test_users_of_finds_saved_and_exported_chips_that_use_a_chip(store: SaveStore) -> None:
+    solve_not(store)
+    store.export("Buf", store.prepare_export("Buf", NOT_AS_BUF))
+    store.export("Two", "CHIP Two { IN in; OUT out; PARTS: Buf(in=in, out=out); }")
+    store.save(LEVELS["And"], "CHIP And { IN a, b; OUT out; PARTS: Buf(in=a, out=out); }")
+    store.save(LEVELS["Or"], "CHIP Or { broken")  # doesn't parse: skipped
+    assert store.users_of("Buf") == ["And", "Two"]
+    assert store.users_of("Not") == ["Buf"]
+    assert store.users_of("Two") == []
 
 
 @pytest.mark.parametrize(

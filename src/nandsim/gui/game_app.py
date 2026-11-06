@@ -5,7 +5,8 @@ It reuses `ViewerApp` for the canvas, the editor pane, navigation and error disp
 and adds the level sidebar, the results panel, the "Run tests" action and the guided
 tour's bubbles (F1 replays the tour). Menus sit on top: the title screen at start,
 and the pause menu on Esc, from which the game can be reset and the chip in the
-editor exported under a name of its own, as a part every level may use.
+editor exported under a name of its own, as a part every level may use. The
+sidebar lists those chips, each with a × button that deletes it.
 """
 
 from __future__ import annotations
@@ -32,6 +33,7 @@ from nandsim.testing import Level, load_levels
 SIDEBAR = 260
 RESULTS_H = 190
 ROW_H = 26
+CHIP_ROW_H = 22  # a row of the "Your chips" list
 BUTTON_W = 210
 
 GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
@@ -60,6 +62,7 @@ class GameApp(ViewerApp):
         self._attempted = store.has_save(self.game.current)
         self._rows: list[tuple[pygame.Rect, Level]] = []
         self._exported = store.exported()  # the player's exported chips, for the sidebar
+        self._chip_rows: list[tuple[pygame.Rect, str]] = []  # × buttons, as last drawn
         self._export_names: dict[str, str] = {}  # level -> name it was last exported as
         self._pending_export: tuple[str, str] | None = None  # waiting for "Replace it"
         self._sync_error()
@@ -140,6 +143,8 @@ class GameApp(ViewerApp):
         """
         backup = self.game.store.reset()
         self.game = GameState(self.game.store)
+        self._exported = self.game.store.exported()
+        self._export_names = {}
         self.tour = self._new_tour()
         self._load_current()
         self.notice = f"New game. Your old chips are in {_home_short(backup)}" if backup else None
@@ -182,8 +187,9 @@ class GameApp(ViewerApp):
     def _confirm_reset_menu(self) -> Menu:
         where = _home_short(self.game.store.backups)
         msg = (
-            "Every chip you wrote, the levels you solved and the tour start over from the "
-            f"first level.\n\nYour files aren't deleted: they move to {where}."
+            "Every chip you wrote, the chips you exported, the levels you solved and the "
+            "tour start over from the first level.\n\n"
+            f"Your files aren't deleted: they move to {where}."
         )
         # Cancel comes first, so Enter on a menu opened by mistake is harmless.
         items = [MenuItem("Cancel", BACK), MenuItem("Reset the game", "confirm_reset", True)]
@@ -199,6 +205,21 @@ class GameApp(ViewerApp):
         items = [MenuItem("Export", "export_named"), MenuItem("Cancel", BACK)]
         name = self._export_names.get(level, f"My{level}")
         return Menu("Export this chip", items, message=msg, text=name, allowed=r"\w")
+
+    def _confirm_delete_menu(self, name: str) -> Menu:
+        users = self.game.store.users_of(name)
+        msg = "No level will be able to use it any more."
+        if users:
+            them = (
+                "they won't build until you change them"
+                if len(users) > 1
+                else ("it won't build until you change it")
+            )
+            msg += f"\n\nUsed by {', '.join(users)}: {them}."
+        msg += f"\n\nThe file isn't destroyed: it moves to {_home_short(self.game.store.backups)}."
+        # Cancel comes first, so Enter on a dialog opened by mistake is harmless.
+        items = [MenuItem("Cancel", BACK), MenuItem("Delete it", f"confirm_delete:{name}", True)]
+        return Menu(f"Delete {name}?", items, message=msg)
 
     def _confirm_export_menu(self, name: str) -> Menu:
         path = self.game.store.export_path(name)
@@ -250,6 +271,8 @@ class GameApp(ViewerApp):
             self.export_chip(self.menus[-1])
         elif action == "confirm_export" and self._pending_export is not None:
             self._write_export(*self._pending_export)
+        elif action.startswith("confirm_delete:"):
+            self.delete_chip(action.split(":", 1)[1])
         elif action == "quit":
             self.quit_requested = True
 
@@ -278,6 +301,19 @@ class GameApp(ViewerApp):
                 self.menus.append(self._confirm_export_menu(name))
                 return
         self._write_export(name, text)
+
+    def delete_chip(self, name: str) -> None:
+        """Take an exported chip out of the library, then rebuild what is on screen."""
+        try:
+            gone = self.game.store.delete_export(name)
+        except OSError as e:
+            self.notice = f"Couldn't delete {name}: {e.strerror or e}"
+        else:
+            self.notice = f"Deleted {name}. Its file is in {_home_short(gone.parent.parent)}"
+            self._export_names = {k: v for k, v in self._export_names.items() if v != name}
+        self._exported = self.game.store.exported()
+        self._close_menus()
+        self._rebuild()  # the circuit on screen may have used it
 
     def _write_export(self, name: str, text: str) -> None:
         self._pending_export = None
@@ -356,6 +392,10 @@ class GameApp(ViewerApp):
             if self.button_rect.collidepoint(ev.pos):
                 self.run_tests()
                 return
+            for rect, name in self._chip_rows:
+                if rect.collidepoint(ev.pos):
+                    self._open_menu(self._confirm_delete_menu(name))
+                    return
             for rect, level in self._rows:
                 if rect.collidepoint(ev.pos):
                     if level is not self.game.current:
@@ -552,14 +592,24 @@ class GameApp(ViewerApp):
                 surf.blit(t, (14, y))
                 y += font.get_linesize()
             y += 8
+        self._chip_rows = []
         if self._exported:
-            label = self.fonts.get(13, bold=True).render("Your chips", True, theme.TEXT)
-            surf.blit(label, (14, y))
-            y += font.get_linesize()
-            names = ", ".join(self._exported) + " (every level)"
-            for line in _wrap(names, (SIDEBAR - 28) // font.size("M")[0]):
-                surf.blit(font.render(line, True, theme.ACCENT), (14, y))
-                y += font.get_linesize()
+            bold = self.fonts.get(13, bold=True)
+            surf.blit(bold.render("Your chips", True, theme.TEXT), (14, y))
+            hint = self.fonts.get(12).render("usable in every level", True, theme.TEXT_DIM)
+            surf.blit(hint, (SIDEBAR - 14 - hint.get_width(), y + 1))
+            y += font.get_linesize() + 2
+            for name in self._exported:
+                row = pygame.Rect(6, y, SIDEBAR - 12, CHIP_ROW_H)
+                surf.blit(font.render(name, True, theme.ACCENT), (14, y + 2))
+                x_btn = pygame.Rect(row.right - CHIP_ROW_H - 2, y, CHIP_ROW_H, CHIP_ROW_H)
+                hot = x_btn.collidepoint(self.mouse) and not self.menus
+                if hot:
+                    pygame.draw.rect(surf, theme.ERROR_BG, x_btn, border_radius=4)
+                cross = font.render("×", True, theme.ERROR_TEXT if hot else theme.TEXT_DIM)
+                surf.blit(cross, cross.get_rect(center=x_btn.center))
+                self._chip_rows.append((x_btn, name))
+                y += CHIP_ROW_H
             y += 8
         self._draw_brief(surf, y)
 

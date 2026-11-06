@@ -10,8 +10,9 @@ save directory and never inside it: the chip library searches the save directory
 recursively, so a backup inside it would still be used as the player's chips.
 
 Chips the player exports under a name of their own live in `<save dir>-exports/`,
-beside the save directory for the same reason, and a reset leaves them alone. Every
-level may use them as parts, so they are part of the library.
+beside the save directory for the same reason. Every level may use them as parts,
+so they are part of the library. Deleting one moves its file to
+`<save dir>-backups/<time>/exports/`, and so does a reset for all of them.
 
 A level is *unlocked* when every level it may use as a part is solved; primitives
 are always available. *Solved* is sticky: it records that the chip passed its
@@ -136,6 +137,35 @@ class SaveStore:
         atomic_write(path, text)
         return path
 
+    def delete_export(self, name: str, now: datetime | None = None) -> Path:
+        """Take an exported chip out of the library; return where its file went.
+
+        Like a reset, nothing is destroyed: the file moves to `backups/<time>/exports/`.
+        """
+        path = self.export_path(name)
+        dest = self._new_backup(now) / "exports"
+        dest.mkdir()
+        return path.replace(dest / path.name)
+
+    def users_of(self, name: str) -> list[str]:
+        """The player's chips, saved or exported, that use `name` directly as a part.
+
+        Files that don't parse are skipped: they can't be using anything yet.
+        """
+        files = [self.path(lv) for lv in self.levels]
+        files += [self.export_path(n) for n in self.exported() if n != name]
+        users = []
+        for f in files:
+            if not f.is_file():
+                continue
+            try:
+                chip = parse(f.read_text(encoding="utf-8"), str(f))
+            except (HdlError, OSError, UnicodeDecodeError):
+                continue
+            if any(part.chip == name for part in chip.parts):
+                users.append(f.stem)
+        return users
+
     # ---- reset --------------------------------------------------------
 
     @property
@@ -143,37 +173,54 @@ class SaveStore:
         return self.root.with_name(self.root.name + "-backups")
 
     def has_progress(self) -> bool:
-        """Whether the player has anything to lose: a saved chip, progress or tour state."""
-        return bool(self._player_files())
+        """Whether the player has anything to lose: a chip, saved or exported, progress
+        or tour state."""
+        return bool(self._player_files() or self._export_files())
 
     def reset(self, now: datetime | None = None) -> Path | None:
         """Start over: move every player file into `backups/<time>/` and return that folder.
 
         `backups` is `<save dir>-backups`, beside the save directory (see the module doc).
+        Exported chips go too, into `backups/<time>/exports/`.
 
         Nothing is deleted, so a reset by mistake can be undone by moving the files
         back. Returns None, and creates nothing, when there was nothing to move.
         """
-        files = self._player_files()
+        files, exports = self._player_files(), self._export_files()
         self._solved = set()
         self.warning = None
-        if not files:
+        if not files and not exports:
             return None
+        dest = self._new_backup(now)
+        for f in files:
+            f.replace(dest / f.name)
+        if exports:
+            (dest / "exports").mkdir()
+            for f in exports:
+                f.replace(dest / "exports" / f.name)
+        return dest
+
+    def _new_backup(self, now: datetime | None) -> Path:
+        """A new, empty `backups/<time>/` folder, made unique within the same second."""
         stamp = (now or datetime.now()).strftime("%Y-%m-%d_%H%M%S")
         dest = self.backups / stamp
         n = 1
-        while dest.exists():  # two resets within the same second
+        while dest.exists():
             n += 1
             dest = self.backups / f"{stamp}-{n}"
         dest.mkdir(parents=True)
-        for f in files:
-            f.replace(dest / f.name)
         return dest
 
     def _player_files(self) -> list[Path]:
         if not self.root.is_dir():
             return []
         return sorted(p for p in self.root.iterdir() if p.is_file())
+
+    def _export_files(self) -> list[Path]:
+        """Every file in the exports folder, chip or not: a reset leaves it empty."""
+        if not self.exports.is_dir():
+            return []
+        return sorted(p for p in self.exports.iterdir() if p.is_file())
 
     def _read_progress(self) -> set[str]:
         p = self.root / "progress.json"
