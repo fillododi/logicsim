@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
-from nandsim.gui.game import GameState
+from nandsim.gui.game import GameState, group_label
 from nandsim.gui.saves import SaveStore
-from nandsim.testing import load_levels
+from nandsim.testing import Level, load_levels
 
 LEVELS = {lv.name: lv for lv in load_levels()}
 
@@ -100,3 +100,41 @@ def test_resumes_past_the_furthest_solved_level(tmp_path: Path) -> None:
     for name in ("Not", "And"):  # the tutorial was skipped
         store.mark_solved(LEVELS[name])
     assert GameState(store).current.name == "Or"
+
+
+def fake_store(tmp_path: Path) -> SaveStore:
+    """Four groups and no files: grouping and unlocking only read names and parts."""
+    root = tmp_path / "data"
+    levels = [
+        Level("Wire", "00_tutorial", (), root),
+        Level("Not", "01_gates", ("Nand",), root),
+        Level("And", "01_gates", ("Nand", "Not"), root),
+        Level("Not4", "02_buses", ("Not",), root),
+        Level("Add4", "03_arith", ("Not4",), root),
+    ]
+    return SaveStore(levels, tmp_path / "save")
+
+
+def test_groups_keep_the_level_order(tmp_path: Path) -> None:
+    game = GameState(fake_store(tmp_path))
+    assert [(g, [lv.name for lv in lvs]) for g, lvs in game.groups()] == [
+        ("00_tutorial", ["Wire"]),
+        ("01_gates", ["Not", "And"]),
+        ("02_buses", ["Not4"]),
+        ("03_arith", ["Add4"]),
+    ]
+    assert group_label("00_tutorial") == "Tutorial" and group_label("02_buses") == "Buses"
+
+
+def test_default_groups_are_the_current_one_and_the_next_with_work(tmp_path: Path) -> None:
+    game = GameState(fake_store(tmp_path))
+    lv = {lv.name: lv for lv in game.levels}
+    assert game.current.name == "Wire"
+    assert game.default_expanded() == {"00_tutorial", "01_gates"}  # Not is open from the start
+    assert game.select(lv["Not"])
+    assert game.default_expanded() == {"01_gates"}  # Not4 is still locked
+    game.store.mark_solved(lv["Not"])
+    assert game.default_expanded() == {"01_gates", "02_buses"}
+    game.store.mark_solved(lv["Not4"])
+    # Buses has nothing left to do, so Arith takes its place: never more than two groups.
+    assert game.default_expanded() == {"01_gates", "03_arith"}

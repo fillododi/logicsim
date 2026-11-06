@@ -59,6 +59,31 @@ class GameState:
         """Chips the player must solve before this level unlocks."""
         return [p for p in level.parts if p not in PRIMITIVES and p not in self.store.solved]
 
+    # ---- level groups -------------------------------------------------------
+
+    def groups(self) -> list[tuple[str, list[Level]]]:
+        """The levels by group (`01_gates`, ...), in the order of `levels.toml`."""
+        out: list[tuple[str, list[Level]]] = []
+        for lv in self.levels:
+            if not out or out[-1][0] != lv.group:
+                out.append((lv.group, []))
+            out[-1][1].append(lv)
+        return out
+
+    def default_expanded(self) -> set[str]:
+        """Groups the sidebar opens: the current level's, and the next one with an open level.
+
+        At most two groups are open, so the list stays short, and the next thing to
+        do is always in sight: Not while the player is in the tutorial, the first
+        bus level once Gates is under way.
+        """
+        groups = self.groups()
+        names = [g for g, _ in groups]
+        mine = self.current.group
+        later = groups[names.index(mine) + 1 :]
+        nxt = next((g for g, lvs in later if any(self.status(lv) == "open" for lv in lvs)), None)
+        return {mine} | ({nxt} if nxt else set())
+
     def select(self, level: Level) -> bool:
         """Open a level; locked levels can't be opened."""
         if self.status(level) == "locked":
@@ -114,6 +139,11 @@ class GameState:
                 report.lines.append(f"Unlocked: {', '.join(unlocked)}")
         self.report = report
         return report
+
+
+def group_label(group: str) -> str:
+    """What the sidebar calls a group: `01_gates` is "Gates", `00_tutorial` "Tutorial"."""
+    return group.split("_", 1)[-1].replace("_", " ").title()
 
 
 def _report(result: TstResult) -> TestReport:
