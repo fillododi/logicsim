@@ -1,0 +1,7 @@
+// Mux4Way4: Selects one of 4 inputs, 4 bits wide.
+// You may use: Nand, Mux4
+CHIP Mux4Way4 {
+    IN a[4], b[4], c[4], d[4], sel[2];
+    OUT out[4];
+    PARTS:
+}

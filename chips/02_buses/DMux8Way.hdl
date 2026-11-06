@@ -1,0 +1,7 @@
+// DMux8Way: Sends in to one of 8 outputs.
+// You may use: Nand, DMux, DMux4Way
+CHIP DMux8Way {
+    IN in, sel[3];
+    OUT a, b, c, d, e, f, g, h;
+    PARTS:
+}

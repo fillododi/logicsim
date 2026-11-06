@@ -90,7 +90,7 @@ CHIP Imply {
 }
 ```
 
-- **Buses and constants:** buses (`IN a[32]`), slices (`a[0..7]`) and the constants `true` and `false`.
+- **Buses and constants:** buses (`IN a[12]`), slices (`a[0..3]`) and the constants `true` and `false`.
 - **Parts:** they can be listed in any order, and wires don't need declaring.
 - **Errors:** mistakes are reported at their exact line and column (`Nand has no pin 'c' (its pins are: a, b, out)`), and the game keeps showing the last circuit that worked.
 - **Values:** every wire is 0, 1 or undefined.

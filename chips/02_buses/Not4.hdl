@@ -1,0 +1,7 @@
+// Not4: Not on each of 4 bits.
+// You may use: Nand, Not
+CHIP Not4 {
+    IN in[4];
+    OUT out[4];
+    PARTS:
+}

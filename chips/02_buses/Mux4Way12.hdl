@@ -1,0 +1,7 @@
+// Mux4Way12: Selects one of 4 inputs, 12 bits wide.
+// You may use: Nand, Mux12
+CHIP Mux4Way12 {
+    IN a[12], b[12], c[12], d[12], sel[2];
+    OUT out[12];
+    PARTS:
+}

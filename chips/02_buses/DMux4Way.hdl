@@ -1,0 +1,7 @@
+// DMux4Way: Sends in to one of 4 outputs.
+// You may use: Nand, DMux
+CHIP DMux4Way {
+    IN in, sel[2];
+    OUT a, b, c, d;
+    PARTS:
+}

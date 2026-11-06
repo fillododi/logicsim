@@ -1,0 +1,7 @@
+// And4: And on each of 4 bit pairs.
+// You may use: Nand, And
+CHIP And4 {
+    IN a[4], b[4];
+    OUT out[4];
+    PARTS:
+}
