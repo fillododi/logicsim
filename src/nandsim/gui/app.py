@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import textwrap
 import time
+from collections.abc import Callable
 from pathlib import Path
 
 import pygame
@@ -25,7 +26,10 @@ from nandsim.gui.tips import tip_for
 from nandsim.hdl import HdlError
 
 HEADER = 36
-FOOTER = 26
+FOOTER = 26  # minimum footer height; it grows when the help wraps
+HELP_SIZE = 12
+HELP_PAD = 12
+SEP = "  ·  "  # between help items: the only places the help line may wrap
 CLICK_SLOP = 4  # pixels a press may move and still count as a click
 POLL_SECONDS = 0.5
 HELP = (
@@ -86,13 +90,18 @@ class ViewerApp:
     def editor_rect(self) -> pygame.Rect:
         w, h = self.size
         ew = self.editor_width
-        return pygame.Rect(w - ew, HEADER, ew, h - HEADER - FOOTER)
+        return pygame.Rect(w - ew, HEADER, ew, h - HEADER - self.footer_height)
 
     @property
     def canvas_area(self) -> tuple[float, float, float, float]:
         w, h = self.size
         x = float(self.left_width)
-        return (x, float(HEADER), float(w - self.editor_width) - x, float(h - HEADER - FOOTER))
+        return (
+            x,
+            float(HEADER),
+            float(w - self.editor_width) - x,
+            float(h - HEADER - self.footer_height),
+        )
 
     @property
     def show_errors(self) -> bool:
@@ -106,6 +115,18 @@ class ViewerApp:
     @property
     def help_text(self) -> str:
         return EDITOR_HELP if self.editing else HELP
+
+    def help_lines(self) -> list[str]:
+        """The help line, wrapped between items to fit the window."""
+        font = self.fonts.get(HELP_SIZE)
+        room = self.size[0] - 2 * HELP_PAD
+        return wrap_items(self.help_text.split(SEP), lambda s: font.size(s)[0] <= room)
+
+    @property
+    def footer_height(self) -> int:
+        """At least FOOTER; taller when a narrow window wraps the help onto more lines."""
+        lines = len(self.help_lines())
+        return max(FOOTER, lines * self.fonts.get(HELP_SIZE).get_linesize() + 10)
 
     @property
     def editing(self) -> bool:
@@ -357,16 +378,21 @@ class ViewerApp:
             raw = _short_error(err).splitlines() + ([f"Tip: {tip}"] if tip else []) + [note]
             lines = [part for line in raw for part in textwrap.wrap(line, cols) or [""]]
             height = 10 + len(lines) * (font.get_linesize())
-            top = h - FOOTER - height
+            top = h - self.footer_height - height
             pygame.draw.rect(
                 surf, theme.ERROR_BG, (left, top, w - self.editor_width - left, height)
             )
             for i, line in enumerate(lines):
                 t = font.render(line, True, theme.ERROR_TEXT)
                 surf.blit(t, (left + 12, top + 5 + i * font.get_linesize()))
-        pygame.draw.rect(surf, theme.PANEL, (0, h - FOOTER, w, FOOTER))
-        t = self.fonts.get(12).render(self.help_text, True, theme.TEXT_DIM)
-        surf.blit(t, (12, h - FOOTER + (FOOTER - t.get_height()) // 2))
+        fh = self.footer_height
+        pygame.draw.rect(surf, theme.PANEL, (0, h - fh, w, fh))
+        font = self.fonts.get(HELP_SIZE)
+        lines = self.help_lines()
+        y = h - fh + (fh - len(lines) * font.get_linesize()) // 2
+        for i, line in enumerate(lines):
+            t = font.render(line, True, theme.TEXT_DIM)
+            surf.blit(t, (HELP_PAD, y + i * font.get_linesize()))
 
     def _draw_tooltip(self, surf: pygame.Surface) -> None:
         r = self.hover.route
@@ -405,6 +431,29 @@ class ViewerApp:
             self.render(screen)
             pygame.display.flip()
             clock.tick(60)
+
+
+def wrap_items(items: list[str], fits: Callable[[str], bool]) -> list[str]:
+    """Pack items into lines joined by SEP, starting a new line when one would not fit.
+
+    An item too long for a line on its own is wrapped between its words; a single
+    word wider than the line is left whole.
+    """
+    lines: list[str] = []
+    for item in items:
+        if lines and fits(lines[-1] + SEP + item):
+            lines[-1] += SEP + item
+        elif fits(item):
+            lines.append(item)
+        else:
+            words = item.split(" ")
+            lines.append(words[0])
+            for word in words[1:]:
+                if fits(lines[-1] + " " + word):
+                    lines[-1] += " " + word
+                else:
+                    lines.append(word)
+    return lines
 
 
 def _short_error(err: HdlError) -> str:

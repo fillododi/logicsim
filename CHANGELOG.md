@@ -24,6 +24,8 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 7 = `0.7.0`).
 ### Changed
 - **Fewer wire crossings:** wires between two columns of parts are spread out so they cross
   each other much less; a 64-part test chip went from about 2500 crossings to under 1000.
+- **Help line in narrow windows:** the shortcuts at the bottom wrap onto more lines instead of
+  running off the edge of the window.
 - On start, the game opens the first open level after the furthest one you solved, so skipping
   the tutorial doesn't send you back to it every time.
 
