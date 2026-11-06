@@ -6,6 +6,13 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-06
+
+Milestone 5: buses. Thirteen new levels widen your gates to the 4, 8 and 12 bits of the
+Intel 4004, so values, instructions and addresses can move around as one. Typing a value
+into an input, tips for bus mistakes and a sidebar that folds and scrolls make the wider
+chips easier to build.
+
 ### Added
 - **Buses: 13 new levels.** Not4, And4, Or4 and Xor4 widen the gates to 4 bits; Mux4, Mux8
   and Mux12 select between buses of the 4004's widths; Or4Way tells whether any bit is set;
@@ -31,9 +38,6 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   `▸ TUTORIAL ✓ 2/2`. Click a group's name to open or close it. When the list is still
   longer than the room the brief leaves, it scrolls with the mouse wheel and keeps the level
   you're on in sight, so the brief is always shown whole.
-
-### Fixed
-- **Ctrl+Enter over an input** no longer opens the value field when the circuit has the keys.
 
 ## [0.4.0] — 2026-11-06
 
@@ -175,7 +179,8 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/fillododi/logicsim/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fillododi/logicsim/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/fillododi/logicsim/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/fillododi/logicsim/compare/v0.1.0...v0.2.0
