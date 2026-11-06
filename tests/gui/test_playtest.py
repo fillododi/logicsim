@@ -68,8 +68,11 @@ def click_level(app: GameApp, name: str) -> None:
     click(app, rect.center)
 
 
-def new_app(save: Path) -> GameApp:
-    return GameApp(SaveStore(load_levels(), save), size=(1440, 860))
+def new_app(save: Path, level: str | None = None) -> GameApp:
+    app = GameApp(SaveStore(load_levels(), save), size=(1440, 860))
+    if level is not None:
+        click_level(app, level)
+    return app
 
 
 def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
@@ -78,7 +81,10 @@ def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
     shots = tmp_path / "shots"
     shots.mkdir()
 
-    # A fresh game opens Not, with its starting text and no error shouted at the player.
+    # A fresh game opens the tutorial; this player skips it and opens Not, which shows its
+    # starting text and no error shouted at the player.
+    assert app.game.current.name == "Hello"
+    click_level(app, "Not")
     assert app.game.current.name == "Not"
     assert app.editor is not None and app.editor.focused
     assert app.editor.buffer.text == app.game.current.stub.read_text()
@@ -144,7 +150,7 @@ def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
 
 
 def test_switching_levels_never_loses_unsaved_text(tmp_path: Path) -> None:
-    app = new_app(tmp_path / "save")
+    app = new_app(tmp_path / "save", "Not")
     replace_all(app, NOT)
     keydown(app, pygame.K_RETURN, CTRL)
     type_text(app, "\n// a note")  # unsaved
@@ -154,7 +160,7 @@ def test_switching_levels_never_loses_unsaved_text(tmp_path: Path) -> None:
 
 
 def test_errors_appear_after_first_save(tmp_path: Path) -> None:
-    app = new_app(tmp_path / "save")
+    app = new_app(tmp_path / "save", "Not")
     replace_all(app, "CHIP Not { IN in; OUT out; PARTS: Nand(a=in, c=in, out=out); }")
     assert not app.show_errors
     keydown(app, pygame.K_s, CTRL)

@@ -1,0 +1,7 @@
+// Reference solution for Hello. Never shown to the player.
+CHIP Hello {
+    IN a, b;
+    OUT out;
+    PARTS:
+    Nand(a=a, b=b, out=out);
+}

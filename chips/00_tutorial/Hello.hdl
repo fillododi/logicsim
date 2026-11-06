@@ -1,0 +1,7 @@
+// Hello: Outputs 0 only when both inputs are 1, exactly like one Nand.
+// You may use: Nand
+CHIP Hello {
+    IN a, b;
+    OUT out;
+    PARTS:
+}

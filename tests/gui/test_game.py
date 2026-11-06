@@ -20,10 +20,20 @@ def solution(name: str) -> str:
 
 @pytest.fixture
 def game(tmp_path: Path) -> GameState:
-    return GameState(SaveStore(load_levels(), tmp_path / "save"))
+    g = GameState(SaveStore(load_levels(), tmp_path / "save"))
+    assert g.select(LEVELS["Not"])  # most tests here are about the first real gate
+    return g
 
 
-def test_new_game_starts_at_not(game: GameState) -> None:
+def test_new_game_starts_at_the_tutorial(tmp_path: Path) -> None:
+    game = GameState(SaveStore(load_levels(), tmp_path / "save"))
+    assert game.current.name == "Hello"
+    r = game.run_tests(solution("Hello"))
+    assert r.passed and r.lines == []  # no later level uses Hello, so nothing new unlocks
+    assert GameState(game.store).current.name == "Not"
+
+
+def test_not_is_open_without_the_tutorial(game: GameState) -> None:
     assert game.current.name == "Not"
     assert game.status(LEVELS["Not"]) == "open"
     assert game.status(LEVELS["And"]) == "locked"
@@ -78,3 +88,10 @@ def test_loader_builds_last_saved_text(game: GameState) -> None:
     game.save(solution("Not"))
     _, lib = game.loader()()
     assert len(lib.resolve("Not").parts) == 1
+
+
+def test_resumes_past_the_furthest_solved_level(tmp_path: Path) -> None:
+    store = SaveStore(load_levels(), tmp_path / "save")
+    for name in ("Not", "And"):  # the tutorial was skipped
+        store.mark_solved(LEVELS[name])
+    assert GameState(store).current.name == "Or"

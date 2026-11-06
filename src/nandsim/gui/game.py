@@ -34,8 +34,14 @@ class GameState:
         self.report: TestReport | None = None
 
     def _first_level(self) -> Level:
-        """The first unlocked level not solved yet; otherwise the first level."""
-        for lv in self.levels:
+        """The first open level past the furthest solved one; else any open level; else the first.
+
+        Looking past the furthest solved level means a player who skipped the
+        tutorial isn't sent back to it every time they start the game.
+        """
+        solved = [i for i, lv in enumerate(self.levels) if self.status(lv) == "solved"]
+        start = solved[-1] + 1 if solved else 0
+        for lv in self.levels[start:] + self.levels[:start]:
             if self.status(lv) == "open":
                 return lv
         return self.levels[0]

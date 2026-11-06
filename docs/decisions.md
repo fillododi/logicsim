@@ -181,3 +181,17 @@ Ambiguous spec points and the option chosen. Newest last.
 - A 0.2.x patch series outside the milestones: rejected, because this is enough work to deserve its own checklist and journal entry.
 
 **Consequences:** the CPU is now milestone 7, and the simulated clock speed is reported in its journal entry. The tutorial level shifts which level opens first in a new game. Saves are keyed by chip name, so existing saves keep working.
+
+## 2026-11-06 — Tutorial level: `Hello` in `00_tutorial`
+**Context:** milestone 3 asks for a tutorial level before Not whose answer is a single `Nand` line.
+
+**Decision:**
+- **The level:** chip `Hello` (`IN a, b; OUT out;`), solved by `Nand(a=a, b=b, out=out);`, in a new group `chips/00_tutorial/` (shown as "Tutorial"). Its brief explains pins and the `Chip(pin=signal)` syntax, and its hint is close to the answer on purpose, since teaching the syntax is the level's job.
+- **Optional:** `Hello` allows only `Nand`, and Not doesn't list `Hello` as a part, so Not stays open from the start and solving `Hello` unlocks nothing new.
+- **Where a game opens:** it opens the first open level after the furthest solved level (wrapping around), instead of the first open unsolved level. Otherwise a player who skipped `Hello` would land on it every time they start.
+
+**Alternatives:**
+- Make Not require `Hello`: rejected, because experienced players would be forced through it.
+- Name the chip after what it does (it is a Nand): rejected, because `Nand` is the primitive's name and a second name for the same gate adds nothing. "Hello" says what the level is for.
+
+**Consequences:** `levels.toml` starts with `Hello`. `test_levels_exist` now checks seven names.
