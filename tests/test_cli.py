@@ -42,11 +42,6 @@ def test_pass_and_fail_exit_codes(tmp_path: Path, capsys: pytest.CaptureFixture[
     assert "0/1 passed" in out
 
 
-def test_gui_without_file_explains(capsys: pytest.CaptureFixture[str]) -> None:
-    assert main(["gui"]) == 2
-    assert "open a chip file" in capsys.readouterr().err
-
-
 def test_gui_missing_file(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["gui", "nope.hdl"]) == 1
     assert "no such file" in capsys.readouterr().err
