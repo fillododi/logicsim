@@ -362,3 +362,49 @@ def test_reset_takes_exported_chips_away(tmp_path: Path) -> None:
     key(app, pygame.K_ESCAPE)
     click_item(app, "Export this chip as…")
     assert app.menus[-1].text == "MyWire"  # the old export names are forgotten too
+
+
+# ---- sound ----------------------------------------------------------------------
+
+
+def test_game_events_play_their_sounds(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    assert app.editor is not None and app.sounds.enabled  # the dummy audio driver
+    app.tour.skip()  # its bubble would sit over the canvas
+    app.save()  # BUF builds: no error sound
+    assert "error" not in app.sounds.played
+    snap = app.session.snapshot
+    assert snap is not None
+    b = snap.layout.boxes[("in", "in")]
+    pos = app.screen_of((b.x + b.w / 2, b.y + b.h / 2))
+    click(app, pos)  # the first click on the circuit only leaves the editor
+    assert "toggle" not in app.sounds.played
+    click(app, pos)
+    assert app.sounds.played[-1] == "toggle"
+    app.run_tests()  # BUF is a buffer, not a Not
+    assert app.sounds.played[-1] == "fail"
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(LEVELS["Not"].reference.read_text())
+    app.run_tests()
+    assert app.sounds.played[-1] == "solved"
+    app.run_tests()  # already solved: a plain pass
+    assert app.sounds.played[-1] == "pass"
+    app.editor.buffer.insert("oops")
+    app.save()
+    assert app.sounds.played[-1] == "error"
+
+
+def test_menus_tick_blip_and_buzz(tmp_path: Path) -> None:
+    app = at_not(tmp_path)
+    key(app, pygame.K_ESCAPE)
+    assert app.sounds.played[-1] == "select"  # the pause menu opens
+    key(app, pygame.K_DOWN)
+    assert app.sounds.played[-1] == "move"
+    click_item(app, "Export this chip as…")
+    assert app.sounds.played[-1] == "select"
+    field(app, "Xor")  # typing is silent
+    assert app.sounds.played[-1] == "select"
+    key(app, pygame.K_RETURN)
+    assert app.sounds.played[-1] == "error"  # a refused name
+    key(app, pygame.K_ESCAPE)
+    assert app.sounds.played[-1] == "back"

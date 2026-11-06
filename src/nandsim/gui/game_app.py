@@ -3,10 +3,11 @@ test results on the right.
 
 It reuses `ViewerApp` for the canvas, the editor pane, navigation and error display,
 and adds the level sidebar, the results panel, the "Run tests" action and the guided
-tour's bubbles (F1 replays the tour). Menus sit on top: the title screen at start,
-and the pause menu on Esc, from which the game can be reset and the chip in the
-editor exported under a name of its own, as a part every level may use. The
-sidebar lists those chips, each with a × button that deletes it.
+tour's bubbles (F1 replays the tour), and plays the sound effects. Menus sit on
+top: the title screen at start, and the pause menu on Esc, from which the game can
+be reset, the sound muted or turned up, and the chip in the editor exported under
+a name of its own, as a part every level may use. The sidebar lists those chips,
+each with a × button that deletes it.
 """
 
 from __future__ import annotations
@@ -26,6 +27,8 @@ from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import ChipSession
+from nandsim.gui.settings import Settings
+from nandsim.gui.sound import Sounds
 from nandsim.gui.textbuffer import Pos, TextBuffer
 from nandsim.gui.tutorial import Tour, load_steps
 from nandsim.testing import Level, load_levels
@@ -35,6 +38,8 @@ RESULTS_H = 190
 ROW_H = 26
 CHIP_ROW_H = 22  # a row of the "Your chips" list
 BUTTON_W = 210
+
+SILENT_ACTIONS = {"mute", "volume"}  # these play their own preview, if any
 
 GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 
@@ -57,7 +62,10 @@ class GameApp(ViewerApp):
         super().__init__(session, size=size)
         self.edit_path = Path(self.game.path)
         self.editor = EditorWidget(TextBuffer(self.game.text()), self.fonts, self.editor_rect)
-        warnings = [w for w in (store.warning, self.tour.warning) if w]
+        self.settings = Settings.load(store.settings_path)
+        self.sounds = Sounds(self.settings)
+        self.sounds.load()  # synthesized once, at startup; silent without an audio device
+        warnings = [w for w in (store.warning, self.tour.warning, self.settings.warning) if w]
         self.notice: str | None = "; ".join(warnings) or None
         self._attempted = store.has_save(self.game.current)
         self._rows: list[tuple[pygame.Rect, Level]] = []
@@ -333,6 +341,8 @@ class GameApp(ViewerApp):
         self.editor.buffer.mark_saved()
         self._attempted = True
         self._rebuild()
+        if self.session.error is not None and self.show_errors:
+            self.sounds.play("error")
         self.tour_event("save")
         if self.session.error is None:
             self.tour_event("build_ok")
@@ -343,6 +353,7 @@ class GameApp(ViewerApp):
         self.editor.buffer.mark_saved()
         self._attempted = True
         self._rebuild()
+        self.sounds.play("solved" if report.newly_solved else "pass" if report.passed else "fail")
         self.tour_event("run_tests")
         if self.session.error is None:
             self.tour_event("build_ok")  # Ctrl+Enter builds too, so it counts as building
@@ -353,6 +364,8 @@ class GameApp(ViewerApp):
         self.tour.event(self.game.current.name, name, detail)
 
     def on_action(self, name: str) -> None:
+        if name == "toggle":
+            self.sounds.play("toggle")
         self.tour_event(name)
 
     def replay_tour(self) -> None:
@@ -376,12 +389,11 @@ class GameApp(ViewerApp):
         if self.menus:
             if hasattr(ev, "pos"):
                 self.mouse = ev.pos
-            action = self.menus[-1].handle(ev)
-            if action is not None:
-                self.menu_action(action)
+            self._menu_event(ev)
             return
         if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
             self.open_pause()
+            self.sounds.play("select")
             return
         if ev.type == pygame.KEYDOWN and ev.key == pygame.K_F1:
             self.replay_tour()
@@ -395,6 +407,7 @@ class GameApp(ViewerApp):
             for rect, name in self._chip_rows:
                 if rect.collidepoint(ev.pos):
                     self._open_menu(self._confirm_delete_menu(name))
+                    self.sounds.play("select")
                     return
             for rect, level in self._rows:
                 if rect.collidepoint(ev.pos):
@@ -404,6 +417,27 @@ class GameApp(ViewerApp):
             if ev.pos[0] < SIDEBAR or self.results_rect.collidepoint(ev.pos):
                 return
         super().handle(ev)
+
+    def _menu_event(self, ev: pygame.event.Event) -> None:
+        """Pass an event to the topmost menu, act on its answer, and sound it out.
+
+        Moving the selection ticks, choosing blips up, going back blips down, and a
+        choice the dialog refuses (an export name, say) sounds like an error.
+        """
+        menu = self.menus[-1]
+        selected, error = menu.selected, menu.error
+        action = menu.handle(ev)
+        if action is None:
+            if menu.selected != selected:
+                self.sounds.play("move")
+            return
+        self.menu_action(action)
+        if menu.error and menu.error != error:
+            self.sounds.play("error")
+        elif action == BACK:
+            self.sounds.play("back")
+        elif action not in SILENT_ACTIONS:
+            self.sounds.play("select")
 
     def _bubble_event(self, ev: pygame.event.Event) -> bool:
         """Presses, wheel turns and plain moves over the bubble never reach what lies under it.
