@@ -33,7 +33,7 @@ The target CPU is a **subset of RISC-V RV32I**, so later projects can be checked
 
 ```bash
 uv sync                                         # install dependencies
-uv run python -m nandsim gui                                   # play: level select + editor (later in M2)
+uv run python -m nandsim gui                                   # play: level select + editor
 uv run python -m nandsim gui reference/01_gates/Mux.hdl        # developer editor + viewer, reloads on save
 uv run python -m nandsim test --impl reference chips/01_gates/Xor.tst  # one level vs its reference
 uv run python -m nandsim test --impl reference chips/           # every level vs its reference

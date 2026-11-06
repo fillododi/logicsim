@@ -8,10 +8,11 @@ Work in progress — see `CLAUDE.md` for the full spec and milestones.
 
 ```bash
 uv sync
+uv run nandsim gui                                # play
 uv run nandsim test                                # run every level
 uv run nandsim gui reference/01_gates/Mux.hdl     # edit a chip and watch its circuit
 ```
 
-![Editing Mux next to its circuit](docs/images/editor-fixed.png)
+![Solving the And level](docs/images/game-solved.png)
 
 License: MIT.

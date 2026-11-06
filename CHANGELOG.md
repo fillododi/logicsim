@@ -7,6 +7,17 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 6 = `0.6.0`).
 ## [Unreleased]
 
 ### Added
+- **The game:** `uv run nandsim gui` opens the level select.
+  - The levels on the left show which are solved (✓), open (○) or locked (–). A locked level
+    tells you which chips to solve first.
+  - Under the list is the level's brief: what the chip does, its truth table and a hint.
+  - Write the chip in the editor. Ctrl+S saves it and draws the circuit.
+  - **Run tests** (or Ctrl+Enter) checks your chip against the level's tests. A failure shows
+    the row and inputs that broke it.
+  - Passing a level marks it solved and unlocks the levels that use it. Later levels are built
+    from your own chips, not ready-made ones.
+  - Your work and progress are saved in `~/.local/share/nandsim/save/` (choose another folder
+    with `--save-dir`). Switching level never loses unsaved text.
 - **Circuit viewer:** `nandsim gui path/to/Chip.hdl` draws a chip from its HDL, with no
   positions to write.
   - Wires are coloured by value: 0, 1 or undefined. Buses show their value; `H` switches between
