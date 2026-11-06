@@ -47,8 +47,10 @@ aren't deleted: they move to `~/.local/share/nandsim/save-backups/<date and time
 To turn a chip into a building block of your own, choose **Export this chip as…** in the Esc
 menu and type a name. Every level can then use it as a part, besides the parts in its brief.
 Your chips are written to `~/.local/share/nandsim/save-exports/<Name>.hdl`; a `.hdl` file
-copied there, whose `CHIP` name matches the file name, becomes one of your chips too. A reset
-leaves that folder alone, and `nandsim test --impl save` uses it as well.
+copied there, whose `CHIP` name matches the file name, becomes one of your chips too, and
+`nandsim test --impl save` uses them as well. The sidebar lists your chips; click the **×** next
+to one to delete it. A deleted chip, and all of them on a reset, move to
+`~/.local/share/nandsim/save-backups/<date and time>/exports/`.
 
 ### Controls
 

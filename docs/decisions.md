@@ -350,3 +350,20 @@ Ambiguous spec points and the option chosen. Newest last.
 - A player can export a level's answer under another name and use it in that same level. Since they wrote the answer themselves, this is accepted. A file copied in from someone else can solve a level, which is what sharing chips means.
 - `ChipDef` gained `name_pos`. `testing` gained `exported_chips`, and `run_script` an `exported` argument. `SaveStore` replaced `chip_files`, `read_chip_file` and `export(level, …)` with `exported`, `name_problem`, `prepare_export` and `export(name, …)`. `Menu` gained a text field. The import menu and its paging are gone.
 - The level briefs' *Parts you may use* line doesn't list exported chips; the sidebar does.
+
+## 2026-11-06 — Deleting exported chips, and resetting them with the game
+**Context:** the user asked that exported chips can be deleted from a button in the sidebar list, and that a game reset deletes them too. Until now a reset left the exports folder alone (entry above).
+
+**Decision:**
+- **One row per exported chip** under *Your chips*, with a **×** button on the right that turns red on hover.
+- **A confirmation first**, with Cancel selected. It names the player's chips, saved levels and other exports, that use the chip directly as a part, because those stop building. Solved levels stay solved (solved is sticky), so a delete never locks a level.
+- **"Deleted" means moved, never destroyed**, as for a reset: the file goes to `<save dir>-backups/<time>/exports/`, which the library never searches. Undoing it is moving the file back.
+- **A reset moves every file in the exports folder** (not only chips) to `backups/<time>/exports/`, beside the save files it already moved, and the reset dialog says exported chips start over too. Exported chips alone count as progress, so the title screen offers *Reset game…* when they are all there is.
+- **After a delete the circuit on screen is rebuilt**, because it may have used the chip: it then shows the build error instead of a circuit that can no longer be built.
+
+**Alternatives:**
+- Deleting the files for good: rejected, for the same reason as for reset.
+- Refusing to delete a chip that others use: rejected, it would force the player to edit those first; the warning is enough.
+- Keeping exports on reset: the user asked otherwise.
+
+**Consequences:** `SaveStore` gained `delete_export` and `users_of`; `reset` and `has_progress` include the exports folder; the backup-folder naming moved into `_new_backup`, shared by both.

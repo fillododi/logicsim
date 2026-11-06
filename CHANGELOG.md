@@ -9,9 +9,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 ### Added
 - **Your own chips:** press **Esc**, choose *Export this chip as…* and type a name, like
   `MyAnd`. The chip in the editor becomes a part that every level can use, `MyAnd(a=…, b=…)`,
-  on top of the parts in the brief. The sidebar lists your chips. They are saved in
-  `~/.local/share/nandsim/save-exports/`, where you can keep or share them, and a game reset
-  leaves them alone.
+  on top of the parts in the brief. The sidebar lists your chips; the **×** next to one deletes
+  it, after telling you which of your chips use it. They are saved in
+  `~/.local/share/nandsim/save-exports/`, where you can keep or share them. A game reset clears
+  them too. Deleted chips aren't lost: like a reset, they move to the backups folder.
 
 ### Changed
 - **New goal: the Intel 4004.** The game now ends with the first commercial microprocessor
