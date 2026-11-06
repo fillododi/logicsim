@@ -90,7 +90,7 @@ def draw_circuit(
             pygame.draw.rect(surf, fill, rect, border_radius=radius)
             border = theme.ACCENT if hovered and not p.primitive else theme.PART_BORDER
             pygame.draw.rect(surf, border, rect, width=max(1, round(1.5 * s)), border_radius=radius)
-            title = label_font.render(p.chip, True, theme.TEXT)
+            title = label_font.render(p.label, True, theme.TEXT)
             surf.blit(title, (rect.centerx - title.get_width() / 2, rect.y + 2 * s))
             for q in p.inputs:
                 ax, ay = cam.to_screen(b.anchors[("in", q.name)])
