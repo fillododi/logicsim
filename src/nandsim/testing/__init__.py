@@ -2,7 +2,7 @@
 
 from nandsim.testing.levels import Level, exported_chips, find_level, load_levels
 from nandsim.testing.runner import Failure, Impl, TstResult, run_script, run_tst
-from nandsim.testing.tst import TstScript, parse_tst
+from nandsim.testing.tst import TstScript, parse_pin_value, parse_tst
 
 __all__ = [
     "Failure",
@@ -13,6 +13,7 @@ __all__ = [
     "exported_chips",
     "find_level",
     "load_levels",
+    "parse_pin_value",
     "parse_tst",
     "run_script",
     "run_tst",

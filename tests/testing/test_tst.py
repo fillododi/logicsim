@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from nandsim.hdl import HdlError
-from nandsim.testing import Impl, exported_chips, load_levels, parse_tst, run_tst
+from nandsim.testing import Impl, exported_chips, load_levels, parse_pin_value, parse_tst, run_tst
 from nandsim.testing.tst import EvalStep, ExpectStep, SetStep
 
 NOT_STUB = "CHIP Not { IN in; OUT out; PARTS: }"
@@ -222,3 +222,26 @@ def test_exported_chips_skip_names_that_cannot_be_their_own_chip(
     (exports / "Sub.hdl").mkdir()
     assert exported_chips(exports, load_levels(root)) == ["aBuf", "Buf"]
     assert exported_chips(tmp_path / "missing", load_levels(root)) == []
+
+
+@pytest.mark.parametrize(
+    ("text", "width", "expected"),
+    [("13", 4, 13), ("-1", 4, 0xF), ("0b1010", 4, 10), ("0xABC", 12, 0xABC), (" 0x0d ", 8, 13)],
+)
+def test_typed_pin_values_use_the_tst_syntax(text: str, width: int, expected: int) -> None:
+    assert parse_pin_value(text, width, "a") == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "width", "message"),
+    [
+        ("16", 4, "16 does not fit in 4-bit pin 'a'"),
+        ("-9", 4, "-9 does not fit in 4-bit pin 'a'"),
+        ("0xG", 4, "'0xG' is not a value: use decimal (5, -1), binary (0b101) or hex (0x1F)"),
+        ("*", 4, "'*' is not a value: use decimal (5, -1), binary (0b101) or hex (0x1F)"),
+    ],
+)
+def test_typed_pin_values_report_tst_messages(text: str, width: int, message: str) -> None:
+    with pytest.raises(HdlError) as e:
+        parse_pin_value(text, width, "a")
+    assert e.value.message == message

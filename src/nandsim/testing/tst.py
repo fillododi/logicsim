@@ -104,6 +104,22 @@ def parse_value(w: _Word, allow_dont_care: bool) -> Value:
         ) from None
 
 
+def parse_pin_value(text: str, width: int, pin: str) -> int:
+    """A value for an input pin written as in a `.tst` file: `13`, `-1`, `0b1101`, `0x0D`.
+
+    Returns the bit pattern for a `width`-bit pin. Raises HdlError, with no position,
+    and the same messages as `.tst` files, when the text isn't a value or doesn't fit.
+    """
+    w = _Word(text.strip(), SourcePos("<typed>", 1, 1))
+    value = parse_value(w, allow_dont_care=True)
+    if value.number is None:  # "*" means something only in expected values
+        raise HdlError(
+            f"'{w.text}' is not a value: use decimal (5, -1), binary (0b101) or hex (0x1F)",
+            None,
+        )
+    return value.encode(width, pin)
+
+
 def parse_tst(text: str, filename: str = "<input>") -> TstScript:
     """Parse a `.tst` script. Raises `HdlError` at the first problem."""
     lines = text.splitlines()
