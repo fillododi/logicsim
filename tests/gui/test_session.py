@@ -111,3 +111,120 @@ def test_camera_zoom_keeps_point_fixed_and_hit_tests(mux: tuple[ChipSession, Pat
     assert box_at(lay, (b.x + 2, b.y + 2)) == ("part", 4)
     first = lay.routes[0].points[0]
     assert route_at(lay, (first[0] + 1, first[1] + 2), 4) is not None
+
+
+# ---- the clock -------------------------------------------------------------
+
+BIT = """CHIP Bit { IN in, load; OUT out; PARTS:
+    Nand(a=load, b=load, out=nl); Nand(a=prev, b=nl, out=x);
+    Nand(a=in, b=load, out=y); Nand(a=x, b=y, out=d);
+    DFF(in=d, out=prev, out=out); }"""
+REG2 = """CHIP Reg2 { IN in[2], load; OUT out[2]; PARTS:
+    Bit(in=in[0], load=load, out=out[0]);
+    Bit(in=in[1], load=load, out=out[1]); }"""
+
+
+@pytest.fixture
+def bit(tmp_path: Path) -> tuple[ChipSession, Path]:
+    (tmp_path / "Bit.hdl").write_text(BIT)
+    s = ChipSession(file_loader(tmp_path / "Bit.hdl"))
+    assert s.reload()
+    return s, tmp_path / "Bit.hdl"
+
+
+def load_bit(s: ChipSession, value: int) -> None:
+    s.set_input("in", value)
+    s.set_input("load", 1)
+    s.step()
+    s.set_input("load", 0)
+
+
+def test_only_chips_with_dffs_have_a_clock(
+    mux: tuple[ChipSession, Path], bit: tuple[ChipSession, Path]
+) -> None:
+    assert not mux[0].has_clock
+    mux[0].toggle_run()
+    assert not mux[0].running  # nothing to run
+    assert bit[0].has_clock
+
+
+def test_step_runs_one_cycle_and_reset_keeps_inputs(bit: tuple[ChipSession, Path]) -> None:
+    s, _ = bit
+    s.set_input("in", 1)
+    s.set_input("load", 1)
+    assert out(s) is None and s.cycle == 0
+    s.step()
+    assert out(s) == 1 and s.cycle == 1
+    s.reset_clock()
+    assert out(s) is None and s.cycle == 0
+    assert s.inputs == {"in": 1, "load": 1}
+    assert s.sim is not None and s.sim.get("load") == 1  # still applied after the reset
+    s.step()
+    assert out(s) == 1
+
+
+def test_running_advances_with_time_at_the_chosen_speed(bit: tuple[ChipSession, Path]) -> None:
+    s, _ = bit
+    assert s.advance(1.0) == 0  # paused
+    s.toggle_run()
+    assert s.running and s.speed == 5
+    assert s.advance(0.1) == 0  # half a cycle owed
+    assert s.advance(0.1) == 1
+    assert s.advance(1.0) == 5 and s.cycle == 6
+    s.change_speed(+1)
+    assert s.speed == 10
+    s.change_speed(-99)
+    assert s.speed == 1
+    s.change_speed(+99)
+    assert s.speed == 1000
+    s.reset_clock()
+    assert not s.running
+
+
+def test_a_slow_chip_falls_behind_instead_of_freezing(bit: tuple[ChipSession, Path]) -> None:
+    s, _ = bit
+    s.toggle_run()
+    # A minute owed and no time to spend: one cycle runs and the rest is dropped.
+    assert s.advance(60.0, budget=0.0) == 1
+    assert s.advance(0.0) == 0
+
+
+def test_reload_keeps_each_dff_whose_place_still_exists(tmp_path: Path) -> None:
+    (tmp_path / "Bit.hdl").write_text(BIT)
+    top = tmp_path / "Reg2.hdl"
+    top.write_text(REG2)
+    s = ChipSession(file_loader(top, [tmp_path]))
+    assert s.reload()
+    s.set_input("in", 2)
+    s.set_input("load", 1)
+    s.step()
+    s.set_input("load", 0)
+    s.set_input("in", 0)
+    assert out(s) == 2 and s.cycle == 1
+
+    top.write_text(REG2.replace("PARTS:", "PARTS:\n    // stored bits"))
+    assert s.reload()
+    assert out(s) == 2 and s.cycle == 1  # Reg2/Bit#1/DFF#5 and Reg2/Bit#2/DFF#5 kept
+
+    # A new first part moves both Bits to #2 and #3: Bit#2 keeps the old Bit#2's
+    # value (1, now feeding out[0]); Bit#3 is new and starts undefined.
+    top.write_text(REG2.replace("PARTS:", "PARTS:\n    Nand(a=load, b=load, out=unused);"))
+    assert s.reload()
+    assert s.sim is not None and s.sim.get_bits("out") == [1, None]
+
+
+def test_reload_with_an_error_keeps_the_clock(bit: tuple[ChipSession, Path]) -> None:
+    s, path = bit
+    load_bit(s, 1)
+    s.toggle_run()
+    path.write_text("CHIP Bit {")
+    assert not s.reload()
+    assert s.running and out(s) == 1 and s.cycle == 1
+
+
+def test_reload_to_a_chip_without_dffs_stops_the_clock(bit: tuple[ChipSession, Path]) -> None:
+    s, path = bit
+    s.toggle_run()
+    path.write_text("CHIP Bit { IN in, load; OUT out; PARTS: Nand(a=in, b=load, out=out); }")
+    assert s.reload()
+    assert not s.has_clock and not s.running

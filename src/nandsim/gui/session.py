@@ -4,10 +4,16 @@ The session owns the flattened simulation of the top chip and a *view path*
 (`Mux`, `Mux/Or#4`, ...) saying which level of the hierarchy is on screen. On
 reload, an HDL error never replaces the running circuit: the session keeps the
 last version that compiled and remembers the error so the GUI can show it.
+
+A chip with DFFs has a clock: `step` runs one whole cycle (tick and tock), and
+`advance` runs as many cycles as the speed asks for while `running`. A reload keeps
+each DFF whose place in the hierarchy (`Bit/DFF#5`) still exists, and the cycle count.
 """
 
 from __future__ import annotations
 
+import re
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +28,11 @@ from nandsim.sim import Simulator
 
 # Returns the top chip's name and the library to find it and its parts in.
 Loader = Callable[[], tuple[str, ChipLibrary]]
+
+SPEEDS = (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)  # clock rates offered, in cycles/s
+DEFAULT_SPEED = 5
+FRAME_BUDGET = 0.03  # seconds of clocking per frame at most, so the window stays responsive
+_DFF_OUT = re.compile(r"(.*/DFF#\d+)/out")
 
 
 @dataclass
@@ -44,6 +55,9 @@ class ChipSession:
         self.error: HdlError | None = None
         self.inputs: dict[str, int | None] = {}
         self._layouts: dict[str, Snapshot] = {}
+        self.running = False
+        self.speed = DEFAULT_SPEED
+        self._owed = 0.0  # cycles due but not yet run, while running
 
     # ---- loading -------------------------------------------------------
 
@@ -61,8 +75,14 @@ class ChipSession:
         except OSError as e:
             self.error = HdlError(f"cannot read chip: {e}", None)
             return False
+        carried = self._dff_values()
+        cycle = self.sim.cycle if self.sim is not None else 0
         self.netlist, self.lib, self.error = netlist, lib, None
         self.sim = Simulator(netlist)
+        self.sim.cycle = cycle
+        self._load_dff_values(carried)
+        if not self.has_clock:
+            self.running = False
         kept = {}
         for pin, nets in netlist.inputs.items():
             v = self.inputs.get(pin)
@@ -142,6 +162,93 @@ class ChipSession:
         if not self.sim.known[idx].all():
             return None
         return int((self.sim.value[idx].astype(np.int64) << np.arange(len(idx))).sum())
+
+    # ---- the clock -------------------------------------------------------
+
+    @property
+    def has_clock(self) -> bool:
+        """Whether the chip has DFFs, so the clock does something."""
+        return self.sim is not None and self.sim.dff_count > 0
+
+    @property
+    def cycle(self) -> int:
+        return self.sim.cycle if self.sim is not None else 0
+
+    def step(self) -> None:
+        """One whole clock cycle: tick, then tock."""
+        assert self.sim is not None
+        self.sim.tick()
+        self.sim.tock()
+
+    def reset_clock(self) -> None:
+        """DFFs back to undefined and the cycle to 0. The inputs keep their values."""
+        assert self.sim is not None
+        self.sim.reset()
+        for pin, v in self.inputs.items():
+            self.sim.set(pin, v)
+        self.sim.eval()
+        self.running = False
+        self._owed = 0.0
+
+    def toggle_run(self) -> None:
+        self.running = not self.running and self.has_clock
+        self._owed = 0.0
+
+    def change_speed(self, delta: int) -> None:
+        """Move `delta` notches along SPEEDS, stopping at either end."""
+        i = SPEEDS.index(self.speed) + delta
+        self.speed = SPEEDS[max(0, min(len(SPEEDS) - 1, i))]
+
+    def advance(self, dt: float, budget: float = FRAME_BUDGET) -> int:
+        """While running, run the cycles `dt` seconds are worth; return how many ran.
+
+        If the chip is too slow for the speed, run for `budget` seconds and drop the
+        rest, so the clock falls behind instead of freezing the window.
+        """
+        if not self.running or self.sim is None:
+            return 0
+        self._owed += dt * self.speed
+        due = int(self._owed)
+        self._owed -= due
+        start = time.perf_counter()
+        done = 0
+        while done < due:
+            self.step()
+            done += 1
+            if time.perf_counter() - start > budget:
+                self._owed = 0.0
+                break
+        return done
+
+    def _dff_paths(self) -> list[str]:
+        """Where each DFF of the current chip sits, e.g. `Bit/DFF#5`, in engine order."""
+        assert self.netlist is not None and self.sim is not None
+        by_net = {}
+        for wire, nets in self.netlist.wires.items():
+            m = _DFF_OUT.fullmatch(wire)
+            if m:
+                by_net[nets[0]] = m.group(1)
+        return [by_net[int(n)] for n in self.sim.dff_outputs]
+
+    def _dff_values(self) -> dict[str, tuple[bool, bool]]:
+        if self.sim is None or not self.has_clock:
+            return {}
+        value, known = self.sim.dff_state()
+        return dict(zip(self._dff_paths(), zip(value, known, strict=True), strict=True))
+
+    def _load_dff_values(self, carried: dict[str, tuple[bool, bool]]) -> None:
+        if not carried or not self.has_clock:
+            return
+        assert self.sim is not None
+        paths = self._dff_paths()
+        which = [i for i, p in enumerate(paths) if p in carried]
+        if which:
+            pairs = [carried[paths[i]] for i in which]
+            self.sim.load_dff_state(
+                np.asarray(which, dtype=np.int64),
+                np.asarray([v for v, _ in pairs], dtype=bool),
+                np.asarray([k for _, k in pairs], dtype=bool),
+            )
 
     def known_fraction(self, nets: tuple[int, ...] | list[int]) -> float:
         assert self.sim is not None
