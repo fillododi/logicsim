@@ -203,8 +203,8 @@ class ChipSession:
         if not self.running or self.sim is None:
             return 0
         self._owed += dt * self.speed
-        due = int(self._owed)
-        self._owed -= due
+        due = int(self._owed + 1e-9)  # 0.2 s at 5/s is 0.999…: still one whole cycle
+        self._owed = max(0.0, self._owed - due)
         start = time.perf_counter()
         done = 0
         while done < due:

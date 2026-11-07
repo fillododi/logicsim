@@ -46,11 +46,9 @@ EDITOR_HELP = (
     "Tab / Shift+Tab: indent  ·  Esc: back to the circuit"
 )
 
-CLOCK_KEYS = {
-    pygame.K_SPACE: "step",
-    pygame.K_LEFTBRACKET: "slower",
-    pygame.K_RIGHTBRACKET: "faster",
-}
+# The speed goes by the character typed, not the key: on many layouts (Italian,
+# German, French) brackets need AltGr and have no bracket keycode.
+CLOCK_CHARS = {"[": "slower", "]": "faster"}
 
 
 class ViewerApp:
@@ -77,6 +75,8 @@ class ViewerApp:
         self._clock_buttons: list[tuple[pygame.Rect, str]] = []
         self.clock_rect: pygame.Rect | None = None  # the clock panel, once drawn
         self._last_frame: float | None = None
+        self._held: set[int] = set()  # keys down now, so a held R doesn't repeat its toggle
+        self._press_on_clock = False  # a press that began on the clock panel never pans
         self._last_poll = 0.0
         self._fitted_path: str | None = None
         self.quit_requested = False  # set to leave `run()` after the current frame
@@ -173,6 +173,8 @@ class ViewerApp:
     # ---- events ----------------------------------------------------------
 
     def handle(self, ev: pygame.event.Event) -> None:
+        if ev.type == pygame.KEYUP:
+            self._held.discard(ev.key)
         if self._field_event(ev):
             return
         if self.editor is not None and self._editor_event(ev):
@@ -185,12 +187,14 @@ class ViewerApp:
                     or abs(ev.pos[0] - self._press[0]) + abs(ev.pos[1] - self._press[1])
                     > CLICK_SLOP
                 ):
-                    self._dragged = True
-                    self.cam.pan(dx, dy)
+                    self._dragged = True  # too far to be a click
+                    if not self._press_on_clock:
+                        self.cam.pan(dx, dy)
             self.mouse = ev.pos
             self._update_hover()
         elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button in (1, 3):
             self._press, self._dragged = ev.pos, False
+            self._press_on_clock = self._on_clock(ev.pos)
             self.mouse = ev.pos
         elif ev.type == pygame.MOUSEBUTTONUP and ev.button in (1, 3):
             if self._press is not None and not self._dragged:
@@ -201,6 +205,8 @@ class ViewerApp:
             self._update_hover()
         elif ev.type == pygame.KEYDOWN:
             self._key(ev.key, getattr(ev, "unicode", ""), getattr(ev, "mod", 0))
+        elif ev.type == pygame.TEXTINPUT and ev.text in CLOCK_CHARS and self.session.has_clock:
+            self.clock(CLOCK_CHARS[ev.text])
 
     def _field_event(self, ev: pygame.event.Event) -> bool:
         """Typing into the value field, if one is open. True if the event was used for it.
@@ -327,7 +333,7 @@ class ViewerApp:
             if rect.collidepoint(pos):
                 self._navigate(path)
                 return
-        if self.clock_rect is not None and self.clock_rect.collidepoint(pos):
+        if self._on_clock(pos):
             for rect, action in self._clock_buttons:
                 if rect.collidepoint(pos) and not right:
                     self.clock(action)
@@ -358,12 +364,14 @@ class ViewerApp:
                 assert self.hover.node is not None
                 self.open_value_field(str(self.hover.node[1]))
                 return
-        if self.session.has_clock and not mod & (pygame.KMOD_CTRL | pygame.KMOD_ALT):
+        if self.session.has_clock and plain:
             if key == pygame.K_r:
-                self.clock("reset" if mod & pygame.KMOD_SHIFT else "run")
+                if key not in self._held:  # a held key repeats: toggle once per press
+                    self._held.add(key)
+                    self.clock("reset" if mod & pygame.KMOD_SHIFT else "run")
                 return
-            if key in CLOCK_KEYS:
-                self.clock(CLOCK_KEYS[key])
+            if key == pygame.K_SPACE:  # held, it keeps stepping: that one is useful
+                self.clock("step")
                 return
         if key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
             if self.session.up():
@@ -376,6 +384,16 @@ class ViewerApp:
         elif key == pygame.K_x and self.hover.node and self.hover.node[0] == "in":
             if self.session.at_top:
                 self.session.set_input(str(self.hover.node[1]), None)
+
+    def _on_clock(self, pos: tuple[int, int]) -> bool:
+        """Whether `pos` is on the clock panel as last drawn, and the chip still has a clock."""
+        rect = self.clock_rect
+        return rect is not None and self.session.has_clock and bool(rect.collidepoint(pos))
+
+    @property
+    def clock_paused(self) -> bool:
+        """Whether something on top (the game's menus) holds the clock; never in the viewer."""
+        return False
 
     def clock(self, action: str) -> None:
         """A clock control: "step", "run" (also pauses), "reset", "slower" or "faster"."""
@@ -401,8 +419,7 @@ class ViewerApp:
 
     def _update_hover(self) -> None:
         snap = self.session.snapshot
-        on_clock = self.clock_rect is not None and self.clock_rect.collidepoint(self.mouse)
-        if snap is None or not self.in_canvas(self.mouse) or on_clock:
+        if snap is None or not self.in_canvas(self.mouse) or self._on_clock(self.mouse):
             self.hover = Hover()
             return
         p = self.cam.to_layout(self.mouse)
@@ -415,7 +432,7 @@ class ViewerApp:
     def tick(self, now: float | None = None) -> None:
         """Run the clock if it is running, then poll for changed files and reload."""
         now = time.monotonic() if now is None else now
-        if self._last_frame is not None:
+        if self._last_frame is not None and not self.clock_paused:
             self.session.advance(min(now - self._last_frame, MAX_FRAME_DT))
         self._last_frame = now
         if self.watcher is None or now - self._last_poll < POLL_SECONDS:

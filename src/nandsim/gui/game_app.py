@@ -462,7 +462,13 @@ class GameApp(ViewerApp):
 
     # ---- events --------------------------------------------------------------
 
+    @property
+    def clock_paused(self) -> bool:
+        return bool(self.menus)  # the pause menu, and every other one, stops the clock
+
     def handle(self, ev: pygame.event.Event) -> None:
+        if ev.type == pygame.KEYUP:
+            self._held.discard(ev.key)  # menus take the event below; R must not stay "held"
         if self.menus:
             if hasattr(ev, "pos"):
                 self.mouse = ev.pos

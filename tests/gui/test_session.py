@@ -171,6 +171,7 @@ def test_running_advances_with_time_at_the_chosen_speed(bit: tuple[ChipSession, 
     assert s.advance(0.1) == 0  # half a cycle owed
     assert s.advance(0.1) == 1
     assert s.advance(1.0) == 5 and s.cycle == 6
+    assert s.advance(10.2 - 10.0) == 1  # 0.999… cycles owed by float error is still one
     s.change_speed(+1)
     assert s.speed == 10
     s.change_speed(-99)

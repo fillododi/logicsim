@@ -187,6 +187,14 @@ def press(app: ViewerApp, k: int, mod: int = 0) -> None:
     app.handle(pygame.event.Event(pygame.KEYDOWN, key=k, mod=mod, unicode=""))
 
 
+def release(app: ViewerApp, k: int) -> None:
+    app.handle(pygame.event.Event(pygame.KEYUP, key=k, mod=0))
+
+
+def typed(app: ViewerApp, text: str) -> None:
+    app.handle(pygame.event.Event(pygame.TEXTINPUT, text=text))
+
+
 def clock_button(app: ViewerApp, action: str) -> tuple[int, int]:
     return next(r.center for r, a in app._clock_buttons if a == action)
 
@@ -234,15 +242,67 @@ def test_clock_keys(tmp_path: Path) -> None:
     press(app, pygame.K_SPACE)
     assert app.session.cycle == 1 and out_of(app) == 1
     press(app, pygame.K_r)
+    release(app, pygame.K_r)
     assert app.session.running
     press(app, pygame.K_SPACE)  # a step by hand pauses
     assert not app.session.running and app.session.cycle == 2
-    press(app, pygame.K_RIGHTBRACKET)
-    press(app, pygame.K_LEFTBRACKET)
-    press(app, pygame.K_LEFTBRACKET)
+    typed(app, "]")
+    typed(app, "[")
+    typed(app, "[")
     assert app.session.speed == 2
     press(app, pygame.K_r, pygame.KMOD_SHIFT)
+    release(app, pygame.K_r)
     assert app.session.cycle == 0 and out_of(app) is None
+
+
+def test_speed_keys_work_where_brackets_need_altgr(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    # Italian layout: AltGr+è types "[". The keycode is è's and AltGr is held.
+    app.handle(pygame.event.Event(pygame.KEYDOWN, key=0xE8, mod=pygame.KMOD_RALT, unicode="["))
+    typed(app, "[")
+    assert app.session.speed == 2
+
+
+def test_holding_r_toggles_once(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    for _ in range(5):  # the first press, then key repeats while held
+        press(app, pygame.K_r)
+    assert app.session.running
+    release(app, pygame.K_r)
+    press(app, pygame.K_r)
+    assert not app.session.running
+
+
+def test_clock_keys_ignore_ctrl_alt_and_meta(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    for mod in (pygame.KMOD_CTRL, pygame.KMOD_ALT, pygame.KMOD_META):
+        press(app, pygame.K_SPACE, mod)  # Cmd+Space is Spotlight, not a step
+        press(app, pygame.K_r, mod)
+        release(app, pygame.K_r)
+    assert app.session.cycle == 0 and not app.session.running
+
+
+def test_dragging_from_the_clock_panel_never_pans(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    start = clock_button(app, "step")
+    before = (app.cam.ox, app.cam.oy)
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=start, button=1))
+    end = (start[0] - 60, start[1] + 40)
+    app.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=end, rel=(-60, 40), buttons=(1, 0, 0)))
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=end, button=1))
+    assert (app.cam.ox, app.cam.oy) == before
+    assert app.session.cycle == 0  # dragged off the button: no step either
+
+
+def test_an_old_panel_never_swallows_a_click(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    assert app.clock_rect is not None
+    (tmp_path / "Bit.hdl").write_text(
+        "CHIP Bit { IN in, load; OUT out; PARTS: Nand(a=in, b=load, out=out); }"
+    )
+    assert app.session.reload()  # no DFFs now, and no frame drawn since
+    old = app.clock_rect
+    assert not app._on_clock(old.center)  # clicks there reach the circuit again
 
 
 def test_dff_part_does_not_open_and_panel_clicks_stay_on_it(tmp_path: Path) -> None:
