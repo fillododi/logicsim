@@ -606,3 +606,14 @@ Ambiguous spec points and the option chosen. Newest last.
 
 **Consequences:** `ChipSession` owns the clock (`step`, `advance`, `reset_clock`, `toggle_run`, `change_speed`) and is tested without a window. The engine gained `dff_paths`, `dff_outputs`, `dff_state` and `load_dff_state`, and the netlist `gate_paths`. `tick` skips its evaluation when nothing changed since the last one, so a step costs one evaluation, not two. Opening a level builds a new session, so its clock starts at cycle 0. The register levels' briefs and the tour will introduce the controls.
 
+
+## 2026-11-07 — The brief and *Your chips* scroll too
+**Context:** the level list scrolls since 2026-11-06, but a window too short for the list's 5 rows plus the brief cut the brief with no way to read its end, and every exported chip added a row to *Your chips*, pushing the brief further down.
+**Decision:**
+- ***Your chips* shows at most 4 rows** (`CHIPS_MAX_ROWS`) and scrolls by whole rows past that. Its header stays put. A chip just exported scrolls into view.
+- **The brief scrolls** in whatever height is left under the chips, by 3 text lines per wheel notch. It goes back to its top when another level opens. The list's height rule doesn't change: it still leaves the whole brief its room when the window allows, so the brief only scrolls in short windows.
+- **The wheel scrolls what is under the mouse**: the level list, the chips or the brief. Elsewhere it still zooms the canvas. All three views show the same thin bar at the sidebar's right edge, and rows scrolled out are neither drawn nor clickable.
+**Alternatives:**
+- One scroll view for everything under the level list: a long chip list would push the brief out of sight again.
+- Shrinking the level list below 5 rows to fit the brief: the list is how the player moves around, and it already scrolls.
+**Consequences:** `GameApp` gained `brief_scroll`/`brief_view` and `chips_scroll`/`chips_view`, next to `list_scroll`/`list_rect`. `brief_cut` now means "the brief scrolls". The `brief` tour anchor is the visible part of the brief.
