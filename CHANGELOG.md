@@ -18,6 +18,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   chip keeps what its DFFs hold, unless you added or removed parts. The clock stops while a
   menu is open.
 
+### Changed
+
+- **The level brief and *Your chips* scroll.** In a short window, scroll the brief with the
+  mouse wheel to read it to its end. *Your chips* shows four chips at a time and scrolls
+  past that, so a long library no longer pushes the brief off the sidebar.
+
 ## [0.6.0] — 2026-11-07
 
 Milestone 6: arithmetic. Ten new levels teach your chips to count, from adding two bits up
