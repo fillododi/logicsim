@@ -1,0 +1,7 @@
+// AddSub4: Adds, or subtracts as the 4004 does.
+// You may use: Nand, Add4, Xor4, Xor
+CHIP AddSub4 {
+    IN a[4], b[4], cin, sub;
+    OUT out[4], cout;
+    PARTS:
+}

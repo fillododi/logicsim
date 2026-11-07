@@ -137,3 +137,25 @@ parts = ["Nand", "HalfAdder"]
 name = "Inc12"
 group = "03_arith"
 parts = ["Nand", "Add4"]
+
+# The pieces of the 4004's ALU that aren't plain adders: SUB's inverted borrow,
+# rotation through the carry, decimal adjust and the keyboard code.
+[[level]]
+name = "AddSub4"
+group = "03_arith"
+parts = ["Nand", "Add4", "Xor4", "Xor"]
+
+[[level]]
+name = "Rotate4"
+group = "03_arith"
+parts = ["Nand", "Mux", "Mux4"]
+
+[[level]]
+name = "Daa4"
+group = "03_arith"
+parts = ["Nand", "Add4", "And", "Or"]
+
+[[level]]
+name = "Kbp4"
+group = "03_arith"
+parts = ["Nand", "Not", "And", "Or"]

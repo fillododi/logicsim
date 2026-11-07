@@ -1,0 +1,7 @@
+// Daa4: Decimal adjust: keeps a sum a valid decimal digit.
+// You may use: Nand, Add4, And, Or
+CHIP Daa4 {
+    IN in[4], cin;
+    OUT out[4], cout;
+    PARTS:
+}

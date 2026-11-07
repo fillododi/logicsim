@@ -1,0 +1,9 @@
+// Reference solution for AddSub4. Never shown to the player.
+CHIP AddSub4 {
+    IN a[4], b[4], cin, sub;
+    OUT out[4], cout;
+    PARTS:
+    Xor4(a=b, b[0]=sub, b[1]=sub, b[2]=sub, b[3]=sub, out=bb);
+    Xor(a=cin, b=sub, out=c);
+    Add4(a=a, b=bb, cin=c, out=out, cout=cout);
+}

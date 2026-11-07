@@ -1,0 +1,8 @@
+// Reference solution for Rotate4. Never shown to the player.
+CHIP Rotate4 {
+    IN in[4], cin, right;
+    OUT out[4], cout;
+    PARTS:
+    Mux4(a[0]=cin, a[1..3]=in[0..2], b[0..2]=in[1..3], b[3]=cin, sel=right, out=out);
+    Mux(a=in[3], b=in[0], sel=right, out=cout);
+}
