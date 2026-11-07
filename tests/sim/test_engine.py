@@ -224,3 +224,37 @@ def test_dff_state_can_be_read_and_carried_into_another_simulator() -> None:
     fresh.tick()
     fresh.tock()
     assert fresh.get_bits("out") == [0, 1]
+
+
+def test_dff_paths_name_each_dff_in_clock_order() -> None:
+    delay = "CHIP Delay { IN in; OUT out; PARTS: DFF(in=in, out=out); }"
+    lib = ChipLibrary(sources={"Delay": (delay, "Delay.hdl")})
+    src = """CHIP T { IN in; OUT out; PARTS:
+        Delay(in=in, out=m); Nand(a=m, b=m, out=n); DFF(in=n, out=out); }"""
+    s = Simulator(elaborate(parse(src, "T.hdl"), lib))
+    assert s.dff_paths == ["T/Delay#1/DFF#1", "T/DFF#3"]
+    assert s.netlist.gate_paths["Nand"] == ["T/Nand#2"]
+
+
+def test_tick_skips_its_evaluation_when_nothing_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    s = sim(DFF)
+    calls: list[int] = []
+    real_eval = s.eval
+
+    def counted() -> None:
+        calls.append(1)
+        real_eval()
+
+    monkeypatch.setattr(s, "eval", counted)
+    s.set("in", 1)
+    s.tick()
+    s.tock()
+    assert len(calls) == 2  # the set made the tick evaluate; a tock always does
+    s.tick()
+    s.tock()
+    assert len(calls) == 3  # nothing changed since the tock: the tick skipped its eval
+    assert s.get("out") == 1
+    s.set("in", 0)
+    s.tick()
+    s.tock()
+    assert len(calls) == 5 and s.get("out") == 0

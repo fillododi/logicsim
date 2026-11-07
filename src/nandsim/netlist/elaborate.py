@@ -62,6 +62,7 @@ class _Builder:
         self.gate_in: dict[str, list[list[int]]] = {}
         self.gate_out: dict[str, list[list[int]]] = {}
         self.gate_pos: dict[str, list[SourcePos]] = {}
+        self.gate_paths: dict[str, list[str]] = {}
         self.alias: dict[int, int] = {}
         self.wires: dict[str, list[int]] = {}
         self.stack: list[str] = []
@@ -96,6 +97,7 @@ class _Builder:
             self.gate_in[kind] = [[] for _ in prim.inputs]
             self.gate_out[kind] = [[] for _ in prim.outputs]
             self.gate_pos[kind] = []
+            self.gate_paths[kind] = []
         outs = {p: self.nets(1) for p in prim.outputs}
         for k, p in enumerate(prim.inputs):
             self.gate_in[kind][k].append(in_nets[p][0])
@@ -105,6 +107,7 @@ class _Builder:
             self.wires[f"{path}/{p}"] = outs[p]
         assert top_pos is not None
         self.gate_pos[kind].append(top_pos)
+        self.gate_paths[kind].append(path)
         return outs
 
     def _chip(
@@ -481,6 +484,7 @@ def elaborate(top: ChipDef, lib: ChipLibrary) -> Netlist:
         inputs={k: remap(v) for k, v in in_nets.items()},
         outputs={k: remap(v) for k, v in out_nets.items()},
         wires=wires,
+        gate_paths=b.gate_paths,
     )
     netlist.levels = levelize(netlist, PRIMITIVES, b.gate_pos, top.pos)
     return netlist
