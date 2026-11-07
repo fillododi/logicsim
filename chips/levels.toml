@@ -188,3 +188,10 @@ parts = ["Nand", "Register4"]
 name = "Register12"
 group = "04_seq"
 parts = ["Nand", "Register4", "Register8"]
+
+# The 4004's 16 index registers, also used as 8 pairs. addr is an instruction's
+# low digit: pair instructions ignore its bit 0.
+[[level]]
+name = "IndexRegs"
+group = "04_seq"
+parts = ["Nand", "Or", "DMux", "DMux8Way", "Mux4", "Mux8Way4", "Register4"]
