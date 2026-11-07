@@ -12,6 +12,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   one clock cycle earlier. Tests can now run the clock with `tick` and `tock`, and a failing
   check in a clocked test says which cycle it happened in. The levels that use it come next.
   A chip you export can contain a DFF only once a level that uses one is open.
+- **Clock controls.** A chip with DFFs gets a clock panel over its circuit: step one cycle,
+  run and pause at 1 to 1000 cycles a second, and reset, with the cycle count beside them.
+  The keys are Space (step), R (run / pause), Shift+R (reset) and [ ] (speed). Saving your
+  chip keeps what its DFFs hold, as long as they are still in the same place.
 
 ## [0.6.0] — 2026-11-07
 

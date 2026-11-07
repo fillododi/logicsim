@@ -587,3 +587,22 @@ Ambiguous spec points and the option chosen. Newest last.
 
 **Consequences:** export is the only way a chip gets into the exports folder (there is no import), so checking there is enough. A file put there by hand isn't checked; players never edit files. `SaveStore.unlocked_primitives()` is available for the GUI if it ever wants to show which primitives are open.
 
+## 2026-11-07 — Clock controls in the circuit view
+**Context:** milestone 7 asks for clock controls in the GUI, and CLAUDE.md lists step (one tick/tock), run with adjustable speed, pause and reset. Open: where they live, which keys, what reset and a rebuild do to state, and whether the view can stop between a tick and its tock.
+
+**Decision:**
+- **A clock panel** at the top right of the canvas: the cycle count, Reset, Run (Pause while running), Step, and the speed between − and +. It and its help items appear only for chips with DFFs, so the combinational levels are unchanged. Fit leaves room for it, and clicks on it never reach the circuit.
+- **Keys** on the circuit (not in the editor): Space steps one cycle, R runs or pauses, Shift+R resets, `[` and `]` change the speed. Stepping by hand pauses a running clock.
+- **Speeds** 1, 2, 5, 10, 20, 50, 100, 200, 500 and 1000 cycles/s, 5 by default. Each frame runs the cycles the elapsed time is worth, but spends at most 30 ms doing so and counts a stall as 0.25 s at most. A chip too slow for its speed falls behind, and the window stays responsive.
+- **Reset** puts every DFF back to undefined and the cycle to 0, and pauses. The input values stay: the player set them on purpose.
+- **A rebuild keeps each DFF whose place in the hierarchy still exists** (`Reg2/Bit#1/DFF#5`), its stored value, and the cycle count. Places are the part paths the GUI already uses, so a comment or a renamed wire keeps everything, and inserting a part before others moves their places and drops what doesn't line up. Running keeps running; a chip that no longer has DFFs stops.
+- **Whole cycles only.** The view never rests between a tick and its tock, so what the DFFs latched never needs showing. That settles the review note on #38 about exposing latched values.
+
+**Alternatives:**
+- Tick and tock as separate controls, as in nand2tetris: shows the two-phase clock but doubles the presses for no gain in what the levels ask; it can be added later with the latched values drawn on DFFs.
+- Controls in the header: too little room beside long breadcrumbs.
+- Matching DFFs across rebuilds by wire names: names change more often than places, and two DFFs can feed the same names.
+- Reset clearing the inputs too: makes the player re-enter values they meant to keep.
+
+**Consequences:** `ChipSession` owns the clock (`step`, `advance`, `reset_clock`, `toggle_run`, `change_speed`) and is tested without a window. The engine gained `dff_outputs`, `dff_state` and `load_dff_state`. Opening a level builds a new session, so its clock starts at cycle 0. The register levels' briefs and the tour will introduce the controls.
+
