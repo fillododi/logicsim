@@ -600,6 +600,8 @@ class GameApp(ViewerApp):
             return self._brief_rect
         if anchor == "chips":
             return self._chips_rect
+        if anchor == "clock":
+            return self.clock_rect if self.session.has_clock else None
         if anchor == "editor":
             return self.editor_rect
         if anchor == "canvas":

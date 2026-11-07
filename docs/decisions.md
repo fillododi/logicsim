@@ -617,3 +617,17 @@ Ambiguous spec points and the option chosen. Newest last.
 - One scroll view for everything under the level list: a long chip list would push the brief out of sight again.
 - Shrinking the level list below 5 rows to fit the brief: the list is how the player moves around, and it already scrolls.
 **Consequences:** `GameApp` gained `brief_scroll`/`brief_view` and `chips_scroll`/`chips_view`, next to `list_scroll`/`list_rect`. `brief_cut` now means "the brief scrolls". The `brief` tour anchor is the visible part of the brief.
+
+## 2026-11-07 — The register levels
+**Context:** milestone 7 lists Bit, Register4, Register8 and Register12 after the DFF and the clock controls. Still open: the group, the pins, what each level may use, how a `.tst` tells a real register from a wrong one, and how the game introduces the clock.
+**Decision:**
+- **A new group `04_seq`, shown as "Memory"**, after Arithmetic. It will also hold the register file, the PC and the RAM levels.
+- **Pins as in nand2tetris:** `IN in[N], load; OUT out[N]`, with `load` 1 storing `in` at the next clock cycle.
+- **Parts:** Bit may use Nand, Mux and DFF (it is the only level that lists DFF so far). Register4 uses Bit, Register8 uses Register4, and Register12 may use Register4 and Register8. Each level builds on the one before, as the bus levels do.
+- **Tests are scripts that check twice per cycle:** after the `tick` (the output must still be the old value) and after the `tock` (the new one). The after-tick check fails a Bit whose output is taken in front of the DFF, which would otherwise pass every after-tock check. Bit covers every (stored, in, load) transition. Register4 loads all 16 values and holds each against a random `in`. Register8 and Register12 test each bit on its own, the edges, and 24 random cycles. Randomness uses seed 4004. The vectors were generated once and committed, as for the earlier levels.
+- **The tour introduces the clock on Bit** with two steps after the And steps: one on the brief until the chip builds, and one on a new `clock` anchor (the clock panel, only while the chip has a DFF) until a new `clock_step` event (one Step). The tour's "done" bubble now says that more bubbles wait in Memory.
+**Alternatives:**
+- A level for the bare DFF before Bit: a chip that is just one DFF teaches nothing the Bit brief doesn't.
+- Letting every register use Bit directly: Register12 from 12 Bits is a chore, not a puzzle.
+- Tour steps that explain Run and Reset one at a time: the panel is small, and one bubble covers it.
+**Consequences:** `tutorial.ANCHORS` gains `clock` and `EVENTS` gains `clock_step`. A player who finished the tour before this change still sees the two Bit bubbles when they reach Bit. Exports may now use DFF once Bit is open.

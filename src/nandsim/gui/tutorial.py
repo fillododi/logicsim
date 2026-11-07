@@ -41,6 +41,7 @@ ANCHORS = frozenset(
         "results",
         "footer",
         "chips",
+        "clock",
     }
 )
 ANCHOR_KINDS = frozenset({"level", "line", "pin"})
@@ -58,6 +59,7 @@ EVENTS = frozenset(
         "solved",
         "open_level",
         "export",
+        "clock_step",
     }
 )
 

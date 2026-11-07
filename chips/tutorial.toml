@@ -5,12 +5,14 @@
 #   anchor  what the bubble points at (see docs/decisions.md for the list):
 #             levels, level:<Name>, brief, editor, line:<text>, canvas,
 #             pin:<name>, part, wire (the first part-to-part wire), header,
-#             run_button, results, footer, chips (the "Your chips" list)
+#             run_button, results, footer, chips (the "Your chips" list),
+#             clock (the clock panel, once the chip has a DFF)
 #   until   the player action that completes the step:
 #             next (the bubble's Next button), save, build_ok, toggle,
 #             set_value (an input's value typed in; it counts as a toggle too),
 #             open_part, up, run_tests, solved, open_level, open_level:<Name>,
-#             export (a chip exported from the Esc menu)
+#             export (a chip exported from the Esc menu),
+#             clock_step (one cycle run with Step or Space)
 #   text    what the bubble says; blank lines split paragraphs, and lines
 #           indented by four spaces are shown as code
 #
@@ -234,5 +236,26 @@ level = "And"
 anchor = "levels"
 until = "next"
 text = """
-That's the tour. Every chip from here to the CPU is built the same way. Good luck!
+That's the tour for now: the clock gets its own bubbles when you reach Memory. Every chip from here to the CPU is built the same way. Good luck!
+"""
+
+# Memory: the first level with a DFF introduces the clock panel.
+[[step]]
+id = "memory"
+level = "Bit"
+anchor = "brief"
+until = "build_ok"
+text = """
+Bit is your first chip with memory, and the DFF is its new part. Build a Bit with a DFF in it and press Ctrl+S.
+"""
+
+[[step]]
+id = "clock"
+level = "Bit"
+anchor = "clock"
+until = "clock_step"
+text = """
+A chip with a DFF gets a clock. Set in and load, then click Step: one cycle runs, and out shows what the DFF stored. Space steps too, once you have clicked the circuit.
+
+Run plays cycles by itself at the speed beside it, and Reset forgets every stored bit.
 """
