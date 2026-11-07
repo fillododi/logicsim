@@ -1,7 +1,6 @@
 # HalfAdder
 
-Adds two bits. The result can be 0, 1 or 2, so it needs two bits: `sum` is the low
-bit and `carry` the high one.
+Adds two bits. The result can be 0, 1 or 2, so it needs two bits: `sum` is the low bit and `carry` the high one.
 
 | a | b | carry | sum |
 |---|---|---|---|

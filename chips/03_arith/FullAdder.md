@@ -1,7 +1,6 @@
 # FullAdder
 
-Adds three bits: `a`, `b`, and a carry `c` coming from the column to the right. The
-result is 0 to 3, so again `sum` is the low bit and `carry` the high one.
+Adds three bits: `a`, `b`, and a carry `c` coming from the column to the right. The result is 0 to 3, so again `sum` is the low bit and `carry` the high one.
 
 | a | b | c | carry | sum |
 |---|---|---|---|---|
