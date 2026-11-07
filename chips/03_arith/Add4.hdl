@@ -1,0 +1,7 @@
+// Add4: Adds two 4-bit numbers and a carry in.
+// You may use: Nand, FullAdder
+CHIP Add4 {
+    IN a[4], b[4], cin;
+    OUT out[4], cout;
+    PARTS:
+}

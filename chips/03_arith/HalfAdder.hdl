@@ -1,0 +1,7 @@
+// HalfAdder: Adds two bits into a sum and a carry.
+// You may use: Nand, Xor, And
+CHIP HalfAdder {
+    IN a, b;
+    OUT sum, carry;
+    PARTS:
+}

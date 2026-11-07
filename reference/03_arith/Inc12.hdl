@@ -1,0 +1,9 @@
+// Reference solution for Inc12. Never shown to the player.
+CHIP Inc12 {
+    IN in[12];
+    OUT out[12];
+    PARTS:
+    Add4(a=in[0..3], b=false, cin=true, out=out[0..3], cout=c0);
+    Add4(a=in[4..7], b=false, cin=c0, out=out[4..7], cout=c1);
+    Add4(a=in[8..11], b=false, cin=c1, out=out[8..11], cout=c2);
+}

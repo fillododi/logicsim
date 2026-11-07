@@ -1,0 +1,10 @@
+// Reference solution for Inc4. Never shown to the player.
+CHIP Inc4 {
+    IN in[4];
+    OUT out[4];
+    PARTS:
+    HalfAdder(a=in[0], b=true, sum=out[0], carry=c0);
+    HalfAdder(a=in[1], b=c0, sum=out[1], carry=c1);
+    HalfAdder(a=in[2], b=c1, sum=out[2], carry=c2);
+    HalfAdder(a=in[3], b=c2, sum=out[3], carry=c3);
+}

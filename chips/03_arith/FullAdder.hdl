@@ -1,0 +1,7 @@
+// FullAdder: Adds three bits into a sum and a carry.
+// You may use: Nand, HalfAdder, Or
+CHIP FullAdder {
+    IN a, b, c;
+    OUT sum, carry;
+    PARTS:
+}

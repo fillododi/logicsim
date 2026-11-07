@@ -1,0 +1,7 @@
+// Inc4: Adds 1 to a 4-bit number; 15 wraps to 0.
+// You may use: Nand, HalfAdder
+CHIP Inc4 {
+    IN in[4];
+    OUT out[4];
+    PARTS:
+}
