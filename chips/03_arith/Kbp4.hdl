@@ -1,0 +1,7 @@
+// Kbp4: Which one bit is set? 1 to 4, 0 if none, else 15.
+// You may use: Nand, Not, And, Or
+CHIP Kbp4 {
+    IN in[4];
+    OUT out[4];
+    PARTS:
+}

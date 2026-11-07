@@ -1,0 +1,21 @@
+// Reference solution for Kbp4. Never shown to the player.
+CHIP Kbp4 {
+    IN in[4];
+    OUT out[4];
+    PARTS:
+    // two or more keys: both of a pair, or one from each pair
+    And(a=in[0], b=in[1], out=both01);
+    And(a=in[2], b=in[3], out=both23);
+    Or(a=in[0], b=in[1], out=any01);
+    Or(a=in[2], b=in[3], out=any23);
+    And(a=any01, b=any23, out=across);
+    Or(a=both01, b=both23, out=pairs);
+    Or(a=pairs, b=across, out=err);
+    // one key: 1 -> 1, 2 -> 2, 4 -> 3, 8 -> 4
+    Or(a=in[0], b=in[2], out=e0);
+    Or(a=in[1], b=in[2], out=e1);
+    Or(a=e0, b=err, out=out[0]);
+    Or(a=e1, b=err, out=out[1]);
+    Or(a=in[3], b=err, out=out[2]);
+    out[3] = err;
+}

@@ -839,12 +839,16 @@ class GameApp(ViewerApp):
             h += font.get_linesize() + 2 + len(self._exported) * CHIP_ROW_H + 8
         return h + sum(step for *_, step in self._brief_layout()) + BRIEF_BOTTOM
 
+    @property
+    def brief_cols(self) -> int:
+        """How many characters of brief text fit across the sidebar."""
+        return (SIDEBAR - 28) // self.fonts.get(13).size("M")[0]
+
     def _brief_layout(self) -> list[tuple[str, str, pygame.font.Font, int]]:
         """The brief's lines as (text, kind, font, height it takes)."""
         text_font = self.fonts.get(13)
-        cols = (SIDEBAR - 28) // text_font.size("M")[0]
         out = []
-        for line, kind in brief_lines(self.game.current.brief.read_text(), cols):
+        for line, kind in brief_lines(self.game.current.brief.read_text(), self.brief_cols):
             font = {
                 "title": self.fonts.get(16, bold=True),
                 "bold": self.fonts.get(13, bold=True),

@@ -1,0 +1,7 @@
+// Rotate4: Rotates 4 bits and the carry, left or right.
+// You may use: Nand, Mux, Mux4
+CHIP Rotate4 {
+    IN in[4], cin, right;
+    OUT out[4], cout;
+    PARTS:
+}

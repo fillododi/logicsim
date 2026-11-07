@@ -1,0 +1,11 @@
+// Reference solution for Daa4. Never shown to the player.
+CHIP Daa4 {
+    IN in[4], cin;
+    OUT out[4], cout;
+    PARTS:
+    Or(a=in[2], b=in[1], out=mid);
+    And(a=in[3], b=mid, out=over9);
+    Or(a=over9, b=cin, out=adjust);
+    Add4(a=in, b[0]=false, b[1]=adjust, b[2]=adjust, b[3]=false, cin=false, out=out, cout=c);
+    Or(a=c, b=cin, out=cout);
+}

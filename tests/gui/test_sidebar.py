@@ -13,6 +13,7 @@ from pathlib import Path  # noqa: E402
 import pygame  # noqa: E402
 import pytest  # noqa: E402
 
+from nandsim.gui.brief import brief_lines
 from nandsim.gui.game_app import ROW_H, GameApp, clamp_scroll, scroll_into_view  # noqa: E402
 from nandsim.gui.saves import SaveStore  # noqa: E402
 from nandsim.testing import load_levels  # noqa: E402
@@ -188,3 +189,11 @@ def test_opening_a_level_scrolls_it_into_view(tmp_path: Path) -> None:
     app.open_level(next(lv for lv in levels if lv.name == "DMux8Way"))
     app.render(pygame.Surface(app.size))
     assert "DMux8Way" in shown(app)
+
+
+def test_every_brief_table_fits_the_sidebar(tmp_path: Path) -> None:
+    """A table row too wide for the sidebar is cut, and loses its last columns."""
+    cols = new_app(tmp_path).brief_cols
+    for lv in load_levels():
+        wide = [t for t, k in brief_lines(lv.brief.read_text(), 1000) if k == "table"]
+        assert all(len(t) <= cols for t in wide), (lv.name, cols, max(wide, key=len))
