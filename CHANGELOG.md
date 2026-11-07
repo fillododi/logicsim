@@ -15,6 +15,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   adders: AddSub4 subtracts with the 4004's inverted borrow, Rotate4 rotates through the carry
   (`RAL`, `RAR`), Daa4 keeps a sum a decimal digit (`DAA`), and Kbp4 turns a key row into a
   number (`KBP`).
+- **The ALU.** The last Arithmetic level puts the 4004's accumulator instructions together:
+  16 operations, chosen by a 4-bit `op`, with the new carry and a zero flag. It's the
+  biggest chip yet, built from the levels before it.
 
 ## [0.5.0] — 2026-11-06
 

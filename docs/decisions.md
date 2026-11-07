@@ -536,3 +536,24 @@ Ambiguous spec points and the option chosen. Newest last.
 **Consequences:**
 - The ALU level can use these four chips as parts, so it's mostly about choosing results by `op`.
 - The Intel manual's URL was unreachable, so these semantics rest on the pyntel4004 docs, which quote it. They should be checked against the manual if it turns up.
+
+## 2026-11-07 — The 4004 ALU: pins and op codes
+**Context:** the ALU is the last Arithmetic level, and its interface is the hardest one to change later. The milestone 8 CPU decoder, the instruction-level emulator in project 2, and players' saves will all depend on it. The analysis proposed the interface below and the user went ahead with it.
+
+**Decision:**
+- **Pins:** `IN a[4], b[4], cin, op[4]; OUT out[4], cout, zr;`. `a` is the accumulator, `b` a register or RAM, and `cin` the carry flag. `out` and `cout` are the new accumulator and carry, and `zr` is `out == 0`.
+- **op codes:** 0–12 are the low digit of the accumulator group `F0`–`FC`: CLB, CLC, IAC, CMC, CMA, RAL, RAR, TCC, DAC, TCS, STC, DAA, KBP. The CPU can pass that digit straight in. 13 is LD (`out = b`, carry kept), in the slot of DCL, which changes neither A nor CY. 14 is ADD and 15 SUB, in the two codes after `FD` that the 4004 doesn't use. ADM and SBM are ADD and SUB with `b` from RAM.
+- **Semantics** are those of the four part levels before it, plus: IAC `a+1` with carry out; DAC `a+15`, whose carry is 1 unless `a` was 0 (no borrow); CMC `~cin`; CMA `~a`, carry kept; TCC `out = cin`, carry 0; TCS `9 + cin`, carry 0; KBP keeps the carry.
+- **LD in the ALU** puts every accumulator write through `out`. LD, LDM, XCH, RDM, RDR and RD0–RD3 put their value on `b` and use op 13. Instructions that don't write A (DCL, WRM, …) just don't load the accumulator.
+- **`zr` is a convenience, not the 4004's zero test.** The 4004 has no zero flag: JCN tests the accumulator as it is. The CPU should test its accumulator register (Or4Way and Not), not this pin, because the ALU's output at JCN time comes from whatever `op` is applied then. The pin is there so the milestone's "zero and carry flags" can be tested at the ALU.
+- **Parts:** Nand, Not, Not4, Or4Way, Mux4, Mux8Way4, Add4 and the four part levels. Mux is left out on purpose: the hint points at carrying a carry in bit 0 of a 4-bit bus, so two Mux8Way4s choose it.
+- **Tests (5,856 checks):** every `a` and `cin` for each op, with `b` random (seed 4004), and every `a`, `b` and `cin` for LD, ADD and SUB, with `out`, `cout` and `zr` checked on each row. They are generated from a model that reuses the part levels' model, with spot checks from the 4004 docs (DAC 0 → 15 with carry 0, TCS, SUB, IAC overflow). These wrong ALUs each fail: RAL and RAR swapped, ADD as SUB, DAC's carry as a borrow, TCS backwards, `zr` from `a` or inverted, KBP, CLC or DAA clearing or keeping the carry wrongly, CMC keeping it, LD passing `a`, TCC giving 1, IAC without a carry, STC as CLC, and `op[3]` ignored.
+
+**Alternatives:**
+- nand2tetris-style control bits instead of `op`: DAA, KBP and TCS don't fit them, and the CPU decoder would have to map every instruction.
+- op 13 as DCL passing `a` through: no use to the ALU, and LD and the reads would need their own mux into the accumulator.
+- No `zr` pin: closer to the real chip, but the milestone asks for the flags at the ALU.
+
+**Consequences:**
+- The reference is 1,319 NANDs at depth 42, four times the largest chip so far. Nearly 450 of them are the two Mux8Way4s that choose the 1-bit carry. It simulates at about 6.5k evaluations/s (8.5 M gate-evaluations/s, the same rate per gate as the bus chips). A builtin ALU, with its equivalence test, is the option if the CPU in milestone 8 needs the speed.
+- Its circuit is dense but readable at the top level: 14 parts, inputs on the left, `out`, `cout` and `zr` on the right.

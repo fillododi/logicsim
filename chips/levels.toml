@@ -159,3 +159,10 @@ parts = ["Nand", "Add4", "And", "Or"]
 name = "Kbp4"
 group = "03_arith"
 parts = ["Nand", "Not", "And", "Or"]
+
+# The 4004's ALU: every accumulator operation, chosen by op. Ops 0-12 are the
+# low digit of the instructions F0-FC, 13 is LD, 14 ADD and 15 SUB.
+[[level]]
+name = "ALU"
+group = "03_arith"
+parts = ["Nand", "Not", "Not4", "Or4Way", "Mux4", "Mux8Way4", "Add4", "AddSub4", "Rotate4", "Daa4", "Kbp4"]
