@@ -1,0 +1,7 @@
+// RAMBank: A bank of four 4002 chips, picked by addr[6..7].
+// You may use: Nand, DMux4Way, Mux4Way4, RAM4002
+CHIP RAMBank {
+    IN in[4], addr[8], status, load;
+    OUT out[4];
+    PARTS:
+}

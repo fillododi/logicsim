@@ -1,0 +1,7 @@
+// RAM8: Eight 4-bit characters; out reads the one at addr, and load writes in there.
+// You may use: Nand, DMux8Way, Mux8Way4, Register4
+CHIP RAM8 {
+    IN in[4], addr[3], load;
+    OUT out[4];
+    PARTS:
+}

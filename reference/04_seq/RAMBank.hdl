@@ -1,0 +1,12 @@
+// Reference solution for RAMBank. Never shown to the player.
+CHIP RAMBank {
+    IN in[4], addr[8], status, load;
+    OUT out[4];
+    PARTS:
+    DMux4Way(in=load, sel=addr[6..7], a=l0, b=l1, c=l2, d=l3);
+    RAM4002(in=in, addr=addr[0..5], status=status, load=l0, out=c0);
+    RAM4002(in=in, addr=addr[0..5], status=status, load=l1, out=c1);
+    RAM4002(in=in, addr=addr[0..5], status=status, load=l2, out=c2);
+    RAM4002(in=in, addr=addr[0..5], status=status, load=l3, out=c3);
+    Mux4Way4(a=c0, b=c1, c=c2, d=c3, sel=addr[6..7], out=out);
+}

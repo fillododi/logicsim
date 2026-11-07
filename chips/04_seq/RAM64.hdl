@@ -1,0 +1,7 @@
+// RAM64: 64 4-bit characters; out reads the one at addr, and load writes in there.
+// You may use: Nand, DMux8Way, Mux8Way4, RAM8
+CHIP RAM64 {
+    IN in[4], addr[6], load;
+    OUT out[4];
+    PARTS:
+}

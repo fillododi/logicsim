@@ -25,6 +25,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   4-bit register, or a pair of them as 8 bits, picked by the low digit of an instruction.
 - **PC**, the 4004's program counter and its 3-level address stack: count, jump, call and
   return, with a fourth nested call overwriting the oldest return address, as on the real chip.
+- **RAM levels: RAM8, RAM64, RAM4002 and RAMBank.** Data memory in 4-bit characters, from
+  eight characters up to a bank of four 4002 chips, each with 4 registers of 16 main and 4
+  status characters, addressed the way the 4004's `SRC` instruction does.
 
 ### Changed
 
