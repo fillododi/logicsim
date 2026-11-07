@@ -28,9 +28,28 @@ expect out 1
 | `table <inputs> \| <outputs>` | Starts a truth table. Each following row lists input values, `\|`, then expected outputs. For each row the runner sets the inputs, evaluates, and checks the outputs. `end` closes the table. |
 | `set <pin> <value>` | Sets an input pin. |
 | `eval` | Propagates the inputs through the chip. |
+| `tick` | First half of a clock cycle: evaluates, then every DFF stores its input. Outputs don't change yet. |
+| `tock` | Second half: every DFF outputs what it stored at the last `tick`, then the chip evaluates. |
 | `expect <pin> <value>` | Checks an output (or input) pin. Each `expect`, and each output in a table row, is one check. |
 
-`tick` and `tock`, for sequential chips, arrive in milestone 7.
+A full clock cycle is `tick` then `tock`. Inputs set before the `tick` are what the DFFs store:
+
+```
+// Bit: load a 1, then hold it with load off
+chip Bit
+set in 1
+set load 1
+tick
+tock
+expect out 1
+set in 0
+set load 0
+tick
+tock
+expect out 1
+```
+
+A table row only sets, evaluates and checks: it never ticks. Every DFF starts undefined.
 
 ## Values
 
@@ -52,6 +71,15 @@ A failing check names its position, the pin, the expected value, and the actual 
 
 ```
 chips/01_gates/Xor.tst:6:13: out: expected 1, got 0 (inputs a=1 b=0)
+```
+
+In a script that uses `tick` or `tock`, a failure also says when it happened: the number of
+finished cycles, and `after tick` when it falls between a `tick` and its `tock`.
+
+```
+Bit.tst:7:1: out: expected 0, got 1 (cycle 1)
+Bit.tst:5:1: out: expected 1, got undefined (cycle 0 after tick)
+Bit.tst:9:11: out: expected 0, got 1 (inputs in=0 load=1, cycle 1)
 ```
 
 An output that has undefined bits prints as `undefined`, or as `0b1x0x` when the expected value was written in binary.

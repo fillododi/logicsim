@@ -16,7 +16,16 @@ from nandsim.netlist import ChipLibrary, Primitive, elaborate
 from nandsim.paths import data_root, default_save_dir, exports_dir
 from nandsim.sim import Simulator
 from nandsim.testing.levels import Level, exported_chips, find_level, load_levels
-from nandsim.testing.tst import EvalStep, ExpectStep, SetStep, TstScript, Value, parse_tst
+from nandsim.testing.tst import (
+    EvalStep,
+    ExpectStep,
+    SetStep,
+    TickStep,
+    TockStep,
+    TstScript,
+    Value,
+    parse_tst,
+)
 
 
 @dataclass(frozen=True)
@@ -144,8 +153,14 @@ def _format(value: int | None, bits: list[int | None], like: Value) -> str:
     return str(value)
 
 
+def _when(sim: Simulator) -> str:
+    """The clock time of a check, e.g. `cycle 3` or `cycle 3 after tick`."""
+    return f"cycle {sim.cycle}" + (" after tick" if sim.mid_cycle else "")
+
+
 def _run_steps(script: TstScript, sim: Simulator, result: TstResult) -> None:
     nl = sim.netlist
+    clocked = any(isinstance(s, TickStep | TockStep) for s in script.steps)
     for step in script.steps:
         if isinstance(step, SetStep):
             if step.pin not in nl.inputs:
@@ -154,6 +169,10 @@ def _run_steps(script: TstScript, sim: Simulator, result: TstResult) -> None:
             sim.set(step.pin, step.value.encode(len(nl.inputs[step.pin]), step.pin))
         elif isinstance(step, EvalStep):
             sim.eval()
+        elif isinstance(step, TickStep):
+            sim.tick()
+        elif isinstance(step, TockStep):
+            sim.tock()
         elif isinstance(step, ExpectStep):
             nets = nl.outputs.get(step.pin) or nl.inputs.get(step.pin)
             if nets is None:
@@ -165,7 +184,10 @@ def _run_steps(script: TstScript, sim: Simulator, result: TstResult) -> None:
             got = sim.get(step.pin)
             if got != want:
                 shown = _format(got, sim.get_bits(step.pin), step.value)
-                where = f" (inputs {step.context})" if step.context else ""
+                notes = [f"inputs {step.context}"] if step.context else []
+                if clocked:
+                    notes.append(_when(sim))
+                where = f" ({', '.join(notes)})" if notes else ""
                 result.failures.append(
                     Failure(step.pos, f"{step.pin}: expected {step.value.text}, got {shown}{where}")
                 )

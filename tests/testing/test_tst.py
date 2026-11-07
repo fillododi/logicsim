@@ -7,8 +7,10 @@ from pathlib import Path
 import pytest
 
 from nandsim.hdl import HdlError
+from nandsim.netlist import ChipLibrary
 from nandsim.testing import Impl, exported_chips, load_levels, parse_pin_value, parse_tst, run_tst
-from nandsim.testing.tst import EvalStep, ExpectStep, SetStep
+from nandsim.testing.runner import run_script
+from nandsim.testing.tst import EvalStep, ExpectStep, SetStep, TickStep, TockStep
 
 NOT_STUB = "CHIP Not { IN in; OUT out; PARTS: }"
 NOT_REF = "CHIP Not { IN in; OUT out; PARTS: Nand(a=in, b=in, out=out); }"
@@ -80,10 +82,10 @@ def test_value_bases(text: str, width: int, bits: int) -> None:
         ("chip X\ntable a | o\n 0 1\nend\n",
          "X.tst:3:2: error: table row needs '|' between inputs and outputs"),
         ("chip X\ntable a | o\n 0 | 1\n", "X.tst:2:1: error: table is never closed: missing 'end'"),
-        ("chip X\ntick\n", "X.tst:2:1: error: 'tick' is for sequential chips, which arrive in "
-         "milestone 7"),
+        ("chip X\ntick 2\n", "X.tst:2:1: error: usage: tick"),
+        ("chip X\ntock now\n", "X.tst:2:1: error: usage: tock"),
         ("chip X\nfrob\n", "X.tst:2:1: error: unknown command 'frob' (expected chip, table, set, "
-         "eval, expect)"),
+         "eval, tick, tock, expect)"),
         ("// nothing\n", "X.tst:1:1: error: empty test: it must start with 'chip <Name>'"),
     ],
 )  # fmt: skip
@@ -156,6 +158,15 @@ def test_only_allowed_parts(root: Path, tmp_path: Path) -> None:
     assert r.error is not None
     assert str(r.error).endswith(
         "1:35: error: 'Buf' is not allowed in this level; Not may use: Nand"
+    )
+
+
+def test_dff_needs_the_level_to_allow_it(root: Path, tmp_path: Path) -> None:
+    impl = save(tmp_path, "CHIP Not { IN in; OUT out; PARTS: DFF(in=in, out=out); }")
+    r = run_tst(root / "chips" / "g" / "Not.tst", impl, root)
+    assert r.error is not None
+    assert str(r.error).endswith(
+        "1:35: error: 'DFF' is not allowed in this level; Not may use: Nand"
     )
 
 
@@ -245,3 +256,57 @@ def test_typed_pin_values_report_tst_messages(text: str, width: int, message: st
     with pytest.raises(HdlError) as e:
         parse_pin_value(text, width, "a")
     assert e.value.message == message
+
+
+# A one-bit register: Mux(prev, in, load) feeding a DFF whose output loops back.
+BIT = """CHIP Bit { IN in, load; OUT out; PARTS:
+    Nand(a=load, b=load, out=nl); Nand(a=prev, b=nl, out=x);
+    Nand(a=in, b=load, out=y); Nand(a=x, b=y, out=d);
+    DFF(in=d, out=prev, out=out); }"""
+
+
+def run_bit(tst: str) -> list[str]:
+    lib = ChipLibrary(sources={"Bit": (BIT, "Bit.hdl")})
+    result = run_script(parse_tst(tst, "Bit.tst"), lib, None)
+    assert result.error is None
+    return [str(f) for f in result.failures]
+
+
+def test_tick_and_tock_parse_to_steps() -> None:
+    s = parse_tst("chip X\ntick\ntock // a full cycle\n", "X.tst")
+    assert [type(step) for step in s.steps] == [TickStep, TockStep]
+
+
+def test_sequential_script_passes() -> None:
+    tst = """chip Bit
+set in 1
+set load 1
+tick
+tock
+expect out 1
+set in 0
+set load 0
+tick
+tock
+expect out 1
+"""
+    assert run_bit(tst) == []
+
+
+def test_clocked_failures_name_the_cycle() -> None:
+    tst = """chip Bit
+set in 1
+set load 1
+tick
+expect out 1
+tock
+expect out 0
+table in load | out
+    0 1 | 0
+end
+"""
+    assert run_bit(tst) == [
+        "Bit.tst:5:1: out: expected 1, got undefined (cycle 0 after tick)",
+        "Bit.tst:7:1: out: expected 0, got 1 (cycle 1)",
+        "Bit.tst:9:11: out: expected 0, got 1 (inputs in=0 load=1, cycle 1)",
+    ]

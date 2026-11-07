@@ -3,6 +3,10 @@
 Each net has two boolean planes: `known` (is the value defined?) and `value`
 (meaningful only where known; kept False elsewhere). NAND follows Kleene logic:
 a known 0 on any input forces a known 1, even if the other input is undefined.
+
+DFFs are clocked: `tick` evaluates and latches every DFF's input, `tock` puts the
+latched values on the DFF outputs and evaluates again, so `out(t) = in(t-1)`.
+Both are one vectorized copy over all DFFs. DFFs start undefined.
 """
 
 from __future__ import annotations
@@ -36,6 +40,14 @@ class Simulator:
         self.known = np.zeros(netlist.num_nets, dtype=bool)
         self.known[[FALSE_NET, TRUE_NET]] = True
         self.value[TRUE_NET] = True
+        dff = netlist.gates.get("DFF")
+        empty = np.zeros(0, dtype=np.int64)
+        self._dff_in = dff.inputs[0] if dff else empty
+        self._dff_out = dff.outputs[0] if dff else empty
+        self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
+        self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
+        self.cycle = 0  # completed clock cycles (tocks) since the start or the last reset
+        self.mid_cycle = False  # True between a tick and its tock
 
     # ---- inputs and outputs -------------------------------------------
 
@@ -83,6 +95,39 @@ class Simulator:
                 for idx, (v, k) in zip(op.outputs, outs, strict=True):
                     value[idx] = v
                     known[idx] = k
+
+    def tick(self) -> None:
+        """First half of a clock cycle: evaluate, then every DFF latches its input."""
+        self.eval()
+        self._latch_value = self.value[self._dff_in]
+        self._latch_known = self.known[self._dff_in]
+        self.mid_cycle = True
+
+    def tock(self) -> None:
+        """Second half: DFF outputs take the values latched at the last tick, then evaluate.
+
+        Before any tick the latches hold undefined, so a lone tock leaves DFFs undefined.
+        """
+        self.value[self._dff_out] = self._latch_value
+        self.known[self._dff_out] = self._latch_known
+        self.eval()
+        self.cycle += 1
+        self.mid_cycle = False
+
+    def reset(self) -> None:
+        """Back to power-on: every input, wire and DFF undefined, cycle 0."""
+        self.value[:] = False
+        self.known[:] = False
+        self.known[[FALSE_NET, TRUE_NET]] = True
+        self.value[TRUE_NET] = True
+        self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
+        self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
+        self.cycle = 0
+        self.mid_cycle = False
+
+    @property
+    def dff_count(self) -> int:
+        return len(self._dff_out)
 
     # ---- helpers -------------------------------------------------------
 

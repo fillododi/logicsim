@@ -1,7 +1,8 @@
 """The primitive table: chips implemented by the engine itself rather than in HDL.
 
-Elaboration and the engine look primitives up here instead of hard-wiring Nand,
-so DFF (milestone 7) and Python builtins can be added as new rows.
+Elaboration and the engine look primitives up here instead of hard-wiring them,
+so Python builtins can be added as new rows. `Nand` is combinational; `DFF` is
+sequential: levelization leaves it out, and the engine updates it on the clock.
 """
 
 from __future__ import annotations
@@ -24,4 +25,5 @@ class Primitive:
 
 PRIMITIVES: dict[str, Primitive] = {
     "Nand": Primitive("Nand", inputs=("a", "b"), outputs=("out",)),
+    "DFF": Primitive("DFF", inputs=("in",), outputs=("out",), sequential=True),
 }

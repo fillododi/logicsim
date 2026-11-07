@@ -1,7 +1,8 @@
 """Parser for the `.tst` test format (see docs/tst.md).
 
 A script names its chip, then lists steps. A `table` block is shorthand: each row
-sets the inputs, evaluates, and checks the outputs.
+sets the inputs, evaluates, and checks the outputs. `tick` and `tock` are the two
+halves of a clock cycle, for chips with DFFs.
 """
 
 from __future__ import annotations
@@ -46,6 +47,16 @@ class EvalStep:
 
 
 @dataclass(frozen=True)
+class TickStep:
+    pos: SourcePos
+
+
+@dataclass(frozen=True)
+class TockStep:
+    pos: SourcePos
+
+
+@dataclass(frozen=True)
 class ExpectStep:
     pin: str
     value: Value
@@ -53,7 +64,7 @@ class ExpectStep:
     context: str = ""  # e.g. "a=1 b=0" for a table row
 
 
-Step = SetStep | EvalStep | ExpectStep
+Step = SetStep | EvalStep | TickStep | TockStep | ExpectStep
 
 
 @dataclass(frozen=True)
@@ -183,13 +194,16 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
         elif cmd == "expect":
             _arity(head, args, 2, "expect <pin> <value>")
             steps.append(ExpectStep(args[0].text, parse_value(args[1], True), head.pos))
-        elif cmd in ("tick", "tock"):
-            raise HdlError(
-                f"'{cmd}' is for sequential chips, which arrive in milestone 7", head.pos
-            )
+        elif cmd == "tick":
+            _arity(head, args, 0, "tick")
+            steps.append(TickStep(head.pos))
+        elif cmd == "tock":
+            _arity(head, args, 0, "tock")
+            steps.append(TockStep(head.pos))
         else:
             raise HdlError(
-                f"unknown command '{cmd}' (expected chip, table, set, eval, expect)", head.pos
+                f"unknown command '{cmd}' (expected chip, table, set, eval, tick, tock, expect)",
+                head.pos,
             )
 
     if header is not None:

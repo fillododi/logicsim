@@ -123,6 +123,20 @@ ERRORS = [
         "Top.hdl:1:55: error: combinational loop (a signal depends on itself without a DFF): "
         "y -> x -> y",
     ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: DFF(d=a, out=o); }",
+        "Top.hdl:1:36: error: DFF has no pin 'd' (its pins are: in, out)",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: DFF(out=o); }",
+        "Top.hdl:1:32: error: input pin 'in' of DFF is not connected",
+    ),
+    (  # a DFF elsewhere in the chip doesn't excuse a loop that skips it
+        "CHIP Top { IN a; OUT o; PARTS: DFF(in=a, out=w); Nand(a=w, b=x, out=x);"
+        " Nand(a=x, b=x, out=o); }",
+        "Top.hdl:1:50: error: combinational loop (a signal depends on itself without a DFF): "
+        "x -> x",
+    ),
 ]
 
 
