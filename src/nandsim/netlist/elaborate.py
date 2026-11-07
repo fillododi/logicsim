@@ -1,13 +1,27 @@
 """Elaboration: flattens a chip hierarchy into a bit-level `Netlist` of primitives.
 
-Each chip output bit and internal wire bit first gets a *placeholder* net. When a
-part's output is connected to it, the placeholder is aliased to the part's real
-output net; all aliases are resolved once at the end. This lets parts appear in
-any order in PARTS, as in hardware.
+Each distinct chip is compiled once into a `_Template`: its flattened gates and
+wires in a numbering of its own, where nets 0 and 1 are the constants, then come
+its input bits, then its internal nets. A part is instantiated by giving the
+part's internal nets a fresh block in the parent and remapping the part's
+template with one numpy index per array, so a chip used 4,000 times in a RAM is
+checked and wired once, not 4,000 times. Templates are cached per `ChipLibrary`
+and are valid exactly as long as its parse cache.
+
+Inside one chip, each output bit and internal wire bit first gets a *placeholder*
+net. When a part's output is connected to it, the placeholder is aliased to the
+part's real output net; aliases are resolved, and placeholders dropped, when the
+chip's template is finished. This lets parts appear in any order in PARTS, as in
+hardware.
+
+`Netlist.wires` and `Netlist.gate_paths` are lazy views over the template tree:
+a DataRAM has over a million wire paths, and the GUI looks up a few at a time.
 """
 
 from __future__ import annotations
 
+import weakref
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -35,6 +49,86 @@ class _Scope:
     labels: dict[str, tuple[Part, Interface]] = field(default_factory=dict)
 
 
+@dataclass
+class _Template:
+    """One chip, flattened and checked once, in its own net numbering.
+
+    Nets 0 and 1 are the constants, `2 .. 2 + input_bits - 1` the input pins in
+    declaration order, the rest its internal nets (every gate output inside it).
+    `parts` maps each part's path segment (`Nand#2`) to the part's template and the
+    map from the part's nets to this chip's nets. `wires` holds only this chip's
+    own signals, or a primitive's pins. `gate_pos[kind][g]` is the PARTS line that
+    holds gate g. All arrays are read-only: templates are shared between netlists.
+    """
+
+    name: str
+    primitive: bool
+    num_nets: int
+    input_bits: int
+    outputs: dict[str, np.ndarray]
+    gates: dict[str, GateArrays]
+    gate_pos: dict[str, list[SourcePos]]
+    wires: dict[str, np.ndarray]
+    parts: dict[str, tuple[_Template, np.ndarray]]
+    wire_count: int  # entries in `wires` here and in every part below
+
+
+def _frozen(a: np.ndarray) -> np.ndarray:
+    a.flags.writeable = False
+    return a
+
+
+def _primitive_template(prim: Primitive) -> _Template:
+    n_in, n_out = len(prim.inputs), len(prim.outputs)
+    ins = [_frozen(np.array([2 + k], dtype=np.int64)) for k in range(n_in)]
+    outs = [_frozen(np.array([2 + n_in + k], dtype=np.int64)) for k in range(n_out)]
+    pins = dict(zip(prim.inputs, ins, strict=True)) | dict(zip(prim.outputs, outs, strict=True))
+    return _Template(
+        name=prim.name,
+        primitive=True,
+        num_nets=2 + n_in + n_out,
+        input_bits=n_in,
+        outputs=dict(zip(prim.outputs, outs, strict=True)),
+        gates={prim.name: GateArrays(inputs=ins, outputs=outs)},
+        gate_pos={},  # a primitive is never the top chip: its parent supplies the line
+        wires=pins,
+        parts={},
+        wire_count=len(pins),
+    )
+
+
+_PRIMITIVE_TEMPLATES = {name: _primitive_template(p) for name, p in PRIMITIVES.items()}
+
+# Compiled chips per library, keyed by the identity of the parsed `ChipDef` (the
+# library hands out one per name). Weak, so a dropped library drops its templates.
+_CACHES: weakref.WeakKeyDictionary[ChipLibrary, dict[int, tuple[ChipDef, _Template]]] = (
+    weakref.WeakKeyDictionary()
+)
+
+
+class _Compiler:
+    """Builds templates depth first, reusing the library's cache."""
+
+    def __init__(self, lib: ChipLibrary) -> None:
+        self.lib = lib
+        self.cache = _CACHES.setdefault(lib, {})
+        self.stack: list[str] = []  # chips being compiled, outermost first
+
+    def template(self, target: ChipDef | Primitive) -> _Template:
+        if isinstance(target, Primitive):
+            return _PRIMITIVE_TEMPLATES[target.name]
+        hit = self.cache.get(id(target))
+        if hit is not None and hit[0] is target:
+            return hit[1]
+        self.stack.append(target.name)
+        try:
+            t = _Builder(self, target).build()
+        finally:
+            self.stack.pop()
+        self.cache[id(target)] = (target, t)
+        return t
+
+
 def _bit_ranges(bits: list[int]) -> str:
     """[0, 1, 2, 5] -> '0..2, 5'."""
     out: list[str] = []
@@ -56,69 +150,27 @@ def _verb(bits: list[int]) -> str:
 
 
 class _Builder:
-    def __init__(self, lib: ChipLibrary) -> None:
-        self.lib = lib
+    """Compiles one chip into a `_Template`, given its parts' templates."""
+
+    def __init__(self, compiler: _Compiler, chip: ChipDef) -> None:
+        self.compiler = compiler
+        self.lib = compiler.lib
+        self.chip = chip
         self.next_net = 2
-        self.gate_in: dict[str, list[list[int]]] = {}
-        self.gate_out: dict[str, list[list[int]]] = {}
-        self.gate_pos: dict[str, list[SourcePos]] = {}
-        self.gate_paths: dict[str, list[str]] = {}
         self.alias: dict[int, int] = {}
-        self.wires: dict[str, list[int]] = {}
-        self.stack: list[str] = []
+        self.parts: list[tuple[str, Part, _Template, np.ndarray]] = []
 
     def nets(self, n: int) -> list[int]:
         start = self.next_net
         self.next_net += n
         return list(range(start, start + n))
 
-    # ---- instantiation -------------------------------------------------
+    # ---- the chip ------------------------------------------------------
 
-    def instantiate(
-        self,
-        target: ChipDef | Primitive,
-        path: str,
-        in_nets: dict[str, list[int]],
-        top_pos: SourcePos | None,
-    ) -> dict[str, list[int]]:
-        if isinstance(target, Primitive):
-            return self._primitive(target, path, in_nets, top_pos)
-        return self._chip(target, path, in_nets, top_pos)
-
-    def _primitive(
-        self,
-        prim: Primitive,
-        path: str,
-        in_nets: dict[str, list[int]],
-        top_pos: SourcePos | None,
-    ) -> dict[str, list[int]]:
-        kind = prim.name
-        if kind not in self.gate_in:
-            self.gate_in[kind] = [[] for _ in prim.inputs]
-            self.gate_out[kind] = [[] for _ in prim.outputs]
-            self.gate_pos[kind] = []
-            self.gate_paths[kind] = []
-        outs = {p: self.nets(1) for p in prim.outputs}
-        for k, p in enumerate(prim.inputs):
-            self.gate_in[kind][k].append(in_nets[p][0])
-            self.wires[f"{path}/{p}"] = in_nets[p]
-        for k, p in enumerate(prim.outputs):
-            self.gate_out[kind][k].append(outs[p][0])
-            self.wires[f"{path}/{p}"] = outs[p]
-        assert top_pos is not None
-        self.gate_pos[kind].append(top_pos)
-        self.gate_paths[kind].append(path)
-        return outs
-
-    def _chip(
-        self,
-        chip: ChipDef,
-        path: str,
-        in_nets: dict[str, list[int]],
-        top_pos: SourcePos | None,
-    ) -> dict[str, list[int]]:
-        self.stack.append(chip.name)
-        scope = _Scope(chip, signals=dict(in_nets))
+    def build(self) -> _Template:
+        chip = self.chip
+        scope = _Scope(chip, signals={p.name: self.nets(p.width) for p in chip.inputs})
+        input_bits = self.next_net - 2
         for o in chip.outputs:
             scope.signals[o.name] = self.nets(o.width)
             scope.driven[o.name] = [None] * o.width
@@ -126,8 +178,8 @@ class _Builder:
         # Pass 1: resolve every part and create the internal wires its outputs drive.
         resolved: list[tuple[ChipDef | Primitive, Interface]] = []
         for part in chip.parts:
-            if part.chip in self.stack:
-                chain = " -> ".join([*self.stack, part.chip])
+            if part.chip in self.compiler.stack:
+                chain = " -> ".join([*self.compiler.stack, part.chip])
                 raise HdlError(f"circular dependency between chips: {chain}", part.pos)
             target = self.lib.resolve(part.chip, part.pos)
             iface = interface_of(target)
@@ -167,7 +219,7 @@ class _Builder:
         for index, (part, (target, iface)) in enumerate(
             zip(chip.parts, resolved, strict=True), start=1
         ):
-            self._part(scope, part, target, iface, f"{path}/{part.chip}#{index}", top_pos)
+            self._part(scope, part, target, iface, f"{part.chip}#{index}")
         for a in chip.assigns:
             self._assign(scope, a)
 
@@ -183,10 +235,7 @@ class _Builder:
                     )
                 raise HdlError(msg, o.pos)
 
-        for name, nets in scope.signals.items():
-            self.wires[f"{path}/{name}"] = nets
-        self.stack.pop()
-        return {o.name: scope.signals[o.name] for o in chip.outputs}
+        return self._finish(scope, input_bits)
 
     def _part(
         self,
@@ -194,8 +243,7 @@ class _Builder:
         part: Part,
         target: ChipDef | Primitive,
         iface: Interface,
-        path: str,
-        top_pos: SourcePos | None,
+        seg: str,
     ) -> None:
         pin_nets: dict[str, list[int | None]] = {p: [None] * w for p, w in iface.inputs.items()}
         outputs: list[tuple[PinRef, PinRef | Const, int, int]] = []
@@ -228,10 +276,23 @@ class _Builder:
                     )
                 raise HdlError(msg, part.pos)
 
-        ready = {p: [n for n in bits if n is not None] for p, bits in pin_nets.items()}
-        outs = self.instantiate(target, path, ready, top_pos or part.pos)
-        for inner, outer, lo, hi in outputs:
-            self._bind(scope, part, inner, outer, outs[inner.name][lo : hi + 1])
+        # Instantiate: the part's inputs come from here, its internal nets get a new block.
+        sub = self.compiler.template(target)
+        inner = sub.num_nets - 2 - sub.input_bits
+        start = self.next_net
+        self.next_net += inner
+        ins = [n for bits in pin_nets.values() for n in bits if n is not None]
+        net_map = np.concatenate(
+            [
+                np.array([FALSE_NET, TRUE_NET, *ins], dtype=np.int64),
+                np.arange(start, start + inner, dtype=np.int64),
+            ]
+        )
+        self.parts.append((seg, part, sub, net_map))
+        outs = {p: net_map[nets].tolist() for p, nets in sub.outputs.items()}
+
+        for inner_ref, outer, lo, hi in outputs:
+            self._bind(scope, part, inner_ref, outer, outs[inner_ref.name][lo : hi + 1])
         if part.label is not None:
             for pin, nets in outs.items():
                 key = f"{part.label}.{pin}"
@@ -453,6 +514,150 @@ class _Builder:
             mapping = nxt
         raise HdlError("internal error: unresolved wire aliases", None)
 
+    def _finish(self, scope: _Scope, input_bits: int) -> _Template:
+        """Resolve aliases, renumber without the placeholders, and merge the parts' gates."""
+        resolved = self.resolve_map()
+        keep = np.unique(resolved)  # sorted: the constants and inputs come first, unaliased
+        renumber = np.full(self.next_net, -1, dtype=np.int64)
+        renumber[keep] = np.arange(len(keep), dtype=np.int64)
+        final = renumber[resolved]
+        assert np.array_equal(final[: 2 + input_bits], np.arange(2 + input_bits))
+
+        ins: dict[str, list[list[np.ndarray]]] = {}
+        outs: dict[str, list[list[np.ndarray]]] = {}
+        gate_pos: dict[str, list[SourcePos]] = {}
+        parts: dict[str, tuple[_Template, np.ndarray]] = {}
+        for seg, part, sub, raw_map in self.parts:
+            net_map = _frozen(final[raw_map])
+            parts[seg] = (sub, net_map)
+            for kind, g in sub.gates.items():
+                if kind not in ins:
+                    ins[kind] = [[] for _ in g.inputs]
+                    outs[kind] = [[] for _ in g.outputs]
+                    gate_pos[kind] = []
+                for col, acc in zip(g.inputs, ins[kind], strict=True):
+                    acc.append(net_map[col])
+                for col, acc in zip(g.outputs, outs[kind], strict=True):
+                    acc.append(net_map[col])
+                gate_pos[kind] += [part.pos] * g.count
+
+        def merged(cols: list[list[np.ndarray]]) -> list[np.ndarray]:
+            return [_frozen(np.concatenate(c)) for c in cols]
+
+        wires = {
+            name: _frozen(final[np.asarray(nets, dtype=np.int64)])
+            for name, nets in scope.signals.items()
+        }
+        return _Template(
+            name=self.chip.name,
+            primitive=False,
+            num_nets=len(keep),
+            input_bits=input_bits,
+            outputs={o.name: wires[o.name] for o in self.chip.outputs},
+            gates={k: GateArrays(merged(ins[k]), merged(outs[k])) for k in ins},
+            gate_pos=gate_pos,
+            wires=wires,
+            parts=parts,
+            wire_count=len(wires) + sum(sub.wire_count for sub, _ in parts.values()),
+        )
+
+
+class WireMap(Mapping[str, list[int]]):
+    """`Netlist.wires`: every wire path in the hierarchy -> its nets, looked up on demand.
+
+    A path such as `Xor/Nand#2/out` walks the templates from the top chip and maps
+    the wire's nets back up through each part. Iteration lists every path, parts
+    before the chip that holds them.
+    """
+
+    def __init__(self, top: str, template: _Template) -> None:
+        self._top = top
+        self._t = template
+
+    def _lookup(self, path: str) -> np.ndarray | None:
+        head, _, rest = path.partition("/")
+        if head != self._top or not rest:
+            return None
+        *segs, name = rest.split("/")
+        t = self._t
+        maps: list[np.ndarray] = []
+        for seg in segs:
+            entry = t.parts.get(seg)
+            if entry is None:
+                return None
+            t, net_map = entry
+            maps.append(net_map)
+        nets = t.wires.get(name)
+        if nets is None:
+            return None
+        for net_map in reversed(maps):
+            nets = net_map[nets]
+        return nets
+
+    def __getitem__(self, path: str) -> list[int]:
+        nets = self._lookup(path)
+        if nets is None:
+            raise KeyError(path)
+        return nets.tolist()
+
+    def __contains__(self, path: object) -> bool:
+        return isinstance(path, str) and self._lookup(path) is not None
+
+    def __len__(self) -> int:
+        return self._t.wire_count
+
+    def __iter__(self) -> Iterator[str]:
+        for path, _ in self.walk():
+            yield path
+
+    def walk(self) -> Iterator[tuple[str, np.ndarray]]:
+        """Every (path, nets) pair, mapping whole templates at once: faster than lookups."""
+
+        def go(
+            t: _Template, prefix: str, to_top: np.ndarray | None
+        ) -> Iterator[tuple[str, np.ndarray]]:
+            for seg, (sub, net_map) in t.parts.items():
+                yield from go(
+                    sub, f"{prefix}/{seg}", net_map if to_top is None else to_top[net_map]
+                )
+            for name, nets in t.wires.items():
+                yield f"{prefix}/{name}", nets if to_top is None else to_top[nets]
+
+        return go(self._t, self._top, None)
+
+
+class GatePaths(Mapping[str, list[str]]):
+    """`Netlist.gate_paths`: kind -> where each gate sits, e.g. `Bit/DFF#5`, built per kind."""
+
+    def __init__(self, top: str, template: _Template) -> None:
+        self._top = top
+        self._t = template
+        self._done: dict[str, list[str]] = {}
+
+    def __getitem__(self, kind: str) -> list[str]:
+        if kind not in self._t.gates:
+            raise KeyError(kind)
+        if kind not in self._done:
+            out: list[str] = []
+
+            def go(t: _Template, prefix: str) -> None:
+                if t.primitive:
+                    out.append(prefix)
+                    return
+                for seg, (sub, _) in t.parts.items():
+                    if kind in sub.gates:
+                        go(sub, f"{prefix}/{seg}")
+
+            go(self._t, self._top)
+            self._done[kind] = out
+        return self._done[kind]
+
+    def __len__(self) -> int:
+        return len(self._t.gates)
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._t.gates)
+
 
 def elaborate(top: ChipDef, lib: ChipLibrary) -> Netlist:
     """Flatten `top` and everything it uses into a levelized netlist.
@@ -461,30 +666,15 @@ def elaborate(top: ChipDef, lib: ChipLibrary) -> Netlist:
     double drivers, unconnected pins, circular chip dependencies) and for
     combinational loops.
     """
-    b = _Builder(lib)
-    in_nets = {p.name: b.nets(p.width) for p in top.inputs}
-    out_nets = b._chip(top, top.name, in_nets, None)
-    mapping = b.resolve_map()
-
-    def remap(nets: list[int]) -> list[int]:
-        return [int(n) for n in mapping[np.asarray(nets, dtype=np.int64)]] if nets else []
-
-    gates = {
-        kind: GateArrays(
-            inputs=[mapping[np.asarray(col, dtype=np.int64)] for col in b.gate_in[kind]],
-            outputs=[np.asarray(col, dtype=np.int64) for col in b.gate_out[kind]],
-        )
-        for kind in b.gate_in
-    }
-    wires = {path: remap(nets) for path, nets in b.wires.items()}
+    t = _Compiler(lib).template(top)
     netlist = Netlist(
         top=top.name,
-        num_nets=b.next_net,
-        gates=gates,
-        inputs={k: remap(v) for k, v in in_nets.items()},
-        outputs={k: remap(v) for k, v in out_nets.items()},
-        wires=wires,
-        gate_paths=b.gate_paths,
+        num_nets=t.num_nets,
+        gates={k: GateArrays(list(g.inputs), list(g.outputs)) for k, g in t.gates.items()},
+        inputs={p.name: t.wires[p.name].tolist() for p in top.inputs},
+        outputs={k: v.tolist() for k, v in t.outputs.items()},
+        wires=WireMap(top.name, t),
+        gate_paths=GatePaths(top.name, t),
     )
-    netlist.levels = levelize(netlist, PRIMITIVES, b.gate_pos, top.pos)
+    netlist.levels = levelize(netlist, PRIMITIVES, t.gate_pos, top.pos)
     return netlist

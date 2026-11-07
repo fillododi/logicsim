@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import importlib
+
 import pytest
 
 from nandsim.hdl import HdlError, parse
@@ -164,3 +166,63 @@ def test_file_defining_wrong_chip() -> None:
     with pytest.raises(HdlError) as exc:
         build("CHIP Top { OUT o; PARTS: Bad(o=o); }", library)
     assert str(exc.value) == "Bad.hdl:1:1: error: file for chip 'Bad' defines chip 'Other' instead"
+
+
+# ---- compiling each chip once ---------------------------------------------
+
+
+def test_repeated_parts_get_their_own_nets() -> None:
+    nl = build("CHIP Top { IN a, b; OUT x, y; PARTS: And(a=a, b=b, out=x); And(a=b, b=a, out=y); }")
+    first, second = nl.wires["Top/And#1/n"], nl.wires["Top/And#2/n"]
+    assert first != second
+    assert nl.gate_count == 4 and len(set(nl.gates["Nand"].outputs[0].tolist())) == 4
+    assert nl.wires["Top/And#2/a"] == nl.inputs["b"]
+    assert nl.gate_paths["Nand"] == [
+        "Top/And#1/Nand#1",
+        "Top/And#1/Not#2/Nand#1",
+        "Top/And#2/Nand#1",
+        "Top/And#2/Not#2/Nand#1",
+    ]
+
+
+def test_a_chip_is_compiled_once_per_library(monkeypatch: pytest.MonkeyPatch) -> None:
+    module = importlib.import_module("nandsim.netlist.elaborate")
+    library = lib()
+    top = parse(
+        "CHIP Top { IN a, b; OUT x, y; PARTS: And(a=a, b=b, out=x); And(a=b, b=a, out=y); }",
+        "Top.hdl",
+    )
+    calls: list[str] = []
+    original = module._Builder.build
+
+    def counting(self: object) -> object:
+        calls.append(self.chip.name)  # type: ignore[attr-defined]
+        return original(self)
+
+    monkeypatch.setattr(module._Builder, "build", counting)
+    elaborate(top, library)
+    elaborate(top, library)
+    assert sorted(calls) == ["And", "Not", "Top"]
+
+
+def test_a_new_library_sees_edited_sources() -> None:
+    top = "CHIP Top { IN a, b; OUT o; PARTS: And(a=a, b=b, out=o); }"
+    assert build(top).gate_count == 2
+    three = "CHIP And { IN a, b; OUT out; PARTS: Nand(a=a, b=b, out=n); Not(in=n, out=m);"
+    three += " Not(in=m, out=k); Not(in=k, out=out); }"
+    assert build(top, lib(And=three)).gate_count == 4
+
+
+def test_wire_map_behaves_like_a_dict() -> None:
+    nl = build("CHIP Top { IN a, b; OUT o; PARTS: And(a=a, b=b, out=o); }")
+    paths = list(nl.wires)
+    assert len(paths) == len(nl.wires) == len(set(paths))
+    assert "Top/And#1/Not#2/Nand#1/out" in nl.wires
+    assert "Top/And#1/Nope" not in nl.wires and "Top" not in nl.wires
+    assert nl.wires.get("Other/a") is None
+    with pytest.raises(KeyError):
+        nl.wires["Top/And#3/a"]
+    walked = dict(nl.wires.walk())  # type: ignore[attr-defined]
+    assert {p: n.tolist() for p, n in walked.items()} == {p: nl.wires[p] for p in paths}
+    # Parts come before the chip that holds them, as the GUI's names expect.
+    assert paths.index("Top/And#1/a") < paths.index("Top/a")

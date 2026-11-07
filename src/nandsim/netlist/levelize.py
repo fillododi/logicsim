@@ -91,7 +91,11 @@ def _net_names(netlist: Netlist) -> dict[int, str]:
     """Best human name for each net: the shallowest wire path, relative to the top chip."""
     names: dict[int, tuple[int, str]] = {}
     prefix = netlist.top + "/"
-    for path, nets in netlist.wires.items():
+    wires = netlist.wires
+    walk = getattr(wires, "walk", None)  # elaboration's lazy map walks its tree faster
+    items = walk() if walk is not None else wires.items()
+    for path, nets in items:
+        nets = [int(n) for n in nets]
         short = path[len(prefix) :] if path.startswith(prefix) else path
         depth = short.count("/")
         for bit, net in enumerate(nets):
