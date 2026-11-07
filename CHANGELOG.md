@@ -11,6 +11,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 - **Adders.** Five levels in a new *Arithmetic* group add bits and numbers: HalfAdder and
   FullAdder add single bits, Add4 adds two 4-bit numbers with a carry in and out (the 4004's
   `ADD`), and Inc4 and Inc12 count up by one, for a register and the program counter.
+- **The 4004's odd instructions.** Four levels build the parts of its ALU that aren't plain
+  adders: AddSub4 subtracts with the 4004's inverted borrow, Rotate4 rotates through the carry
+  (`RAL`, `RAR`), Daa4 keeps a sum a decimal digit (`DAA`), and Kbp4 turns a key row into a
+  number (`KBP`).
 
 ## [0.5.0] — 2026-11-06
 
