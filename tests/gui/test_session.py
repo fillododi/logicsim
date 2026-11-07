@@ -189,7 +189,7 @@ def test_a_slow_chip_falls_behind_instead_of_freezing(bit: tuple[ChipSession, Pa
     assert s.advance(0.0) == 0
 
 
-def test_reload_keeps_each_dff_whose_place_still_exists(tmp_path: Path) -> None:
+def test_reload_keeps_dff_state_only_when_the_dffs_are_the_same(tmp_path: Path) -> None:
     (tmp_path / "Bit.hdl").write_text(BIT)
     top = tmp_path / "Reg2.hdl"
     top.write_text(REG2)
@@ -204,13 +204,25 @@ def test_reload_keeps_each_dff_whose_place_still_exists(tmp_path: Path) -> None:
 
     top.write_text(REG2.replace("PARTS:", "PARTS:\n    // stored bits"))
     assert s.reload()
-    assert out(s) == 2 and s.cycle == 1  # Reg2/Bit#1/DFF#5 and Reg2/Bit#2/DFF#5 kept
+    assert out(s) == 2 and s.cycle == 1  # the same two DFFs: state and count kept
+    s.toggle_run()
 
-    # A new first part moves both Bits to #2 and #3: Bit#2 keeps the old Bit#2's
-    # value (1, now feeding out[0]); Bit#3 is new and starts undefined.
+    # A new first part renumbers both Bits (#2, #3). Their old numbers mean other
+    # DFFs now, so nothing carries over: no bit may show its neighbour's value.
     top.write_text(REG2.replace("PARTS:", "PARTS:\n    Nand(a=load, b=load, out=unused);"))
     assert s.reload()
-    assert s.sim is not None and s.sim.get_bits("out") == [1, None]
+    assert s.sim is not None and s.sim.get_bits("out") == [None, None]
+    assert s.cycle == 0 and not s.running
+
+
+def test_cycle_count_restarts_when_no_state_carries(bit: tuple[ChipSession, Path]) -> None:
+    s, path = bit
+    load_bit(s, 1)
+    path.write_text("CHIP Bit { IN in, load; OUT out; PARTS: Nand(a=in, b=load, out=out); }")
+    assert s.reload() and s.cycle == 0  # no DFFs at all
+    path.write_text(BIT)
+    assert s.reload()
+    assert s.cycle == 0 and out(s) is None  # DFFs again, but fresh ones
 
 
 def test_reload_with_an_error_keeps_the_clock(bit: tuple[ChipSession, Path]) -> None:

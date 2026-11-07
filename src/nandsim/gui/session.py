@@ -7,12 +7,12 @@ last version that compiled and remembers the error so the GUI can show it.
 
 A chip with DFFs has a clock: `step` runs one whole cycle (tick and tock), and
 `advance` runs as many cycles as the speed asks for while `running`. A reload keeps
-each DFF whose place in the hierarchy (`Bit/DFF#5`) still exists, and the cycle count.
+the DFFs' values and the cycle count only if every DFF still sits in the same place
+in the hierarchy (`Reg2/Bit#1/DFF#5`); otherwise the clock starts over.
 """
 
 from __future__ import annotations
 
-import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -32,7 +32,6 @@ Loader = Callable[[], tuple[str, ChipLibrary]]
 SPEEDS = (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)  # clock rates offered, in cycles/s
 DEFAULT_SPEED = 5
 FRAME_BUDGET = 0.03  # seconds of clocking per frame at most, so the window stays responsive
-_DFF_OUT = re.compile(r"(.*/DFF#\d+)/out")
 
 
 @dataclass
@@ -75,14 +74,10 @@ class ChipSession:
         except OSError as e:
             self.error = HdlError(f"cannot read chip: {e}", None)
             return False
-        carried = self._dff_values()
-        cycle = self.sim.cycle if self.sim is not None else 0
+        old = self.sim
         self.netlist, self.lib, self.error = netlist, lib, None
         self.sim = Simulator(netlist)
-        self.sim.cycle = cycle
-        self._load_dff_values(carried)
-        if not self.has_clock:
-            self.running = False
+        self._carry_clock(old, self.sim)
         kept = {}
         for pin, nets in netlist.inputs.items():
             v = self.inputs.get(pin)
@@ -220,35 +215,23 @@ class ChipSession:
                 break
         return done
 
-    def _dff_paths(self) -> list[str]:
-        """Where each DFF of the current chip sits, e.g. `Bit/DFF#5`, in engine order."""
-        assert self.netlist is not None and self.sim is not None
-        by_net = {}
-        for wire, nets in self.netlist.wires.items():
-            m = _DFF_OUT.fullmatch(wire)
-            if m:
-                by_net[nets[0]] = m.group(1)
-        return [by_net[int(n)] for n in self.sim.dff_outputs]
+    def _carry_clock(self, old: Simulator | None, new: Simulator) -> None:
+        """Move the clock's state from `old` into the rebuilt `new`, if it still means the same.
 
-    def _dff_values(self) -> dict[str, tuple[bool, bool]]:
-        if self.sim is None or not self.has_clock:
-            return {}
-        value, known = self.sim.dff_state()
-        return dict(zip(self._dff_paths(), zip(value, known, strict=True), strict=True))
-
-    def _load_dff_values(self, carried: dict[str, tuple[bool, bool]]) -> None:
-        if not carried or not self.has_clock:
-            return
-        assert self.sim is not None
-        paths = self._dff_paths()
-        which = [i for i, p in enumerate(paths) if p in carried]
-        if which:
-            pairs = [carried[paths[i]] for i in which]
-            self.sim.load_dff_state(
-                np.asarray(which, dtype=np.int64),
-                np.asarray([v for v, _ in pairs], dtype=bool),
-                np.asarray([k for _, k in pairs], dtype=bool),
-            )
+        Part paths are numbered by position (`Bit#2`), so a part added or removed
+        renumbers the DFFs after it. State carries only when every DFF sits where it
+        did; otherwise every DFF starts undefined, the count restarts and the clock
+        pauses, as after a reset. A value is never shown on the wrong DFF.
+        """
+        same = old is not None and old.dff_count > 0 and old.dff_paths == new.dff_paths
+        if same:
+            assert old is not None
+            value, known = old.dff_state()
+            new.load_dff_state(np.arange(new.dff_count), value, known)
+            new.cycle = old.cycle
+        else:
+            self.running = False
+            self._owed = 0.0
 
     def known_fraction(self, nets: tuple[int, ...] | list[int]) -> float:
         assert self.sim is not None
