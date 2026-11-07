@@ -190,3 +190,13 @@ def test_chip_without_dffs_can_still_be_clocked() -> None:
     s.tick()
     s.tock()
     assert s.get("out") == 1
+
+
+def test_every_sequential_primitive_is_clocked_like_a_dff() -> None:
+    # The engine clocks every primitive marked sequential as a D flip-flop, so a new
+    # sequential row with another shape must come with its own clock behaviour.
+    from nandsim.netlist import PRIMITIVES
+
+    sequential = [p for p in PRIMITIVES.values() if p.sequential]
+    assert [p.name for p in sequential] == ["DFF"]
+    assert all((p.inputs, p.outputs) == (("in",), ("out",)) for p in sequential)

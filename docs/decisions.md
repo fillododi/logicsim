@@ -576,3 +576,14 @@ Ambiguous spec points and the option chosen. Newest last.
 
 **Consequences:** the GUI's clock controls (next) need only `tick`, `tock`, `reset`, `cycle` and `mid_cycle`. `levels.RESERVED` now derives from the primitive table.
 
+## 2026-11-07 — Exported chips may use a primitive only once a level lists it
+**Context:** reviewing #38 showed that once `DFF` resolves as a primitive, the export dialog let a player on Not export a one-DFF chip. Exported chips are allowed in every level, and the level check only looks at a chip's direct parts, so the DFF would reach levels that don't list it.
+
+**Decision:** an export may use a primitive only if some unlocked level lists it among its parts. The check runs on the flattened netlist, so a DFF inside a saved or exported part counts too. The message is `It uses DFF, which no level you have unlocked allows yet.` `Nand` is unaffected, since the first levels list it and they are always open. `RESERVED` is gone: the primitive table is the one list of names a player's chip can't take.
+
+**Alternatives:**
+- Check DFF use transitively in the test runner for every level: sequential levels (Register4 uses Bit, which holds a DFF) would need a rule for which hidden DFFs are fine, which the export check avoids.
+- Refuse DFF in exports for good: it would stop players from exporting their own registers in milestone 7.
+
+**Consequences:** export is the only way a chip gets into the exports folder (there is no import), so checking there is enough. A file put there by hand isn't checked; players never edit files. `SaveStore.unlocked_primitives()` is available for the GUI if it ever wants to show which primitives are open.
+
