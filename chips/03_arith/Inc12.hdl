@@ -1,0 +1,7 @@
+// Inc12: Adds 1 to a 12-bit number; 0xFFF wraps to 0.
+// You may use: Nand, Add4
+CHIP Inc12 {
+    IN in[12];
+    OUT out[12];
+    PARTS:
+}

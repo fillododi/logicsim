@@ -124,6 +124,7 @@ def test_groups_keep_the_level_order(tmp_path: Path) -> None:
         ("03_arith", ["Add4"]),
     ]
     assert group_label("00_tutorial") == "Tutorial" and group_label("02_buses") == "Buses"
+    assert group_label("03_arith") == "Arithmetic"
 
 
 def test_default_groups_are_the_current_one_and_the_next_with_work(tmp_path: Path) -> None:
@@ -136,5 +137,5 @@ def test_default_groups_are_the_current_one_and_the_next_with_work(tmp_path: Pat
     game.store.mark_solved(lv["Not"])
     assert game.default_expanded() == {"01_gates", "02_buses"}
     game.store.mark_solved(lv["Not4"])
-    # Buses has nothing left to do, so Arith takes its place: never more than two groups.
+    # Buses has nothing left to do, so Arithmetic takes its place: never more than two groups.
     assert game.default_expanded() == {"01_gates", "03_arith"}

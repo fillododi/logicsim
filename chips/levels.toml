@@ -110,3 +110,30 @@ parts = ["Nand", "DMux"]
 name = "DMux8Way"
 group = "02_buses"
 parts = ["Nand", "DMux", "DMux4Way"]
+
+# Arithmetic: adders up to the 4004's 4-bit data and 12-bit program counter. The
+# 4004's ALU comes after them, in its own levels.
+[[level]]
+name = "HalfAdder"
+group = "03_arith"
+parts = ["Nand", "Xor", "And"]
+
+[[level]]
+name = "FullAdder"
+group = "03_arith"
+parts = ["Nand", "HalfAdder", "Or"]
+
+[[level]]
+name = "Add4"
+group = "03_arith"
+parts = ["Nand", "FullAdder"]
+
+[[level]]
+name = "Inc4"
+group = "03_arith"
+parts = ["Nand", "HalfAdder"]
+
+[[level]]
+name = "Inc12"
+group = "03_arith"
+parts = ["Nand", "Add4"]

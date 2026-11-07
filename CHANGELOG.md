@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+### Added
+
+- **Adders.** Five levels in a new *Arithmetic* group add bits and numbers: HalfAdder and
+  FullAdder add single bits, Add4 adds two 4-bit numbers with a carry in and out (the 4004's
+  `ADD`), and Inc4 and Inc12 count up by one, for a register and the program counter.
+
 ## [0.5.0] — 2026-11-06
 
 Milestone 5: buses. Thirteen new levels widen your gates to the 4, 8 and 12 bits of the

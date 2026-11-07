@@ -141,8 +141,14 @@ class GameState:
         return report
 
 
+# Groups whose folder name is shortened: `03_arith` reads better as "Arithmetic".
+_GROUP_LABELS = {"03_arith": "Arithmetic"}
+
+
 def group_label(group: str) -> str:
     """What the sidebar calls a group: `01_gates` is "Gates", `00_tutorial` "Tutorial"."""
+    if group in _GROUP_LABELS:
+        return _GROUP_LABELS[group]
     return group.split("_", 1)[-1].replace("_", " ").title()
 
 

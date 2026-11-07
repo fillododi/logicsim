@@ -1,0 +1,8 @@
+// Reference solution for HalfAdder. Never shown to the player.
+CHIP HalfAdder {
+    IN a, b;
+    OUT sum, carry;
+    PARTS:
+    Xor(a=a, b=b, out=sum);
+    And(a=a, b=b, out=carry);
+}
