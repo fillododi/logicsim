@@ -1,7 +1,8 @@
 # HDL reference
 
 The language you build chips in. A chip has input pins, output pins, and a list of
-**parts**: other chips wired together. The only chip you don't build yourself is `Nand`.
+**parts**: other chips wired together. The only chips you don't build yourself are the two
+primitives, `Nand` and `DFF`.
 
 ## A complete chip
 
@@ -70,6 +71,26 @@ Not(in=g1.out, out=out);
 - `true` and `false` are constants. They fill every bit of the pin they connect to: `Foo(in=false)` makes all bits of `in` zero.
 - Both sides of a connection must have the same width. Constants are the exception.
 - A new internal wire cannot be sliced where it is created. Write `out=w`, then read `w[0..3]` elsewhere.
+
+## DFF: memory
+
+`DFF(in=d, out=q)` is a data flip-flop, the one primitive with memory. Its output is its input
+one clock cycle earlier: `out(t) = in(t-1)`. Each cycle has two halves:
+
+- **tick:** the chip settles, then every DFF stores its `in`. Outputs don't change yet.
+- **tock:** every DFF puts the stored value on `out`, all at once, and the chip settles again.
+
+A DFF starts undefined, and stays undefined until it stores a known value. Anything else
+uses it like a part: `DFF(in=d, out=q, out=out)` sends its output to two places.
+
+A signal may depend on itself through a DFF, which is how a register keeps its value:
+
+```
+Mux(a=prev, b=in, sel=load, out=d);
+DFF(in=d, out=prev, out=out);
+```
+
+Without the DFF that loop would be a combinational loop, an error.
 
 ## Rules and errors
 

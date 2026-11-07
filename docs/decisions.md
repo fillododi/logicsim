@@ -557,3 +557,22 @@ Ambiguous spec points and the option chosen. Newest last.
 **Consequences:**
 - The reference is 1,319 NANDs at depth 42, four times the largest chip so far. Nearly 450 of them are the two Mux8Way4s that choose the 1-bit carry. It simulates at about 6.5k evaluations/s (8.5 M gate-evaluations/s, the same rate per gate as the bus chips). A builtin ALU, with its equivalence test, is the option if the CPU in milestone 8 needs the speed.
 - Its circuit is dense but readable at the top level: 14 parts, inputs on the left, `out`, `cout` and `zr` on the right.
+
+## 2026-11-07 — DFF and the clock: tick latches, tock commits
+**Context:** milestone 7 needs state. CLAUDE.md fixes `out(t) = in(t-1)` with a tick and a tock per cycle, as in nand2tetris, and the three-valued engine entry says DFFs start undefined. Still open: what each half does exactly, what a lone `tock` does, how a `.tst` failure says when it happened, and whether tables tick.
+
+**Decision:**
+- **`tick`** evaluates the chip, then every DFF latches its input. **`tock`** puts every latched value on its DFF's output, evaluates again, and counts one cycle. Both are a single vectorized copy over all DFFs. Inputs changed between a tick and its tock don't reach that cycle.
+- **A `tock` with no `tick` before it** commits whatever is latched: undefined at power-on, so it changes nothing. It isn't an error, and it still counts a cycle.
+- **`Simulator.reset()`** returns to power-on: every input, wire and latch undefined, cycle 0. It lands now, for the GUI's reset button.
+- **In a `.tst`,** `tick` and `tock` are plain commands with no arguments. A failing check in a script that uses either one ends with `cycle N`, or `cycle N after tick` between the halves, after the table inputs if any. Combinational scripts print as before.
+- **Table rows don't tick.** They stay set, eval, expect. Sequential tests write their cycles out until a shorthand earns its place.
+- **`DFF` is allowed only where a level lists it,** like any other part.
+
+**Alternatives:**
+- A `cycle` command for tick plus tock: left out to keep the format small; it can be added without changing anything else.
+- Times printed nand2tetris style (`3+`): shorter but cryptic to a new player.
+- A lone `tock` as an error: it is harmless, and an error would only get in the way of a GUI that lets the player press either half.
+
+**Consequences:** the GUI's clock controls (next) need only `tick`, `tock`, `reset`, `cycle` and `mid_cycle`. `levels.RESERVED` now derives from the primitive table.
+
