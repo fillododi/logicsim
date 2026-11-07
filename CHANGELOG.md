@@ -11,6 +11,7 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 - **Memory: the DFF.** A second primitive beside `Nand`, a flip-flop whose output is its input
   one clock cycle earlier. Tests can now run the clock with `tick` and `tock`, and a failing
   check in a clocked test says which cycle it happened in. The levels that use it come next.
+  A chip you export can contain a DFF only once a level that uses one is open.
 
 ## [0.6.0] — 2026-11-07
 
