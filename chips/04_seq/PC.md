@@ -4,7 +4,7 @@ The 4004 keeps four 12-bit addresses and a 2-bit pointer. The address the pointe
 
 Each clock cycle does the first of these that is asked for:
 
-- `reset`: the pointer goes to 0 and that address becomes 0.
+- `reset`: the pointer and all four addresses go to 0.
 - `push` (a call, `JMS`): the pointer moves up and the address there becomes `in`. If `inc` is also 1, the address left behind steps by 1 first, so the return skips the call.
 - `pop` (a return, `BBL`): the pointer moves down; its address is where the program goes on.
 - `load` (a jump): the current address becomes `in`.

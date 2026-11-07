@@ -1,7 +1,8 @@
 // PC: reset, counting and wrapping at 0xFFF, jumps, calls and returns three deep, a fourth
-// call overwriting the oldest return, returns past the bottom wrapping around, each
-// control against the ones it outranks, then 200 random cycles (seed 4004). Each clock
-// cycle checks out after its tick (still the old value) and after its tock.
+// call overwriting the oldest return, returns past the bottom wrapping around, reset
+// clearing the whole stack, every pair of controls (the higher one wins), then 200 random
+// cycles (seed 4004). Each clock cycle checks out after its tick (still the old value) and
+// after its tock.
 chip PC
 // Reset: address 0
 set in 0x000
@@ -310,67 +311,988 @@ tick
 expect out 0x444
 tock
 expect out 0x334
-// Each control against the ones it outranks
-set in 0x555
+// Reset clears every address: returns past it all find 0
+set in 0x0A0
 set inc 1
-set load 1
+set load 0
 set push 1
-set pop 1
+set pop 0
 set reset 0
 tick
 expect out 0x334
 tock
-expect out 0x555
-set in 0x666
+expect out 0x0A0
+set in 0x0B0
 set inc 1
-set load 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0A0
+tock
+expect out 0x0B0
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x0B0
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
 set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x555
+expect out 0x000
 tock
-expect out 0x335
-set in 0x777
-set inc 1
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+// Every pair of controls: the higher one wins
+// reset over push
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
 set load 1
 set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x335
+expect out 0x000
 tock
-expect out 0x777
-set in 0x888
+expect out 0x0C1
+set in 0x321
 set inc 1
-set load 1
+set load 0
 set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
 set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 0
+set load 0
+set push 1
+set pop 0
 set reset 1
 tick
-expect out 0x777
+expect out 0x655
 tock
 expect out 0x000
 set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+// reset over pop
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 1
+tick
+expect out 0x655
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+// reset over load
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x655
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+// reset over inc
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
 set inc 1
 set load 0
 set push 0
 set pop 0
+set reset 1
+tick
+expect out 0x655
+tock
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
 set reset 0
 tick
 expect out 0x000
 tock
-expect out 0x001
-set in 0x999
+expect out 0x000
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x000
+// push over pop
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x000
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 0
+set load 0
+set push 1
+set pop 1
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x5A5
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x5A5
+tock
+expect out 0x655
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x322
+// push over load
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x322
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
 set inc 0
 set load 1
 set push 1
 set pop 0
 set reset 0
 tick
-expect out 0x001
+expect out 0x655
 tock
-expect out 0x999
+expect out 0x5A5
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x5A5
+tock
+expect out 0x655
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x322
+// push over inc
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x322
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x5A5
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x5A5
+tock
+expect out 0x656
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x656
+tock
+expect out 0x322
+// pop over load
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x322
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 0
+set load 1
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x322
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x322
+tock
+expect out 0x0C2
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x0C2
+tock
+expect out 0x987
+// pop over inc
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x987
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 1
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x322
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x322
+tock
+expect out 0x0C2
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x0C2
+tock
+expect out 0x987
+// load over inc
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 0
+set reset 1
+tick
+expect out 0x987
+tock
+expect out 0x000
+set in 0x0C1
+set inc 0
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x000
+tock
+expect out 0x0C1
+set in 0x321
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x0C1
+tock
+expect out 0x321
+set in 0x654
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x321
+tock
+expect out 0x654
+set in 0x987
+set inc 1
+set load 0
+set push 1
+set pop 0
+set reset 0
+tick
+expect out 0x654
+tock
+expect out 0x987
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x987
+tock
+expect out 0x655
+set in 0x5A5
+set inc 1
+set load 1
+set push 0
+set pop 0
+set reset 0
+tick
+expect out 0x655
+tock
+expect out 0x5A5
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x5A5
+tock
+expect out 0x322
+set in 0x000
+set inc 0
+set load 0
+set push 0
+set pop 1
+set reset 0
+tick
+expect out 0x322
+tock
+expect out 0x0C2
 // Random cycles: one control or a few at once
 set in 0xCCA
 set inc 1
@@ -379,9 +1301,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x999
+expect out 0x0C2
 tock
-expect out 0x99A
+expect out 0x0C3
 set in 0x6F8
 set inc 0
 set load 0
@@ -389,7 +1311,7 @@ set push 1
 set pop 0
 set reset 0
 tick
-expect out 0x99A
+expect out 0x0C3
 tock
 expect out 0x6F8
 set in 0x094
@@ -401,7 +1323,7 @@ set reset 0
 tick
 expect out 0x6F8
 tock
-expect out 0x99A
+expect out 0x0C3
 set in 0x3D1
 set inc 1
 set load 0
@@ -409,9 +1331,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x99A
+expect out 0x0C3
 tock
-expect out 0x99B
+expect out 0x0C4
 set in 0x8E9
 set inc 0
 set load 0
@@ -419,9 +1341,9 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x99B
+expect out 0x0C4
 tock
-expect out 0x001
+expect out 0x987
 set in 0xEED
 set inc 0
 set load 0
@@ -429,7 +1351,7 @@ set push 1
 set pop 1
 set reset 0
 tick
-expect out 0x001
+expect out 0x987
 tock
 expect out 0xEED
 set in 0x0DA
@@ -561,7 +1483,7 @@ set reset 0
 tick
 expect out 0xEBB
 tock
-expect out 0x777
+expect out 0x000
 set in 0x04F
 set inc 0
 set load 0
@@ -569,9 +1491,9 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x777
+expect out 0x000
 tock
-expect out 0x6F8
+expect out 0x000
 set in 0x55D
 set inc 0
 set load 0
@@ -579,7 +1501,7 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x6F8
+expect out 0x000
 tock
 expect out 0x713
 set in 0xA64
@@ -601,7 +1523,7 @@ set reset 0
 tick
 expect out 0xEBB
 tock
-expect out 0x777
+expect out 0x000
 set in 0x241
 set inc 0
 set load 0
@@ -609,9 +1531,9 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x777
+expect out 0x000
 tock
-expect out 0x6F8
+expect out 0x000
 set in 0xFFF
 set inc 0
 set load 0
@@ -619,7 +1541,7 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x6F8
+expect out 0x000
 tock
 expect out 0x713
 set in 0xF6C
@@ -661,7 +1583,7 @@ set reset 0
 tick
 expect out 0x53B
 tock
-expect out 0x777
+expect out 0x000
 set in 0xE5A
 set inc 1
 set load 0
@@ -669,9 +1591,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x777
+expect out 0x000
 tock
-expect out 0x778
+expect out 0x001
 set in 0x1D6
 set inc 0
 set load 1
@@ -679,7 +1601,7 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x778
+expect out 0x001
 tock
 expect out 0x1D6
 set in 0xEAD
@@ -701,7 +1623,7 @@ set reset 0
 tick
 expect out 0x1D7
 tock
-expect out 0x6F8
+expect out 0x000
 set in 0xD7B
 set inc 1
 set load 0
@@ -709,9 +1631,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x6F8
+expect out 0x000
 tock
-expect out 0x6F9
+expect out 0x001
 set in 0x0C7
 set inc 0
 set load 0
@@ -719,7 +1641,7 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x6F9
+expect out 0x001
 tock
 expect out 0x713
 set in 0x8BF
@@ -1931,7 +2853,7 @@ set reset 0
 tick
 expect out 0x002
 tock
-expect out 0x838
+expect out 0x000
 set in 0x132
 set inc 1
 set load 0
@@ -1939,9 +2861,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x838
+expect out 0x000
 tock
-expect out 0x839
+expect out 0x001
 set in 0xBAB
 set inc 0
 set load 0
@@ -1949,9 +2871,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x839
+expect out 0x001
 tock
-expect out 0x839
+expect out 0x001
 set in 0x94E
 set inc 1
 set load 0
@@ -1959,9 +2881,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x839
+expect out 0x001
 tock
-expect out 0x83A
+expect out 0x002
 set in 0x17C
 set inc 0
 set load 0
@@ -1969,9 +2891,9 @@ set push 0
 set pop 1
 set reset 0
 tick
-expect out 0x83A
+expect out 0x002
 tock
-expect out 0x013
+expect out 0x000
 set in 0xD1C
 set inc 0
 set load 1
@@ -1979,7 +2901,7 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x013
+expect out 0x000
 tock
 expect out 0xD1C
 set in 0x2CD
@@ -2011,7 +2933,7 @@ set reset 0
 tick
 expect out 0x002
 tock
-expect out 0x83A
+expect out 0x002
 set in 0xB0C
 set inc 1
 set load 0
@@ -2019,7 +2941,7 @@ set push 1
 set pop 0
 set reset 0
 tick
-expect out 0x83A
+expect out 0x002
 tock
 expect out 0xB0C
 set in 0x9EB
@@ -2241,7 +3163,7 @@ set reset 0
 tick
 expect out 0xA1E
 tock
-expect out 0x83B
+expect out 0x000
 set in 0x161
 set inc 1
 set load 0
@@ -2249,9 +3171,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x83B
+expect out 0x000
 tock
-expect out 0x83C
+expect out 0x001
 set in 0xE84
 set inc 1
 set load 0
@@ -2259,9 +3181,9 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x83C
+expect out 0x001
 tock
-expect out 0x83D
+expect out 0x002
 set in 0xFA4
 set inc 0
 set load 1
@@ -2269,7 +3191,7 @@ set push 0
 set pop 0
 set reset 0
 tick
-expect out 0x83D
+expect out 0x002
 tock
 expect out 0xFA4
 set in 0x6B9

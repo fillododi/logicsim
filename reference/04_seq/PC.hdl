@@ -35,14 +35,19 @@ CHIP PC {
 
     DMux4Way(in=wnew, sel[0]=np0, sel[1]=np1, a=n0, b=n1, c=n2, d=n3);
     DMux4Way(in=wold, sel[0]=p0, sel[1]=p1, a=o0, b=o1, c=o2, d=o3);
-    Or(a=n0, b=o0, out=l0);
-    Or(a=n1, b=o1, out=l1);
-    Or(a=n2, b=o2, out=l2);
-    Or(a=n3, b=o3, out=l3);
-    Mux12(a=next, b=newval, sel=n0, out=d0);
-    Mux12(a=next, b=newval, sel=n1, out=d1);
-    Mux12(a=next, b=newval, sel=n2, out=d2);
-    Mux12(a=next, b=newval, sel=n3, out=d3);
+    // Reset writes newval, which is 0 then, into all four.
+    Or(a=n0, b=reset, out=r0);
+    Or(a=n1, b=reset, out=r1);
+    Or(a=n2, b=reset, out=r2);
+    Or(a=n3, b=reset, out=r3);
+    Or(a=r0, b=o0, out=l0);
+    Or(a=r1, b=o1, out=l1);
+    Or(a=r2, b=o2, out=l2);
+    Or(a=r3, b=o3, out=l3);
+    Mux12(a=next, b=newval, sel=r0, out=d0);
+    Mux12(a=next, b=newval, sel=r1, out=d1);
+    Mux12(a=next, b=newval, sel=r2, out=d2);
+    Mux12(a=next, b=newval, sel=r3, out=d3);
     Register12(in=d0, load=l0, out=a0);
     Register12(in=d1, load=l1, out=a1);
     Register12(in=d2, load=l2, out=a2);
