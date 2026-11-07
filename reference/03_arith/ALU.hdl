@@ -1,0 +1,36 @@
+// Reference solution for ALU. Never shown to the player.
+CHIP ALU {
+    IN a[4], b[4], cin, op[4];
+    OUT out[4], cout, zr;
+    PARTS:
+    Not(in=cin, out=ncin);
+    Not4(in=a, out=na);
+    // IAC is a + 1; DAC is a + 15, which carries unless a is 0
+    Add4(a=a, b=false, cin=true, out=inc, cout=incC);
+    Add4(a=a, b=true, cin=false, out=dec, cout=decC);
+    // ADD (op 14) and SUB (op 15): op[0] is sub
+    AddSub4(a=a, b=b, cin=cin, sub=op[0], out=sum, cout=sumC);
+    // RAL (op 5) and RAR (op 6): op[1] is right
+    Rotate4(in=a, cin=cin, right=op[1], out=rot, cout=rotC);
+    Daa4(in=a, cin=cin, out=daa, cout=daaC);
+    Kbp4(in=a, out=kbp);
+
+    // results: ops 0-7, then 8-15
+    Mux8Way4(a=false, b=a, c=inc, d=a, e=na, f=rot, g=rot,
+             h[0]=cin, h[1..3]=false, sel=op[0..2], out=lo);
+    Mux8Way4(a=dec, b[0]=ncin, b[1]=cin, b[2]=false, b[3]=true, c=a, d=daa,
+             e=kbp, f=b, g=sum, h=sum, sel=op[0..2], out=hi);
+    Mux4(a=lo, b=hi, sel=op[3], out=res);
+    out = res;
+    Or4Way(in=res, out=nz);
+    Not(in=nz, out=zr);
+
+    // carries, in bit 0
+    Mux8Way4(a=false, b=false, c[0]=incC, c[1..3]=false, d[0]=ncin, d[1..3]=false,
+             e[0]=cin, e[1..3]=false, f[0]=rotC, f[1..3]=false, g[0]=rotC, g[1..3]=false,
+             h=false, sel=op[0..2], out=loC);
+    Mux8Way4(a[0]=decC, a[1..3]=false, b=false, c[0]=true, c[1..3]=false,
+             d[0]=daaC, d[1..3]=false, e[0]=cin, e[1..3]=false, f[0]=cin, f[1..3]=false,
+             g[0]=sumC, g[1..3]=false, h[0]=sumC, h[1..3]=false, sel=op[0..2], out=hiC);
+    Mux4(a=loC, b=hiC, sel=op[3], out[0]=cout);
+}
