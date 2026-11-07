@@ -7,6 +7,7 @@ primitive kind as index arrays, one array per primitive pin, never as objects.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -45,6 +46,8 @@ class Netlist:
     e.g. `Xor/n` or `Xor/Nand#2/out`, to its nets so the GUI can show them.
     `levels` is the combinational evaluation order. `gate_paths[kind][g]` is where
     gate g of a kind sits in the hierarchy, e.g. `Bit/DFF#5`, in `gates` order.
+    Both are read-only and may be computed on demand: a large RAM has over a million
+    wire paths.
     """
 
     top: str
@@ -52,9 +55,9 @@ class Netlist:
     gates: dict[str, GateArrays]
     inputs: dict[str, list[int]]
     outputs: dict[str, list[int]]
-    wires: dict[str, list[int]]
+    wires: Mapping[str, list[int]]
     levels: list[list[LevelOp]] = field(default_factory=list)
-    gate_paths: dict[str, list[str]] = field(default_factory=dict)
+    gate_paths: Mapping[str, list[str]] = field(default_factory=dict)
 
     @property
     def gate_count(self) -> int:

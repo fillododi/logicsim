@@ -1,13 +1,12 @@
 """Levelization: orders combinational gates so each level depends only on earlier ones.
 
-Runs once per elaboration (Python loops are fine here); the result is a list of
-per-level index arrays that the engine evaluates with vectorized numpy.
+Runs once per elaboration, vectorized too: a DataRAM has 180k gates, and a Python
+loop per gate cost most of its compile time. The result is a list of per-level
+index arrays that the engine evaluates with vectorized numpy.
 A gate set that cannot be ordered is a combinational loop, reported by wire name.
 """
 
 from __future__ import annotations
-
-from collections import deque
 
 import numpy as np
 
@@ -24,66 +23,75 @@ def levelize(
 ) -> list[list[LevelOp]]:
     # Global gate ids: kinds in table order, gates in creation order.
     kinds = [k for k in netlist.gates if not primitives[k].sequential]
-    owners: list[tuple[str, int]] = []
-    for k in kinds:
-        owners += [(k, i) for i in range(netlist.gates[k].count)]
-    n = len(owners)
-
-    driver = np.full(netlist.num_nets, -1, dtype=np.int64)
-    offset = 0
-    for k in kinds:
-        g = netlist.gates[k]
-        for col in g.outputs:
-            driver[col] = np.arange(offset, offset + g.count)
-        offset += g.count
-
-    deps: list[list[int]] = [[] for _ in range(n)]
-    gid = 0
-    for k in kinds:
-        g = netlist.gates[k]
-        ins = np.stack(g.inputs, axis=1) if g.inputs else np.zeros((g.count, 0), np.int64)
-        drv = driver[ins]
-        for row in drv:
-            deps[gid] = [int(d) for d in row if d >= 0]
-            gid += 1
-
-    users: list[list[int]] = [[] for _ in range(n)]
-    pending = [0] * n
-    for g, ds in enumerate(deps):
-        pending[g] = len(ds)
-        for d in ds:
-            users[d].append(g)
-
-    level = [0] * n
-    queue = deque(g for g in range(n) if pending[g] == 0)
-    done = 0
-    while queue:
-        g = queue.popleft()
-        done += 1
-        for u in users[g]:
-            level[u] = max(level[u], level[g] + 1)
-            pending[u] -= 1
-            if pending[u] == 0:
-                queue.append(u)
-
-    if done < n:
-        _report_loop(netlist, owners, deps, pending, driver, gate_pos, top_pos)
-
+    counts = [netlist.gates[k].count for k in kinds]
+    offsets = np.cumsum([0, *counts])
+    n = int(offsets[-1])
     if n == 0:
         return []
-    by_level: list[dict[str, list[int]]] = [{} for _ in range(max(level) + 1)]
-    for g, (k, i) in enumerate(owners):
-        by_level[level[g]].setdefault(k, []).append(i)
-    result: list[list[LevelOp]] = []
-    for groups in by_level:
-        ops = []
-        for k, idx_list in groups.items():
-            idx = np.asarray(idx_list, dtype=np.int64)
-            arrays = netlist.gates[k]
-            ops.append(
-                LevelOp(k, [c[idx] for c in arrays.inputs], [c[idx] for c in arrays.outputs])
-            )
-        result.append(ops)
+
+    driver = np.full(netlist.num_nets, -1, dtype=np.int64)
+    for k, off in zip(kinds, offsets, strict=False):
+        g = netlist.gates[k]
+        for col in g.outputs:
+            driver[col] = np.arange(off, off + g.count)
+
+    # Dependency edges src -> dst: gate dst reads a net that gate src drives.
+    srcs: list[np.ndarray] = []
+    dsts: list[np.ndarray] = []
+    for k, off in zip(kinds, offsets, strict=False):
+        g = netlist.gates[k]
+        ids = np.arange(off, off + g.count, dtype=np.int64)
+        for col in g.inputs:
+            d = driver[col]
+            used = d >= 0
+            srcs.append(d[used])
+            dsts.append(ids[used])
+    src = np.concatenate(srcs) if srcs else np.zeros(0, np.int64)
+    dst = np.concatenate(dsts) if dsts else np.zeros(0, np.int64)
+
+    # Kahn's algorithm one frontier at a time: round r finds every gate whose
+    # longest path from an input is r, so each round is exactly one level.
+    order = np.argsort(src, kind="stable")
+    users = dst[order]
+    starts = np.searchsorted(src[order], np.arange(n + 1))
+    pending = np.bincount(dst, minlength=n)
+    level = np.full(n, -1, dtype=np.int64)
+    frontier = np.flatnonzero(pending == 0)
+    r = 0
+    while len(frontier):
+        level[frontier] = r
+        first, deg = starts[frontier], starts[frontier + 1] - starts[frontier]
+        total = int(deg.sum())
+        if total == 0:
+            break
+        # Positions of every user edge of the frontier, without a Python loop.
+        base = np.repeat(first - np.cumsum(deg) + deg, deg)
+        hit = users[base + np.arange(total)]
+        pending -= np.bincount(hit, minlength=n)
+        hit = np.unique(hit)
+        frontier = hit[pending[hit] == 0]
+        r += 1
+
+    if (level < 0).any():
+        deps: list[list[int]] = [[] for _ in range(n)]
+        for a, b in zip(src.tolist(), dst.tolist(), strict=True):
+            deps[b].append(a)
+        owners = [(k, i) for k, c in zip(kinds, counts, strict=True) for i in range(c)]
+        # A gate never reached still waits on a driver: pending > 0 marks the loop.
+        _report_loop(netlist, owners, deps, pending.tolist(), driver, gate_pos, top_pos)
+
+    result: list[list[LevelOp]] = [[] for _ in range(int(level.max()) + 1)]
+    for k, off, count in zip(kinds, offsets, counts, strict=False):
+        lv = level[off : off + count]
+        by_level = np.argsort(lv, kind="stable")  # gates of one level stay in creation order
+        bounds = np.searchsorted(lv[by_level], np.arange(len(result) + 1))
+        arrays = netlist.gates[k]
+        for L in range(len(result)):
+            idx = by_level[bounds[L] : bounds[L + 1]]
+            if len(idx):
+                result[L].append(
+                    LevelOp(k, [c[idx] for c in arrays.inputs], [c[idx] for c in arrays.outputs])
+                )
     return result
 
 
@@ -91,7 +99,11 @@ def _net_names(netlist: Netlist) -> dict[int, str]:
     """Best human name for each net: the shallowest wire path, relative to the top chip."""
     names: dict[int, tuple[int, str]] = {}
     prefix = netlist.top + "/"
-    for path, nets in netlist.wires.items():
+    wires = netlist.wires
+    walk = getattr(wires, "walk", None)  # elaboration's lazy map walks its tree faster
+    items = walk() if walk is not None else wires.items()
+    for path, nets in items:
+        nets = [int(n) for n in nets]
         short = path[len(prefix) :] if path.startswith(prefix) else path
         depth = short.count("/")
         for bit, net in enumerate(nets):
