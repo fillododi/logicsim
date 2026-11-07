@@ -15,7 +15,8 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 - **Clock controls.** A chip with DFFs gets a clock panel over its circuit: step one cycle,
   run and pause at 1 to 1000 cycles a second, and reset, with the cycle count beside them.
   The keys are Space (step), R (run / pause), Shift+R (reset) and [ ] (speed). Saving your
-  chip keeps what its DFFs hold, as long as they are still in the same place.
+  chip keeps what its DFFs hold, unless you added or removed parts. The clock stops while a
+  menu is open.
 
 ## [0.6.0] — 2026-11-07
 
