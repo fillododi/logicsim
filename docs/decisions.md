@@ -663,3 +663,18 @@ Ambiguous spec points and the option chosen. Newest last.
 - Making the CPU save the return address itself: two writes in one cycle would move into the CPU, which is already the largest chip.
 - Showing the stack on extra outputs: the CPU doesn't need it, and the circuit view already shows every register's value.
 **Consequences:** the CPU will raise `inc` on every fetch cycle, `push` with `inc` on `JMS`'s second cycle, `pop` on `BBL`, `load` on jumps that are taken, and `reset` from its own reset pin.
+
+## 2026-11-07 — The RAM levels, up to one bank of 4002s
+**Context:** milestone 7 asks for RAM at increasing sizes up to the 4002 layout: registers of 16 main and 4 status characters, picked by bank, chip and register. Open: the sizes on the way, the pins, how status characters are addressed, how many banks, whether the 4002's output port belongs here, and whether every size can run as HDL.
+**Decision:**
+- **The ladder is RAM8 → RAM64 → RAM4002 → RAMBank**, each built from the one before (RAM8 from Register4), with 4-bit characters throughout. The status characters are what the levels add after RAM64.
+- **Addresses as `SRC` sends them:** RAMBank's `addr[8]` is chip `addr[6..7]`, register `addr[4..5]` and main character `addr[0..3]`. RAM4002 takes the low 6 bits. The CPU can wire its `SRC` register straight in.
+- **One `status` pin chooses status characters,** picked by `addr[0..1]` within the register, with `addr[2..3]` ignored. For `WRn`/`RDn` the CPU puts `n` on `addr[0..1]`. The alternative, a separate 2-bit pin for the status index, would add a pin to every level for a two-bit Mux in the CPU.
+- **Banks: 8, picked by a 3-bit number** (the low 3 bits of `DCL`), as in MCS-4 systems with a bank decoder and in most emulators. A system without the decoder drives the CM-RAM lines directly, and some `DCL` values select two banks at once. That is wiring, not memory, and few programs rely on it.
+- **The 4002's 4-bit output port is not in these levels.** It is written by `WMP`, not by memory writes, and the CPU milestone turns ports into chip pins, so it is decided there.
+- **The eight-bank memory (DataRAM) waits for a builtin.** In HDL it comes to 187k gates. It simulates at about 490 cycles/s, but elaborating it takes 7.4 s, on every save and every Run tests. RAMBank is 23k gates, takes 0.8 s and runs about 2,100 cycles/s. CLAUDE.md allows a builtin once the HDL version passes, so a builtin RAMBank, with its equivalence test, comes first. DataRAM then is eight of those. Its HDL reference passes too; it is kept out of the repo until then.
+- **Tests,** generated once from a Python model with seed 4004, check each write after its tick and its tock, and each read at once. RAM8 and RAM64 write every address and read it all back. RAM4002 does that for all 64 main and 16 status characters, with random `addr[2..3]` on the status ones. RAMBank writes the same address in all four chips, and the edges and status characters of every register. All end with random cycles. Wrong versions fail: a RAM8 that loads every register, status characters picked by `addr[2..3]` or by the wrong register bit, status writes leaking into main memory, and a RAMBank picking chips by `addr[4..5]`.
+**Alternatives:**
+- A flat `RAM512`/`RAM4K` ladder as in nand2tetris: the 4002 layout would then be index arithmetic in the CPU.
+- Four banks (the CM-RAM lines without a decoder): the multi-bank `DCL` codes would need modelling for little gain.
+**Consequences:** pytest takes about 9 s, up from 5 s, because every level's reference and stub run. The next step is builtins: RAMBank first, marked in the GUI, switchable back to HDL, with a test that the builtin and HDL versions agree, then the DataRAM level.
