@@ -276,4 +276,45 @@ def test_a_new_export_scrolls_into_view(tmp_path: Path) -> None:
     app = with_chips(tmp_path, 6)
     app._write_export("Zed", "CHIP Zed { IN in; OUT out; PARTS: Nand(a=in, b=in, out=out); }")
     app.render(pygame.Surface(app.size))
-    assert "Zed" in [n for _, n in app._chip_rows]
+    assert app._exported[-1] == "Zed"  # sorted last, below the four rows shown
+    assert app.chips_scroll > 0
+    zed = next(r for r, n in app._chip_rows if n == "Zed")
+    assert app.chips_view.contains(zed)  # wholly in sight, not cut at the bottom
+
+
+def test_deleting_the_last_chip_gives_the_wheel_back_to_the_brief(tmp_path: Path) -> None:
+    app = with_chips(tmp_path, 1)
+    app.size = (1000, 420)
+    app.render(pygame.Surface(app.size))
+    where = app.chips_view.center
+    app.delete_chip("Buf0")
+    app.notice = None  # "Deleted Buf0…" would take the place the brief moves into
+    app.render(pygame.Surface(app.size))
+    assert app.chips_view.height == 0 and app.brief_cut
+    assert app.brief_view.collidepoint(where)  # the brief moved up into the chips' place
+    app.mouse = where
+    wheel(app, -1)
+    assert app.brief_scroll > 0
+
+
+def test_a_short_window_shrinks_the_chips_and_keeps_some_brief(tmp_path: Path) -> None:
+    app = with_chips(tmp_path, 6)
+    app.notice = "A notice, long enough to wrap over a couple of lines in the sidebar."
+    app.size = (1000, 400)
+    app.render(pygame.Surface(app.size))
+    bottom = app.size[1] - app.footer_height
+    assert CHIP_ROW_H <= app.chips_view.height < 4 * CHIP_ROW_H
+    assert app.chips_view.bottom <= bottom and app.brief_view.height > 0
+    app.size = (1000, 200)  # hopeless: still no chip drawn over the footer
+    app.render(pygame.Surface(app.size))
+    assert all(r.bottom <= app.size[1] - app.footer_height for r, _ in app._chip_rows)
+
+
+def test_the_wheel_over_a_sidebar_heading_does_not_zoom(tmp_path: Path) -> None:
+    app = with_chips(tmp_path, 6)
+    assert app._chips_rect is not None
+    app.mouse = (app._chips_rect.centerx, app._chips_rect.top + 6)  # on "Your chips"
+    assert not app.chips_view.collidepoint(app.mouse)
+    scale = app.cam.scale
+    wheel(app, 1)
+    assert app.cam.scale == scale and app.chips_scroll == 0

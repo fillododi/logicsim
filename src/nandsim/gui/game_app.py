@@ -47,6 +47,7 @@ BRIEF_BOTTOM = 6  # gap between the brief and the footer
 LIST_MIN_ROWS = 5  # the level list leaves the brief its room, but shows at least this many rows
 CHIPS_MAX_ROWS = 4  # "Your chips" shows this many rows at most, and scrolls past that
 BRIEF_WHEEL_LINES = 3  # lines of brief text one wheel notch scrolls
+BRIEF_KEEP_LINES = 3  # in a short window, "Your chips" shrinks to leave the brief this many
 
 
 def clamp_scroll(scroll: int, content: int, view: int) -> int:
@@ -504,6 +505,8 @@ class GameApp(ViewerApp):
             step = BRIEF_WHEEL_LINES * self.fonts.get(13).get_linesize()
             self.brief_scroll = max(0, self.brief_scroll - ev.y * step)  # clamped when drawn
             return
+        if ev.type == pygame.MOUSEWHEEL and self.mouse[0] < SIDEBAR:
+            return  # over a sidebar heading or gap: nothing to scroll, and not the canvas
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
             if self.button_rect.collidepoint(ev.pos):
                 self.run_tests()
@@ -725,6 +728,7 @@ class GameApp(ViewerApp):
             y += 8
         self._chip_rows = []
         self._chips_rect = None
+        self.chips_view = pygame.Rect(0, 0, 0, 0)  # no list, nothing for the wheel to catch
         if self._exported:
             top = y
             bold = self.fonts.get(13, bold=True)
@@ -739,9 +743,16 @@ class GameApp(ViewerApp):
 
     def _draw_chip_rows(self, surf: pygame.Surface, y: int, font: pygame.font.Font) -> int:
         """The exported chips, each with its × button, scrolling past `CHIPS_MAX_ROWS`.
-        Returns the y below them."""
+        Returns the y below them.
+
+        In a short window the list takes fewer rows (at least one) so that the brief keeps
+        `BRIEF_KEEP_LINES`, and it never reaches below the footer's top.
+        """
         content = len(self._exported) * CHIP_ROW_H
-        view = min(content, CHIPS_MAX_ROWS * CHIP_ROW_H)
+        bottom = self.size[1] - self.footer_height - BRIEF_BOTTOM
+        keep = 8 + BRIEF_KEEP_LINES * self.fonts.get(13).get_linesize()  # gap, then the brief
+        rows = max(1, min(CHIPS_MAX_ROWS, (bottom - y - keep) // CHIP_ROW_H))
+        view = max(0, min(content, rows * CHIP_ROW_H, bottom - y))
         if self._show_chip in self._exported:
             at = self._exported.index(self._show_chip) * CHIP_ROW_H
             self.chips_scroll = scroll_into_view(self.chips_scroll, at, CHIP_ROW_H, view)
@@ -757,16 +768,13 @@ class GameApp(ViewerApp):
             row = pygame.Rect(6, top, SIDEBAR - 12, CHIP_ROW_H)
             surf.blit(font.render(name, True, theme.ACCENT), (14, top + 2))
             x_btn = pygame.Rect(row.right - CHIP_ROW_H - 2, top, CHIP_ROW_H, CHIP_ROW_H)
-            hot = (
-                x_btn.collidepoint(self.mouse)
-                and self.chips_view.collidepoint(self.mouse)
-                and not self.menus
-            )
+            hit = x_btn.clip(self.chips_view)  # only the visible part takes clicks
+            hot = hit.collidepoint(self.mouse) and not self.menus
             if hot:
                 pygame.draw.rect(surf, theme.ERROR_BG, x_btn, border_radius=4)
             cross = font.render("×", True, theme.ERROR_TEXT if hot else theme.TEXT_DIM)
             surf.blit(cross, cross.get_rect(center=x_btn.center))
-            self._chip_rows.append((x_btn.clip(self.chips_view), name))
+            self._chip_rows.append((hit, name))
         surf.set_clip(clip)
         _draw_scrollbar(surf, y, view, content, self.chips_scroll, CHIP_ROW_H)
         return y + view
@@ -927,7 +935,8 @@ class GameApp(ViewerApp):
                 surf.blit(font.render(line, True, color), (14, line_y))
             line_y += step
         surf.set_clip(clip)
-        _draw_scrollbar(surf, y, view, content, self.brief_scroll, 2 * BRIEF_BOTTOM)
+        line_h = self.fonts.get(13).get_linesize()
+        _draw_scrollbar(surf, y, view, content, self.brief_scroll, line_h)
         self._brief_rect = pygame.Rect(6, y - 4, SIDEBAR - 12, view + 8)
 
     def _draw_results(self, surf: pygame.Surface) -> None:

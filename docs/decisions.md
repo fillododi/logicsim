@@ -610,9 +610,9 @@ Ambiguous spec points and the option chosen. Newest last.
 ## 2026-11-07 — The brief and *Your chips* scroll too
 **Context:** the level list scrolls since 2026-11-06, but a window too short for the list's 5 rows plus the brief cut the brief with no way to read its end, and every exported chip added a row to *Your chips*, pushing the brief further down.
 **Decision:**
-- ***Your chips* shows at most 4 rows** (`CHIPS_MAX_ROWS`) and scrolls by whole rows past that. Its header stays put. A chip just exported scrolls into view.
+- ***Your chips* shows at most 4 rows** (`CHIPS_MAX_ROWS`) and scrolls by whole rows past that. Its header stays put. A chip just exported scrolls into view. In a short window it takes fewer rows, down to one, so the brief keeps 3 lines (`BRIEF_KEEP_LINES`), and it never runs past the footer.
 - **The brief scrolls** in whatever height is left under the chips, by 3 text lines per wheel notch. It goes back to its top when another level opens. The list's height rule doesn't change: it still leaves the whole brief its room when the window allows, so the brief only scrolls in short windows.
-- **The wheel scrolls what is under the mouse**: the level list, the chips or the brief. Elsewhere it still zooms the canvas. All three views show the same thin bar at the sidebar's right edge, and rows scrolled out are neither drawn nor clickable.
+- **The wheel scrolls what is under the mouse**: the level list, the chips or the brief. Over the rest of the sidebar (headings, the notice, gaps) it does nothing; over the canvas it still zooms. All three views show the same thin bar at the sidebar's right edge, and rows scrolled out are neither drawn nor clickable.
 **Alternatives:**
 - One scroll view for everything under the level list: a long chip list would push the brief out of sight again.
 - Shrinking the level list below 5 rows to fit the brief: the list is how the player moves around, and it already scrolls.
