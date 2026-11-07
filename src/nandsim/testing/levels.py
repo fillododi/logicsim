@@ -17,7 +17,7 @@ from nandsim.paths import data_root
 
 CHIP_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 KEYWORDS = frozenset({"CHIP", "IN", "OUT", "PARTS", "true", "false"})
-RESERVED = frozenset({"Nand", "DFF"})  # the primitives, DFF included before it lands
+RESERVED = frozenset(PRIMITIVES)  # names a chip of the player's can never take
 
 
 @dataclass(frozen=True)
