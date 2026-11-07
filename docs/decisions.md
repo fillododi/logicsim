@@ -679,3 +679,17 @@ Ambiguous spec points and the option chosen. Newest last.
 - Generated tests without their generator, as for the earlier levels: the first version of these did that, and fixing its gap meant regenerating thousands of lines. The earlier levels' generators can move to `tools/` when they next change.
 - Four banks (the CM-RAM lines without a decoder): the multi-bank `DCL` codes would need modelling for little gain.
 **Consequences:** pytest takes about 9 s, up from 5 s, because every level's reference and stub run. The next step is builtins: RAMBank first, marked in the GUI, switchable back to HDL, with a test that the builtin and HDL versions agree, then the DataRAM level.
+
+## 2026-11-07 — Compile each chip once, and keep wire paths lazy
+**Context:** elaboration re-walked a chip's HDL, re-checked its wiring and rebuilt its wire paths for every instance. A RAMBank (4,000 copies of a few small chips) took 0.8 s on every save and Run tests, and an eight-bank DataRAM 7.3 s, which kept that level waiting for a builtin. Profiling showed the time spread over the per-instance checks and the 1.3M wire paths of a DataRAM. Once those were gone, levelization (a Python loop per gate) was 85% of what remained.
+**Decision:**
+- **Each distinct chip compiles once into a template:** its flattened gates and wires in a numbering of its own (constants, then input bits, then internal nets), already checked, with placeholder aliases resolved. A part is instantiated by giving its internal nets a fresh block in the parent and remapping the template's arrays with numpy.
+- **Templates are cached per `ChipLibrary`, keyed by the parsed `ChipDef` object.** The library already hands out one `ChipDef` per name, so a template is valid exactly as long as the parse cache. Every compile in the GUI and the CLI makes a fresh library, so an edit is never served stale. A cache keyed on source text across libraries would also skip unchanged chips between saves, but it needs to track what each chip resolved to. It is not needed at these times.
+- **`Netlist.wires` and `Netlist.gate_paths` become read-only `Mapping`s computed on demand** by walking the template tree. The GUI and the engine look up a few paths at a time; nothing needs all of them except a combinational-loop message, which walks the tree once.
+- **Levelization processes one frontier per round with numpy.** It gives the same levels, and the same gate order within each level, as the old loop. This was checked on every reference chip and on DataRAM.
+- **Results:** RAMBank 0.81 s → 0.016 s, DataRAM (187k gates) 7.34 s → 0.087 s. Simulation speed is unchanged.
+**Alternatives:**
+- Memoizing only the parse, or only the error checks: the per-instance wire paths alone took about a second for DataRAM.
+- Keeping `wires` an eager dict: 1.3M lists for DataRAM, built on every save.
+- A builtin RAMBank first, as planned: still useful for simulation speed (DataRAM runs about 490 cycles/s in HDL), but the build time no longer blocks the level.
+**Consequences:** net numbers are now compact (placeholders no longer take a slot), so `num_nets` is smaller than before. Code that needs every wire should use `wires.walk()` rather than one lookup per path. The DataRAM level can now be added in HDL. Whether it still waits for a builtin depends only on simulation speed.

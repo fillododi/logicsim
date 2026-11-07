@@ -34,6 +34,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 - **The level brief and *Your chips* scroll.** In a short window, scroll the brief with the
   mouse wheel to read it to its end. *Your chips* shows four chips at a time and scrolls
   past that, so a long library no longer pushes the brief off the sidebar.
+- **Big chips build in a blink.** Saving a chip or running its tests now builds each kind of
+  part once and reuses it, so a chip made of many copies of the same part no longer stalls:
+  a bank of four RAM chips builds in 0.02 s instead of 0.8 s, and eight banks in under 0.1 s
+  instead of over 7 s. Running the clock is as fast as before.
 
 ## [0.6.0] — 2026-11-07
 
