@@ -1,0 +1,7 @@
+// PC: The 4004's program counter and 3-level address stack: four 12-bit addresses and a pointer.
+// You may use: Nand, Not, And, Or, Xor, Mux, Mux12, DMux4Way, Mux4Way12, Inc12, Register12, Bit
+CHIP PC {
+    IN in[12], inc, load, push, pop, reset;
+    OUT out[12];
+    PARTS:
+}

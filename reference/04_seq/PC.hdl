@@ -1,0 +1,51 @@
+// Reference solution for PC. Never shown to the player.
+CHIP PC {
+    IN in[12], inc, load, push, pop, reset;
+    OUT out[12];
+    PARTS:
+    // The pointer: up on push, down on pop, 0 on reset.
+    Bit(in=np0, load=true, out=p0);
+    Bit(in=np1, load=true, out=p1);
+    Not(in=p0, out=flip0);           // up and down both flip bit 0
+    Xor(a=p1, b=p0, out=up1);
+    Xor(a=p1, b=flip0, out=down1);
+    Mux(a=down1, b=up1, sel=push, out=step1);
+    Or(a=push, b=pop, out=move);
+    Mux(a=p0, b=flip0, sel=move, out=m0);
+    Mux(a=p1, b=step1, sel=move, out=m1);
+    Mux(a=m0, b=false, sel=reset, out=np0);
+    Mux(a=m1, b=false, sel=reset, out=np1);
+
+    // What the register at the new pointer takes: in, 0, or the current address + 1.
+    Inc12(in=cur, out=next);
+    Or(a=load, b=push, out=take);
+    Mux12(a=next, b=in, sel=take, out=fresh);
+    Mux12(a=fresh, b=false, sel=reset, out=newval);
+
+    // Whether it writes: reset, push, or load/inc without a pop.
+    Or(a=load, b=inc, out=moves);
+    Not(in=pop, out=nopop);
+    And(a=moves, b=nopop, out=here);
+    Or(a=push, b=reset, out=jump);
+    Or(a=here, b=jump, out=wnew);
+    // A push with inc also steps the address it leaves behind.
+    Not(in=reset, out=noreset);
+    And(a=push, b=inc, out=pushinc);
+    And(a=pushinc, b=noreset, out=wold);
+
+    DMux4Way(in=wnew, sel[0]=np0, sel[1]=np1, a=n0, b=n1, c=n2, d=n3);
+    DMux4Way(in=wold, sel[0]=p0, sel[1]=p1, a=o0, b=o1, c=o2, d=o3);
+    Or(a=n0, b=o0, out=l0);
+    Or(a=n1, b=o1, out=l1);
+    Or(a=n2, b=o2, out=l2);
+    Or(a=n3, b=o3, out=l3);
+    Mux12(a=next, b=newval, sel=n0, out=d0);
+    Mux12(a=next, b=newval, sel=n1, out=d1);
+    Mux12(a=next, b=newval, sel=n2, out=d2);
+    Mux12(a=next, b=newval, sel=n3, out=d3);
+    Register12(in=d0, load=l0, out=a0);
+    Register12(in=d1, load=l1, out=a1);
+    Register12(in=d2, load=l2, out=a2);
+    Register12(in=d3, load=l3, out=a3);
+    Mux4Way12(a=a0, b=a1, c=a2, d=a3, sel[0]=p0, sel[1]=p1, out=cur, out=out);
+}

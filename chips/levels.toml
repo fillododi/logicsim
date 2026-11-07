@@ -195,3 +195,10 @@ parts = ["Nand", "Register4", "Register8"]
 name = "IndexRegs"
 group = "04_seq"
 parts = ["Nand", "Or", "DMux", "DMux8Way", "Mux4", "Mux8Way4", "Register4"]
+
+# The 4004's program counter and address stack: four addresses and a 2-bit
+# pointer that wraps, as on the chip, so a fourth nested call loses the oldest.
+[[level]]
+name = "PC"
+group = "04_seq"
+parts = ["Nand", "Not", "And", "Or", "Xor", "Mux", "Mux12", "DMux4Way", "Mux4Way12", "Inc12", "Register12", "Bit"]

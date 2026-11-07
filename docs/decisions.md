@@ -647,3 +647,19 @@ Ambiguous spec points and the option chosen. Newest last.
 - Separate read and write addresses: no 4004 instruction needs them in the same cycle.
 - Making both loads at once undefined: tests can't check "undefined" usefully, and the CPU never does it.
 **Consequences:** the CPU level will drive `addr` from the instruction's low digit (from R0's pair for `FIN`'s fetch), `load` for `XCH`/`INC`/`ISZ`, and `loadpair` for `FIM`/`FIN`. A builtin for this chip can come later if the CPU needs the speed, with an equivalence test.
+
+## 2026-11-07 — The PC and its stack: four addresses and a wrapping pointer
+**Context:** milestone 7 asks for the PC with its 3-level address stack. The 4004 keeps four 12-bit address registers and a 2-bit pointer. The one selected is the program counter, `JMS` moves the pointer up and `BBL` moves it down, and the pointer wraps. A stack built as a shift register (PC, S1, S2, S3) behaves the same for programs that nest at most three calls, but not after a fourth call or a return past the bottom. Also open: the controls, what wins when several are set, how the return address skips the call, and how the counter starts.
+**Decision:**
+- **Four addresses and a wrapping pointer, as on the chip,** so even an overflowing program behaves as on a real 4004. The emulator in the next project will follow the same model.
+- **`CHIP PC { IN in[12], inc, load, push, pop, reset; OUT out[12]; }`.** Priority is `reset` > `push` > `pop` > `load` > `inc`, and the test pins it down.
+- **`push` with `inc` also steps the address it leaves behind.** On `JMS`'s second cycle the CPU both fetches (which steps the PC) and calls, so the saved address must point past the call. A push without `inc` saves the address unchanged.
+- **`pop` writes nothing.** The address under the new pointer is already the return address, stepped when the call was made.
+- **`reset`** sets the pointer to 0 and address 0 to 0, and leaves the other three alone. Everything starts undefined, so the CPU needs one reset cycle.
+- **Parts:** Nand, Not, And, Or, Xor, Mux, Mux12, DMux4Way, Mux4Way12, Inc12, Register12, Bit. The pointer is two Bits.
+- **Test:** reset, counting across `0xFFF`, a jump, calls three deep with and without `inc`, a fourth call, two returns past the bottom, each control against the ones it outranks, then 200 random cycles (seed 4004) from a Python model, 472 checks. Every clock cycle checks `out` after its tick and after its tock. Wrong versions fail: a push that doesn't step the address it leaves, a load that outranks a pop, a reset that doesn't clear the address, and a push that writes at the old pointer.
+**Alternatives:**
+- A shift-register stack: just as easy to build, but it differs from the 4004 after an overflow.
+- Making the CPU save the return address itself: two writes in one cycle would move into the CPU, which is already the largest chip.
+- Showing the stack on extra outputs: the CPU doesn't need it, and the circuit view already shows every register's value.
+**Consequences:** the CPU will raise `inc` on every fetch cycle, `push` with `inc` on `JMS`'s second cycle, `pop` on `BBL`, `load` on jumps that are taken, and `reset` from its own reset pin.
