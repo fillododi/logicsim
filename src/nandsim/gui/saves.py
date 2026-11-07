@@ -33,7 +33,7 @@ from nandsim.hdl import ChipDef, HdlError, parse
 from nandsim.netlist import PRIMITIVES, ChipLibrary, Primitive, elaborate
 from nandsim.paths import default_save_dir, exports_dir, settings_file
 from nandsim.testing import Level, exported_chips
-from nandsim.testing.levels import CHIP_NAME, KEYWORDS, RESERVED
+from nandsim.testing.levels import CHIP_NAME, KEYWORDS
 
 PROGRESS_VERSION = 1
 
@@ -115,7 +115,7 @@ class SaveStore:
             return "A chip name starts with a letter and has only letters, digits and _."
         if name in KEYWORDS:
             return f"{name} is a word of the HDL. Pick another name."
-        if name in PRIMITIVES or name in RESERVED:
+        if name in PRIMITIVES:
             return f"{name} is a built-in chip. Pick another name."
         if any(lv.name == name for lv in self.levels):
             return f"{name} is a level's chip. Pick another name, like My{name}."

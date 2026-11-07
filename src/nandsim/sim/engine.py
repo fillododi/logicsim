@@ -15,7 +15,7 @@ from collections.abc import Callable
 
 import numpy as np
 
-from nandsim.netlist import FALSE_NET, TRUE_NET, Netlist
+from nandsim.netlist import FALSE_NET, PRIMITIVES, TRUE_NET, Netlist
 
 Planes = tuple[np.ndarray, np.ndarray]  # (value, known)
 
@@ -36,18 +36,13 @@ class Simulator:
 
     def __init__(self, netlist: Netlist) -> None:
         self.netlist = netlist
-        self.value = np.zeros(netlist.num_nets, dtype=bool)
-        self.known = np.zeros(netlist.num_nets, dtype=bool)
-        self.known[[FALSE_NET, TRUE_NET]] = True
-        self.value[TRUE_NET] = True
-        dff = netlist.gates.get("DFF")
+        # Every primitive marked sequential (levelization leaves them all out) is a
+        # D flip-flop: one input latched on tick, one output updated on tock.
+        clocked = [g for k, g in netlist.gates.items() if PRIMITIVES[k].sequential]
         empty = np.zeros(0, dtype=np.int64)
-        self._dff_in = dff.inputs[0] if dff else empty
-        self._dff_out = dff.outputs[0] if dff else empty
-        self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
-        self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
-        self.cycle = 0  # completed clock cycles (tocks) since the start or the last reset
-        self.mid_cycle = False  # True between a tick and its tock
+        self._dff_in = np.concatenate([g.inputs[0] for g in clocked]) if clocked else empty
+        self._dff_out = np.concatenate([g.outputs[0] for g in clocked]) if clocked else empty
+        self.reset()
 
     # ---- inputs and outputs -------------------------------------------
 
@@ -116,17 +111,18 @@ class Simulator:
 
     def reset(self) -> None:
         """Back to power-on: every input, wire and DFF undefined, cycle 0."""
-        self.value[:] = False
-        self.known[:] = False
+        self.value = np.zeros(self.netlist.num_nets, dtype=bool)
+        self.known = np.zeros(self.netlist.num_nets, dtype=bool)
         self.known[[FALSE_NET, TRUE_NET]] = True
         self.value[TRUE_NET] = True
         self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
         self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
-        self.cycle = 0
-        self.mid_cycle = False
+        self.cycle = 0  # completed clock cycles (tocks) since power-on
+        self.mid_cycle = False  # True between a tick and its tock
 
     @property
     def dff_count(self) -> int:
+        """How many DFFs the clock updates."""
         return len(self._dff_out)
 
     # ---- helpers -------------------------------------------------------

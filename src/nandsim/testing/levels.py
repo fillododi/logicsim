@@ -17,7 +17,6 @@ from nandsim.paths import data_root
 
 CHIP_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
 KEYWORDS = frozenset({"CHIP", "IN", "OUT", "PARTS", "true", "false"})
-RESERVED = frozenset(PRIMITIVES)  # names a chip of the player's can never take
 
 
 @dataclass(frozen=True)
@@ -69,7 +68,7 @@ def exported_chips(directory: Path, levels: list[Level]) -> list[str]:
     """
     if not directory.is_dir():
         return []
-    taken = {lv.name for lv in levels} | set(PRIMITIVES) | RESERVED | KEYWORDS
+    taken = {lv.name for lv in levels} | set(PRIMITIVES) | KEYWORDS
     names = [
         p.stem
         for p in directory.iterdir()
