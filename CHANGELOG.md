@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-07
+
+Milestone 6: arithmetic. Ten new levels teach your chips to count, from adding two bits up
+to the Intel 4004's whole arithmetic and logic unit, with its decimal adjust, its inverted
+borrow and its keyboard code.
+
 ### Added
 
 - **Adders.** Five levels in a new *Arithmetic* group add bits and numbers: HalfAdder and
@@ -192,7 +198,8 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/fillododi/logicsim/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/fillododi/logicsim/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fillododi/logicsim/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/fillododi/logicsim/compare/v0.2.0...v0.3.0
