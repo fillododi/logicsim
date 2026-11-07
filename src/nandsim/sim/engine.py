@@ -7,6 +7,11 @@ a known 0 on any input forces a known 1, even if the other input is undefined.
 DFFs are clocked: `tick` evaluates and latches every DFF's input, `tock` puts the
 latched values on the DFF outputs and evaluates again, so `out(t) = in(t-1)`.
 Both are one vectorized copy over all DFFs. DFFs start undefined.
+
+`tick` skips its evaluation when nothing changed since the last one (no `set`,
+`tock`, `reset` or `load_dff_state`): a step in the GUI or a `.tst` that ticks
+right after a tock then costs one evaluation instead of two. Write nets only
+through these methods, or the skip can miss a change.
 """
 
 from __future__ import annotations
@@ -38,7 +43,9 @@ class Simulator:
         self.netlist = netlist
         # Every primitive marked sequential (levelization leaves them all out) is a
         # D flip-flop: one input latched on tick, one output updated on tock.
-        clocked = [g for k, g in netlist.gates.items() if PRIMITIVES[k].sequential]
+        kinds = [k for k in netlist.gates if PRIMITIVES[k].sequential]
+        clocked = [netlist.gates[k] for k in kinds]
+        self._dff_paths = [p for k in kinds for p in netlist.gate_paths.get(k, [])]
         empty = np.zeros(0, dtype=np.int64)
         self._dff_in = np.concatenate([g.inputs[0] for g in clocked]) if clocked else empty
         self._dff_out = np.concatenate([g.outputs[0] for g in clocked]) if clocked else empty
@@ -53,6 +60,7 @@ class Simulator:
         if value is None:
             self.known[idx] = False
             self.value[idx] = False
+            self._stale = True
             return
         width = len(nets)
         if not 0 <= value < (1 << width):
@@ -60,6 +68,7 @@ class Simulator:
         bits = (value >> np.arange(width)) & 1
         self.value[idx] = bits.astype(bool)
         self.known[idx] = True
+        self._stale = True
 
     def get(self, pin: str) -> int | None:
         """Read a top-level output (or input) as an integer; `None` if any bit is undefined."""
@@ -90,10 +99,12 @@ class Simulator:
                 for idx, (v, k) in zip(op.outputs, outs, strict=True):
                     value[idx] = v
                     known[idx] = k
+        self._stale = False
 
     def tick(self) -> None:
         """First half of a clock cycle: evaluate, then every DFF latches its input."""
-        self.eval()
+        if self._stale:
+            self.eval()
         self._latch_value = self.value[self._dff_in]
         self._latch_known = self.known[self._dff_in]
         self.mid_cycle = True
@@ -118,12 +129,39 @@ class Simulator:
         self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
         self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
         self.cycle = 0  # completed clock cycles (tocks) since power-on
+        self._stale = True  # nets may not match the inputs: the next tick must evaluate
         self.mid_cycle = False  # True between a tick and its tock
 
     @property
     def dff_count(self) -> int:
         """How many DFFs the clock updates."""
         return len(self._dff_out)
+
+    @property
+    def dff_paths(self) -> list[str]:
+        """Where each DFF sits in the hierarchy, e.g. `Reg2/Bit#1/DFF#5`, in clock order."""
+        return list(self._dff_paths)
+
+    @property
+    def dff_outputs(self) -> np.ndarray:
+        """The output net of each DFF, in the order `dff_state` uses."""
+        return self._dff_out.copy()
+
+    def dff_state(self) -> Planes:
+        """What every DFF outputs now, as (value, known) copies in `dff_outputs` order."""
+        return self.value[self._dff_out], self.known[self._dff_out]
+
+    def load_dff_state(self, which: np.ndarray, value: np.ndarray, known: np.ndarray) -> None:
+        """Make DFFs `which` (indices into `dff_outputs`) hold these values, latched too.
+
+        For carrying state into a rebuilt chip; call `eval()` afterwards to propagate it.
+        """
+        nets = self._dff_out[which]
+        self.value[nets] = value & known
+        self.known[nets] = known
+        self._latch_value[which] = value & known
+        self._latch_known[which] = known
+        self._stale = True
 
     # ---- helpers -------------------------------------------------------
 

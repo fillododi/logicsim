@@ -164,3 +164,164 @@ def test_help_line_fits_the_window(chips: Path, width: int) -> None:
     else:
         assert len(lines) > 1
     app.render(pygame.Surface(app.size))
+
+
+# ---- the clock -------------------------------------------------------------
+
+BIT = """CHIP Bit { IN in, load; OUT out; PARTS:
+    Nand(a=load, b=load, out=nl); Nand(a=prev, b=nl, out=x);
+    Nand(a=in, b=load, out=y); Nand(a=x, b=y, out=d);
+    DFF(in=d, out=prev, out=out); }"""
+
+
+def bit_app(tmp_path: Path) -> ViewerApp:
+    (tmp_path / "Bit.hdl").write_text(BIT)
+    s = ChipSession(file_loader(tmp_path / "Bit.hdl", [tmp_path]))
+    assert s.reload()
+    app = ViewerApp(s, size=(1100, 600))
+    app.render(pygame.Surface(app.size))
+    return app
+
+
+def press(app: ViewerApp, k: int, mod: int = 0) -> None:
+    app.handle(pygame.event.Event(pygame.KEYDOWN, key=k, mod=mod, unicode=""))
+
+
+def release(app: ViewerApp, k: int) -> None:
+    app.handle(pygame.event.Event(pygame.KEYUP, key=k, mod=0))
+
+
+def typed(app: ViewerApp, text: str) -> None:
+    app.handle(pygame.event.Event(pygame.TEXTINPUT, text=text))
+
+
+def clock_button(app: ViewerApp, action: str) -> tuple[int, int]:
+    return next(r.center for r, a in app._clock_buttons if a == action)
+
+
+def out_of(app: ViewerApp) -> int | None:
+    assert app.session.sim is not None
+    return app.session.sim.get("out")
+
+
+def test_clock_panel_only_for_chips_with_dffs(chips: Path, tmp_path: Path) -> None:
+    mux = make_app(chips)
+    mux.render(pygame.Surface(mux.size))
+    assert mux.clock_rect is None and "Space" not in mux.help_text
+    key(mux, pygame.K_SPACE)  # nothing to clock: no error, nothing happens
+    app = bit_app(tmp_path)
+    assert app.clock_rect is not None
+    assert [a for _, a in app._clock_buttons] == ["reset", "run", "step", "slower", "faster"]
+    assert "Space: step a cycle" in app.help_text
+
+
+def test_clock_buttons_step_run_and_reset(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    app.session.set_input("in", 1)
+    app.session.set_input("load", 1)
+    click(app, clock_button(app, "step"))
+    assert out_of(app) == 1 and app.session.cycle == 1
+    click(app, clock_button(app, "run"))
+    assert app.session.running
+    app.render(pygame.Surface(app.size))  # the button now says Pause
+    app.tick(now=100.0)
+    app.tick(now=100.2)  # 0.2 s at 5 cycles/s
+    assert app.session.cycle == 2
+    app.tick(now=200.0)  # a long stall counts as MAX_FRAME_DT at most
+    assert app.session.cycle == 3
+    click(app, clock_button(app, "faster"))
+    assert app.session.speed == 10
+    click(app, clock_button(app, "reset"))
+    assert not app.session.running and app.session.cycle == 0 and out_of(app) is None
+
+
+def test_clock_keys(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    app.session.set_input("in", 1)
+    app.session.set_input("load", 1)
+    press(app, pygame.K_SPACE)
+    assert app.session.cycle == 1 and out_of(app) == 1
+    press(app, pygame.K_r)
+    release(app, pygame.K_r)
+    assert app.session.running
+    press(app, pygame.K_SPACE)  # a step by hand pauses
+    assert not app.session.running and app.session.cycle == 2
+    typed(app, "]")
+    typed(app, "[")
+    typed(app, "[")
+    assert app.session.speed == 2
+    press(app, pygame.K_r, pygame.KMOD_SHIFT)
+    release(app, pygame.K_r)
+    assert app.session.cycle == 0 and out_of(app) is None
+
+
+def test_speed_keys_work_where_brackets_need_altgr(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    # Italian layout: AltGr+è types "[". The keycode is è's and AltGr is held.
+    app.handle(pygame.event.Event(pygame.KEYDOWN, key=0xE8, mod=pygame.KMOD_RALT, unicode="["))
+    typed(app, "[")
+    assert app.session.speed == 2
+
+
+def test_holding_r_toggles_once(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    for _ in range(5):  # the first press, then key repeats while held
+        press(app, pygame.K_r)
+    assert app.session.running
+    release(app, pygame.K_r)
+    press(app, pygame.K_r)
+    assert not app.session.running
+
+
+def test_clock_keys_ignore_ctrl_alt_and_meta(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    for mod in (pygame.KMOD_CTRL, pygame.KMOD_ALT, pygame.KMOD_META):
+        press(app, pygame.K_SPACE, mod)  # Cmd+Space is Spotlight, not a step
+        press(app, pygame.K_r, mod)
+        release(app, pygame.K_r)
+    assert app.session.cycle == 0 and not app.session.running
+
+
+def test_dragging_from_the_clock_panel_never_pans(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    start = clock_button(app, "step")
+    before = (app.cam.ox, app.cam.oy)
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=start, button=1))
+    end = (start[0] - 60, start[1] + 40)
+    app.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=end, rel=(-60, 40), buttons=(1, 0, 0)))
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, pos=end, button=1))
+    assert (app.cam.ox, app.cam.oy) == before
+    assert app.session.cycle == 0  # dragged off the button: no step either
+
+
+def test_an_old_panel_never_swallows_a_click(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    assert app.clock_rect is not None
+    (tmp_path / "Bit.hdl").write_text(
+        "CHIP Bit { IN in, load; OUT out; PARTS: Nand(a=in, b=load, out=out); }"
+    )
+    assert app.session.reload()  # no DFFs now, and no frame drawn since
+    old = app.clock_rect
+    assert not app._on_clock(old.center)  # clicks there reach the circuit again
+
+
+def test_dff_part_does_not_open_and_panel_clicks_stay_on_it(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    snap = app.session.snapshot
+    assert snap is not None
+    dff = next(i for i, p in enumerate(snap.view.parts) if p.chip == "DFF")
+    assert snap.view.part(dff).primitive
+    click(app, center_of(app, ("part", dff)))
+    assert app.session.path == "Bit"  # a primitive: nothing inside to open
+    assert app.clock_rect is not None
+    corner = (app.clock_rect.x + 2, app.clock_rect.y + 2)  # on the panel, not a button
+    click(app, corner)
+    assert app.session.cycle == 0 and app.session.path == "Bit"
+
+
+def test_fit_keeps_the_circuit_below_the_clock_panel(tmp_path: Path) -> None:
+    app = bit_app(tmp_path)
+    snap = app.session.snapshot
+    assert snap is not None and app.clock_rect is not None
+    top = min(app.screen_of((b.x, b.y))[1] for b in snap.layout.boxes.values())
+    assert top >= app.clock_rect.bottom

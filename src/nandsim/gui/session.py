@@ -4,10 +4,16 @@ The session owns the flattened simulation of the top chip and a *view path*
 (`Mux`, `Mux/Or#4`, ...) saying which level of the hierarchy is on screen. On
 reload, an HDL error never replaces the running circuit: the session keeps the
 last version that compiled and remembers the error so the GUI can show it.
+
+A chip with DFFs has a clock: `step` runs one whole cycle (tick and tock), and
+`advance` runs as many cycles as the speed asks for while `running`. A reload keeps
+the DFFs' values and the cycle count only if every DFF still sits in the same place
+in the hierarchy (`Reg2/Bit#1/DFF#5`); otherwise the clock starts over.
 """
 
 from __future__ import annotations
 
+import time
 from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +28,10 @@ from nandsim.sim import Simulator
 
 # Returns the top chip's name and the library to find it and its parts in.
 Loader = Callable[[], tuple[str, ChipLibrary]]
+
+SPEEDS = (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)  # clock rates offered, in cycles/s
+DEFAULT_SPEED = 5
+FRAME_BUDGET = 0.03  # seconds of clocking per frame at most, so the window stays responsive
 
 
 @dataclass
@@ -44,6 +54,9 @@ class ChipSession:
         self.error: HdlError | None = None
         self.inputs: dict[str, int | None] = {}
         self._layouts: dict[str, Snapshot] = {}
+        self.running = False
+        self.speed = DEFAULT_SPEED
+        self._owed = 0.0  # cycles due but not yet run, while running
 
     # ---- loading -------------------------------------------------------
 
@@ -61,8 +74,10 @@ class ChipSession:
         except OSError as e:
             self.error = HdlError(f"cannot read chip: {e}", None)
             return False
+        old = self.sim
         self.netlist, self.lib, self.error = netlist, lib, None
         self.sim = Simulator(netlist)
+        self._carry_clock(old, self.sim)
         kept = {}
         for pin, nets in netlist.inputs.items():
             v = self.inputs.get(pin)
@@ -142,6 +157,81 @@ class ChipSession:
         if not self.sim.known[idx].all():
             return None
         return int((self.sim.value[idx].astype(np.int64) << np.arange(len(idx))).sum())
+
+    # ---- the clock -------------------------------------------------------
+
+    @property
+    def has_clock(self) -> bool:
+        """Whether the chip has DFFs, so the clock does something."""
+        return self.sim is not None and self.sim.dff_count > 0
+
+    @property
+    def cycle(self) -> int:
+        return self.sim.cycle if self.sim is not None else 0
+
+    def step(self) -> None:
+        """One whole clock cycle: tick, then tock."""
+        assert self.sim is not None
+        self.sim.tick()
+        self.sim.tock()
+
+    def reset_clock(self) -> None:
+        """DFFs back to undefined and the cycle to 0. The inputs keep their values."""
+        assert self.sim is not None
+        self.sim.reset()
+        for pin, v in self.inputs.items():
+            self.sim.set(pin, v)
+        self.sim.eval()
+        self.running = False
+        self._owed = 0.0
+
+    def toggle_run(self) -> None:
+        self.running = not self.running and self.has_clock
+        self._owed = 0.0
+
+    def change_speed(self, delta: int) -> None:
+        """Move `delta` notches along SPEEDS, stopping at either end."""
+        i = SPEEDS.index(self.speed) + delta
+        self.speed = SPEEDS[max(0, min(len(SPEEDS) - 1, i))]
+
+    def advance(self, dt: float, budget: float = FRAME_BUDGET) -> int:
+        """While running, run the cycles `dt` seconds are worth; return how many ran.
+
+        If the chip is too slow for the speed, run for `budget` seconds and drop the
+        rest, so the clock falls behind instead of freezing the window.
+        """
+        if not self.running or self.sim is None:
+            return 0
+        self._owed += dt * self.speed
+        due = int(self._owed + 1e-9)  # 0.2 s at 5/s is 0.999…: still one whole cycle
+        self._owed = max(0.0, self._owed - due)
+        start = time.perf_counter()
+        done = 0
+        while done < due:
+            self.step()
+            done += 1
+            if time.perf_counter() - start > budget:
+                self._owed = 0.0
+                break
+        return done
+
+    def _carry_clock(self, old: Simulator | None, new: Simulator) -> None:
+        """Move the clock's state from `old` into the rebuilt `new`, if it still means the same.
+
+        Part paths are numbered by position (`Bit#2`), so a part added or removed
+        renumbers the DFFs after it. State carries only when every DFF sits where it
+        did; otherwise every DFF starts undefined, the count restarts and the clock
+        pauses, as after a reset. A value is never shown on the wrong DFF.
+        """
+        same = old is not None and old.dff_count > 0 and old.dff_paths == new.dff_paths
+        if same:
+            assert old is not None
+            value, known = old.dff_state()
+            new.load_dff_state(np.arange(new.dff_count), value, known)
+            new.cycle = old.cycle
+        else:
+            self.running = False
+            self._owed = 0.0
 
     def known_fraction(self, nets: tuple[int, ...] | list[int]) -> float:
         assert self.sim is not None

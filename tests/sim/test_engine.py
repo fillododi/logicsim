@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 
+import numpy as np
 import pytest
 
 from nandsim.hdl import parse
@@ -200,3 +201,60 @@ def test_every_sequential_primitive_is_clocked_like_a_dff() -> None:
     sequential = [p for p in PRIMITIVES.values() if p.sequential]
     assert [p.name for p in sequential] == ["DFF"]
     assert all((p.inputs, p.outputs) == (("in",), ("out",)) for p in sequential)
+
+
+def test_dff_state_can_be_read_and_carried_into_another_simulator() -> None:
+    src = """CHIP T { IN in; OUT out[2]; PARTS:
+        DFF(in=in, out=a, out=out[0]); DFF(in=a, out=out[1]); }"""
+    s = sim(src)
+    s.set("in", 1)
+    s.tick()
+    s.tock()  # out = [1, undefined]
+    value, known = s.dff_state()
+    assert list(known) == [True, False] and bool(value[0])
+    assert len(s.dff_outputs) == 2
+
+    fresh = sim(src)
+    fresh.load_dff_state(np.arange(2), value, known)
+    fresh.eval()
+    assert fresh.get_bits("out") == [1, None]
+    fresh.set("in", 0)
+    fresh.tock()  # the latch was loaded too: a tock keeps the carried state
+    assert fresh.get_bits("out") == [1, None]
+    fresh.tick()
+    fresh.tock()
+    assert fresh.get_bits("out") == [0, 1]
+
+
+def test_dff_paths_name_each_dff_in_clock_order() -> None:
+    delay = "CHIP Delay { IN in; OUT out; PARTS: DFF(in=in, out=out); }"
+    lib = ChipLibrary(sources={"Delay": (delay, "Delay.hdl")})
+    src = """CHIP T { IN in; OUT out; PARTS:
+        Delay(in=in, out=m); Nand(a=m, b=m, out=n); DFF(in=n, out=out); }"""
+    s = Simulator(elaborate(parse(src, "T.hdl"), lib))
+    assert s.dff_paths == ["T/Delay#1/DFF#1", "T/DFF#3"]
+    assert s.netlist.gate_paths["Nand"] == ["T/Nand#2"]
+
+
+def test_tick_skips_its_evaluation_when_nothing_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    s = sim(DFF)
+    calls: list[int] = []
+    real_eval = s.eval
+
+    def counted() -> None:
+        calls.append(1)
+        real_eval()
+
+    monkeypatch.setattr(s, "eval", counted)
+    s.set("in", 1)
+    s.tick()
+    s.tock()
+    assert len(calls) == 2  # the set made the tick evaluate; a tock always does
+    s.tick()
+    s.tock()
+    assert len(calls) == 3  # nothing changed since the tock: the tick skipped its eval
+    assert s.get("out") == 1
+    s.set("in", 0)
+    s.tick()
+    s.tock()
+    assert len(calls) == 5 and s.get("out") == 0

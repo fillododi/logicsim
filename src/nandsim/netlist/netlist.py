@@ -43,7 +43,8 @@ class Netlist:
     `inputs` and `outputs` map the top chip's pins to their nets, bit 0 first.
     `wires` maps every pin and internal wire at every level of the hierarchy,
     e.g. `Xor/n` or `Xor/Nand#2/out`, to its nets so the GUI can show them.
-    `levels` is the combinational evaluation order.
+    `levels` is the combinational evaluation order. `gate_paths[kind][g]` is where
+    gate g of a kind sits in the hierarchy, e.g. `Bit/DFF#5`, in `gates` order.
     """
 
     top: str
@@ -53,6 +54,7 @@ class Netlist:
     outputs: dict[str, list[int]]
     wires: dict[str, list[int]]
     levels: list[list[LevelOp]] = field(default_factory=list)
+    gate_paths: dict[str, list[str]] = field(default_factory=dict)
 
     @property
     def gate_count(self) -> int:

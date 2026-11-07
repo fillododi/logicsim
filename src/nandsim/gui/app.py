@@ -38,10 +38,17 @@ HELP = (
     "click part: open  ·  "
     "Backspace: up  ·  wheel: zoom  ·  drag: pan  ·  F: fit  ·  H: hex/dec"
 )
+CLOCK_HELP = "Space: step a cycle  ·  R: run / pause  ·  Shift+R: reset clock  ·  [ ]: speed"
+CLOCK_PAD = 8  # inside the clock panel and between its items
+MAX_FRAME_DT = 0.25  # seconds; a longer stall (a drag, a slow rebuild) doesn't pile up cycles
 EDITOR_HELP = (
     "Ctrl+S: save & build  ·  Ctrl+Z / Ctrl+Y: undo / redo  ·  Ctrl+/: comment  ·  "
     "Tab / Shift+Tab: indent  ·  Esc: back to the circuit"
 )
+
+# The speed goes by the character typed, not the key: on many layouts (Italian,
+# German, French) brackets need AltGr and have no bracket keycode.
+CLOCK_CHARS = {"[": "slower", "]": "faster"}
 
 
 class ViewerApp:
@@ -65,6 +72,11 @@ class ViewerApp:
         self._press: tuple[int, int] | None = None
         self._dragged = False
         self._crumbs: list[tuple[pygame.Rect, str]] = []
+        self._clock_buttons: list[tuple[pygame.Rect, str]] = []
+        self.clock_rect: pygame.Rect | None = None  # the clock panel, once drawn
+        self._last_frame: float | None = None
+        self._held: set[int] = set()  # keys down now, so a held R doesn't repeat its toggle
+        self._press_on_clock = False  # a press that began on the clock panel never pans
         self._last_poll = 0.0
         self._fitted_path: str | None = None
         self.quit_requested = False  # set to leave `run()` after the current frame
@@ -119,7 +131,9 @@ class ViewerApp:
 
     @property
     def help_text(self) -> str:
-        return EDITOR_HELP if self.editing else HELP
+        if self.editing:
+            return EDITOR_HELP
+        return f"{HELP}{SEP}{CLOCK_HELP}" if self.session.has_clock else HELP
 
     def help_lines(self) -> list[str]:
         """The help line, wrapped between items to fit the window."""
@@ -137,9 +151,18 @@ class ViewerApp:
     def editing(self) -> bool:
         return self.editor is not None and self.editor.focused
 
+    @property
+    def clock_height(self) -> int:
+        """Height of the clock panel with its margin; 0 when the chip has no clock."""
+        if not self.session.has_clock:
+            return 0
+        return self.fonts.get(13, bold=True).get_linesize() + 6 + 3 * CLOCK_PAD
+
     def fit(self) -> None:
         if self.session.snapshot is not None:
-            self.cam.fit(self.session.snapshot.layout, self.canvas_area)
+            x, y, w, h = self.canvas_area
+            room = self.clock_height  # so a fitted circuit starts below the clock panel
+            self.cam.fit(self.session.snapshot.layout, (x, y + room, w, h - room))
             self._fitted_path = self.session.path
 
     def screen_of(self, layout_point: tuple[float, float]) -> tuple[int, int]:
@@ -150,6 +173,8 @@ class ViewerApp:
     # ---- events ----------------------------------------------------------
 
     def handle(self, ev: pygame.event.Event) -> None:
+        if ev.type == pygame.KEYUP:
+            self._held.discard(ev.key)
         if self._field_event(ev):
             return
         if self.editor is not None and self._editor_event(ev):
@@ -162,12 +187,14 @@ class ViewerApp:
                     or abs(ev.pos[0] - self._press[0]) + abs(ev.pos[1] - self._press[1])
                     > CLICK_SLOP
                 ):
-                    self._dragged = True
-                    self.cam.pan(dx, dy)
+                    self._dragged = True  # too far to be a click
+                    if not self._press_on_clock:
+                        self.cam.pan(dx, dy)
             self.mouse = ev.pos
             self._update_hover()
         elif ev.type == pygame.MOUSEBUTTONDOWN and ev.button in (1, 3):
             self._press, self._dragged = ev.pos, False
+            self._press_on_clock = self._on_clock(ev.pos)
             self.mouse = ev.pos
         elif ev.type == pygame.MOUSEBUTTONUP and ev.button in (1, 3):
             if self._press is not None and not self._dragged:
@@ -178,6 +205,8 @@ class ViewerApp:
             self._update_hover()
         elif ev.type == pygame.KEYDOWN:
             self._key(ev.key, getattr(ev, "unicode", ""), getattr(ev, "mod", 0))
+        elif ev.type == pygame.TEXTINPUT and ev.text in CLOCK_CHARS and self.session.has_clock:
+            self.clock(CLOCK_CHARS[ev.text])
 
     def _field_event(self, ev: pygame.event.Event) -> bool:
         """Typing into the value field, if one is open. True if the event was used for it.
@@ -304,6 +333,11 @@ class ViewerApp:
             if rect.collidepoint(pos):
                 self._navigate(path)
                 return
+        if self._on_clock(pos):
+            for rect, action in self._clock_buttons:
+                if rect.collidepoint(pos) and not right:
+                    self.clock(action)
+            return  # the panel covers the circuit: a click on it never reaches a part
         snap = self.session.snapshot
         if snap is None or not self.in_canvas(pos):
             return
@@ -330,6 +364,15 @@ class ViewerApp:
                 assert self.hover.node is not None
                 self.open_value_field(str(self.hover.node[1]))
                 return
+        if self.session.has_clock and plain:
+            if key == pygame.K_r:
+                if key not in self._held:  # a held key repeats: toggle once per press
+                    self._held.add(key)
+                    self.clock("reset" if mod & pygame.KMOD_SHIFT else "run")
+                return
+            if key == pygame.K_SPACE:  # held, it keeps stepping: that one is useful
+                self.clock("step")
+                return
         if key in (pygame.K_BACKSPACE, pygame.K_ESCAPE):
             if self.session.up():
                 self.fit()
@@ -342,6 +385,32 @@ class ViewerApp:
             if self.session.at_top:
                 self.session.set_input(str(self.hover.node[1]), None)
 
+    def _on_clock(self, pos: tuple[int, int]) -> bool:
+        """Whether `pos` is on the clock panel as last drawn, and the chip still has a clock."""
+        rect = self.clock_rect
+        return rect is not None and self.session.has_clock and bool(rect.collidepoint(pos))
+
+    @property
+    def clock_paused(self) -> bool:
+        """Whether something on top (the game's menus) holds the clock; never in the viewer."""
+        return False
+
+    def clock(self, action: str) -> None:
+        """A clock control: "step", "run" (also pauses), "reset", "slower" or "faster"."""
+        s = self.session
+        if not s.has_clock:
+            return
+        if action == "step":
+            s.running = False  # stepping by hand pauses a running clock
+            s.step()
+        elif action == "run":
+            s.toggle_run()
+        elif action == "reset":
+            s.reset_clock()
+        elif action in ("slower", "faster"):
+            s.change_speed(-1 if action == "slower" else 1)
+        self.on_action(f"clock_{action}")
+
     def _navigate(self, path: str) -> None:
         if path != self.session.path:
             self.session.goto(path)
@@ -350,7 +419,7 @@ class ViewerApp:
 
     def _update_hover(self) -> None:
         snap = self.session.snapshot
-        if snap is None or not self.in_canvas(self.mouse):
+        if snap is None or not self.in_canvas(self.mouse) or self._on_clock(self.mouse):
             self.hover = Hover()
             return
         p = self.cam.to_layout(self.mouse)
@@ -361,8 +430,11 @@ class ViewerApp:
     # ---- time ------------------------------------------------------------
 
     def tick(self, now: float | None = None) -> None:
-        """Poll for changed files and reload; refit if the view jumped elsewhere."""
+        """Run the clock if it is running, then poll for changed files and reload."""
         now = time.monotonic() if now is None else now
+        if self._last_frame is not None and not self.clock_paused:
+            self.session.advance(min(now - self._last_frame, MAX_FRAME_DT))
+        self._last_frame = now
         if self.watcher is None or now - self._last_poll < POLL_SECONDS:
             return
         self._last_poll = now
@@ -388,6 +460,7 @@ class ViewerApp:
             r = self.editor.rect
             border = theme.ACCENT if self.editor.focused else theme.PART_BORDER
             pygame.draw.line(surf, border, (r.x - 1, r.y), (r.x - 1, r.bottom), 2)
+        self._draw_clock(surf)
         self._draw_value_field(surf)
         self._draw_header(surf)
         self._draw_footer(surf)
@@ -419,6 +492,55 @@ class ViewerApp:
         pygame.draw.rect(surf, border, rect, 2, border_radius=6)
         surf.blit(typed, (x + 10, y + 6))
         surf.blit(hint, (x + 10, y + 10 + typed.get_height()))
+
+    def _draw_clock(self, surf: pygame.Surface) -> None:
+        """The clock panel, top right of the canvas, for chips with DFFs.
+
+        Left to right: the cycle count, Reset, Run (Pause while running), Step, and
+        the speed between − and +.
+        """
+        self._clock_buttons = []
+        self.clock_rect = None
+        s = self.session
+        if not s.has_clock:
+            return
+        bold, plain = self.fonts.get(13, bold=True), self.fonts.get(13)
+        running = s.running
+        items: list[tuple[str | None, pygame.Surface]] = [
+            (None, plain.render(f"cycle {s.cycle}", True, theme.TEXT)),
+            ("reset", bold.render("Reset", True, theme.TEXT)),
+            (
+                "run",
+                bold.render(
+                    "Pause" if running else "Run", True, theme.BG if running else theme.TEXT
+                ),
+            ),
+            ("step", bold.render("Step", True, theme.TEXT)),
+            ("slower", bold.render("−", True, theme.TEXT)),
+            (None, plain.render(f"{s.speed}/s", True, theme.TEXT_DIM)),
+            ("faster", bold.render("+", True, theme.TEXT)),
+        ]
+        bh = bold.get_linesize() + 6
+        widths = [t.get_width() + (2 * CLOCK_PAD if a else 0) for a, t in items]
+        x0, y0, cw, _ = self.canvas_area
+        panel = pygame.Rect(0, 0, sum(widths) + CLOCK_PAD * (len(items) + 1), bh + 2 * CLOCK_PAD)
+        panel.topright = (round(x0 + cw) - CLOCK_PAD, round(y0) + CLOCK_PAD)
+        panel.left = max(panel.left, round(x0) + CLOCK_PAD)  # a narrow canvas: stay off the sidebar
+        pygame.draw.rect(surf, theme.PANEL, panel, border_radius=6)
+        pygame.draw.rect(surf, theme.PART_BORDER, panel, 1, border_radius=6)
+        x, y = panel.x + CLOCK_PAD, panel.y + CLOCK_PAD
+        for (action, text), w in zip(items, widths, strict=True):
+            rect = pygame.Rect(x, y, w, bh)
+            if action is not None:
+                active = action == "run" and running
+                hot = rect.collidepoint(self.mouse)
+                pygame.draw.rect(surf, theme.ACCENT if active else theme.BG, rect, border_radius=4)
+                edge = theme.ACCENT if active or hot else theme.PART_BORDER
+                pygame.draw.rect(surf, edge, rect, 1, border_radius=4)
+                self._clock_buttons.append((rect, action))
+            surf.blit(text, text.get_rect(center=rect.center))
+            x += w + CLOCK_PAD
+        self.clock_rect = panel
 
     def _draw_header(self, surf: pygame.Surface) -> None:
         w = self.size[0]

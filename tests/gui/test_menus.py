@@ -441,3 +441,53 @@ def test_sound_and_volume_change_in_place_and_are_remembered(tmp_path: Path) -> 
     assert "Sound: Off" in labels(again) and "Volume: 20%" in labels(again)
     click_item(again, "Sound: Off")
     assert again.sounds.played == ["select"]  # unmuting plays the preview
+
+
+# ---- the clock behind menus ----------------------------------------------------
+
+BIT = """CHIP Bit { IN in, load; OUT out; PARTS:
+    Nand(a=load, b=load, out=nl); Nand(a=prev, b=nl, out=x);
+    Nand(a=in, b=load, out=y); Nand(a=x, b=y, out=d);
+    DFF(in=d, out=prev, out=out); }"""
+
+
+def clocked_game(tmp_path: Path) -> GameApp:
+    """The game with a chip that has DFFs on screen (no level lists DFF yet)."""
+    from nandsim.gui.session import ChipSession, file_loader
+
+    app = new_app(tmp_path / "save")
+    app.open_level(LEVELS["Not"])
+    (tmp_path / "Bit.hdl").write_text(BIT)
+    app.session = ChipSession(file_loader(tmp_path / "Bit.hdl", [tmp_path]))
+    assert app.session.reload() and app.session.has_clock
+    if app.editor is not None:
+        app.editor.focused = False
+    return app
+
+
+def test_menus_hold_the_clock(tmp_path: Path) -> None:
+    app = clocked_game(tmp_path)
+    app.clock("run")
+    app.tick(now=10.0)
+    app.tick(now=10.2)
+    assert app.session.cycle == 1
+    key(app, pygame.K_ESCAPE)
+    assert app.menus and app.menus[-1].title == "Paused"
+    app.tick(now=10.4)
+    app.tick(now=10.6)
+    assert app.session.cycle == 1  # still: the game is paused
+    key(app, pygame.K_ESCAPE)
+    assert not app.menus
+    app.tick(now=10.8)  # time spent in the menu isn't owed afterwards
+    assert app.session.cycle == 2 and app.session.running
+
+
+def test_releasing_r_inside_a_menu_doesnt_leave_it_held(tmp_path: Path) -> None:
+    app = clocked_game(tmp_path)
+    key(app, pygame.K_r)
+    assert app.session.running
+    key(app, pygame.K_ESCAPE)
+    app.handle(pygame.event.Event(pygame.KEYUP, key=pygame.K_r, mod=0))  # the menu takes it
+    key(app, pygame.K_ESCAPE)
+    key(app, pygame.K_r)
+    assert not app.session.running  # a fresh press, not a repeat
