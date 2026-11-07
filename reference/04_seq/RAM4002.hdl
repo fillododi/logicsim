@@ -1,0 +1,15 @@
+// Reference solution for RAM4002. Never shown to the player.
+CHIP RAM4002 {
+    IN in[4], addr[6], status, load;
+    OUT out[4];
+    PARTS:
+    DMux(in=load, sel=status, a=lmain, b=lstat);
+    // Main characters: register addr[4..5], character addr[0..3].
+    RAM64(in=in, addr=addr, load=lmain, out=main);
+    // Status characters: register addr[4..5], character addr[0..1].
+    DMux(in=lstat, sel=addr[5], a=ls0, b=ls1);
+    RAM8(in=in, addr[0..1]=addr[0..1], addr[2]=addr[4], load=ls0, out=s0);
+    RAM8(in=in, addr[0..1]=addr[0..1], addr[2]=addr[4], load=ls1, out=s1);
+    Mux4(a=s0, b=s1, sel=addr[5], out=stat);
+    Mux4(a=main, b=stat, sel=status, out=out);
+}

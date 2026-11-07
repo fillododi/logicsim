@@ -1,0 +1,7 @@
+// RAM4002: One 4002 RAM chip: 4 registers of 16 main and 4 status characters.
+// You may use: Nand, DMux, Mux4, RAM8, RAM64
+CHIP RAM4002 {
+    IN in[4], addr[6], status, load;
+    OUT out[4];
+    PARTS:
+}

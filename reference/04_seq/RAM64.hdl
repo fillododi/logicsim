@@ -1,0 +1,16 @@
+// Reference solution for RAM64. Never shown to the player.
+CHIP RAM64 {
+    IN in[4], addr[6], load;
+    OUT out[4];
+    PARTS:
+    DMux8Way(in=load, sel=addr[3..5], a=l0, b=l1, c=l2, d=l3, e=l4, f=l5, g=l6, h=l7);
+    RAM8(in=in, addr=addr[0..2], load=l0, out=r0);
+    RAM8(in=in, addr=addr[0..2], load=l1, out=r1);
+    RAM8(in=in, addr=addr[0..2], load=l2, out=r2);
+    RAM8(in=in, addr=addr[0..2], load=l3, out=r3);
+    RAM8(in=in, addr=addr[0..2], load=l4, out=r4);
+    RAM8(in=in, addr=addr[0..2], load=l5, out=r5);
+    RAM8(in=in, addr=addr[0..2], load=l6, out=r6);
+    RAM8(in=in, addr=addr[0..2], load=l7, out=r7);
+    Mux8Way4(a=r0, b=r1, c=r2, d=r3, e=r4, f=r5, g=r6, h=r7, sel=addr[3..5], out=out);
+}

@@ -202,3 +202,26 @@ parts = ["Nand", "Or", "DMux", "DMux8Way", "Mux4", "Mux8Way4", "Register4"]
 name = "PC"
 group = "04_seq"
 parts = ["Nand", "Not", "And", "Or", "Xor", "Mux", "Mux12", "DMux4Way", "Mux4Way12", "Inc12", "Register12", "Bit"]
+
+# Data memory, in 4-bit characters, up to a bank of four 4002 chips. A 4002 has
+# 4 registers of 16 main and 4 status characters; SRC's 8-bit address picks the
+# chip, the register and the main character.
+[[level]]
+name = "RAM8"
+group = "04_seq"
+parts = ["Nand", "DMux8Way", "Mux8Way4", "Register4"]
+
+[[level]]
+name = "RAM64"
+group = "04_seq"
+parts = ["Nand", "DMux8Way", "Mux8Way4", "RAM8"]
+
+[[level]]
+name = "RAM4002"
+group = "04_seq"
+parts = ["Nand", "DMux", "Mux4", "RAM8", "RAM64"]
+
+[[level]]
+name = "RAMBank"
+group = "04_seq"
+parts = ["Nand", "DMux4Way", "Mux4Way4", "RAM4002"]
