@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import itertools
 
+import numpy as np
 import pytest
 
 from nandsim.hdl import parse
@@ -200,3 +201,26 @@ def test_every_sequential_primitive_is_clocked_like_a_dff() -> None:
     sequential = [p for p in PRIMITIVES.values() if p.sequential]
     assert [p.name for p in sequential] == ["DFF"]
     assert all((p.inputs, p.outputs) == (("in",), ("out",)) for p in sequential)
+
+
+def test_dff_state_can_be_read_and_carried_into_another_simulator() -> None:
+    src = """CHIP T { IN in; OUT out[2]; PARTS:
+        DFF(in=in, out=a, out=out[0]); DFF(in=a, out=out[1]); }"""
+    s = sim(src)
+    s.set("in", 1)
+    s.tick()
+    s.tock()  # out = [1, undefined]
+    value, known = s.dff_state()
+    assert list(known) == [True, False] and bool(value[0])
+    assert len(s.dff_outputs) == 2
+
+    fresh = sim(src)
+    fresh.load_dff_state(np.arange(2), value, known)
+    fresh.eval()
+    assert fresh.get_bits("out") == [1, None]
+    fresh.set("in", 0)
+    fresh.tock()  # the latch was loaded too: a tock keeps the carried state
+    assert fresh.get_bits("out") == [1, None]
+    fresh.tick()
+    fresh.tock()
+    assert fresh.get_bits("out") == [0, 1]

@@ -125,6 +125,26 @@ class Simulator:
         """How many DFFs the clock updates."""
         return len(self._dff_out)
 
+    @property
+    def dff_outputs(self) -> np.ndarray:
+        """The output net of each DFF, in the order `dff_state` uses."""
+        return self._dff_out.copy()
+
+    def dff_state(self) -> Planes:
+        """What every DFF outputs now, as (value, known) copies in `dff_outputs` order."""
+        return self.value[self._dff_out], self.known[self._dff_out]
+
+    def load_dff_state(self, which: np.ndarray, value: np.ndarray, known: np.ndarray) -> None:
+        """Make DFFs `which` (indices into `dff_outputs`) hold these values, latched too.
+
+        For carrying state into a rebuilt chip; call `eval()` afterwards to propagate it.
+        """
+        nets = self._dff_out[which]
+        self.value[nets] = value & known
+        self.known[nets] = known
+        self._latch_value[which] = value & known
+        self._latch_known[which] = known
+
     # ---- helpers -------------------------------------------------------
 
     @staticmethod
