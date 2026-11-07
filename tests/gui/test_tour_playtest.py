@@ -243,13 +243,14 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     press_next(app)
     assert step_id(app) == "done"
     press_next(app)
-    assert app.tour.current is None and shown(app) is None
+    # The tour's last steps wait for Bit, the first level with a clock.
+    assert step_id(app) == "memory" and shown(app) is None
     for p in shots.iterdir():
         assert p.stat().st_size > 0
 
-    # Restarting remembers the finished tour; F1 replays it from the first tutorial level.
+    # Restarting remembers how far the tour got; F1 replays it from the first tutorial level.
     again = new_app(save)
-    assert again.tour.current is None
+    assert step_id(again) == "memory"
     keydown(again, pygame.K_F1)
     assert again.game.current.name == "Wire" and step_id(again) == "welcome"
 
@@ -362,3 +363,26 @@ def test_both_unreadable_files_are_reported(tmp_path: Path) -> None:
     app = new_app(save)
     assert app.notice is not None
     assert "progress.json.bad" in app.notice and "tutorial.json.bad" in app.notice
+
+
+def test_bit_introduces_the_clock(tmp_path: Path) -> None:
+    """On Bit, the last two bubbles ask for a chip with a DFF, then for one clock step."""
+    levels = load_levels()
+    store = SaveStore(levels, tmp_path / "save")
+    for lv in levels[: [x.name for x in levels].index("Bit")]:
+        store.save(lv, lv.reference.read_text())
+        store.mark_solved(lv)
+    app = GameApp(store, size=(1440, 860))
+    app.tour.seen.update(s.id for s in app.tour.steps if s.level != "Bit")
+    app.open_level(next(lv for lv in levels if lv.name == "Bit"))
+    assert step_id(app) == "memory" and shown(app) is not None
+    assert app.anchor_rect("clock") is None  # the stub has no DFF, so no clock yet
+    assert app.editor is not None
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(next(lv for lv in levels if lv.name == "Bit").reference.read_text())
+    keydown(app, pygame.K_s, CTRL)
+    assert app.session.error is None and step_id(app) == "clock"
+    b = shown(app)  # beside the clock panel, not over it
+    assert b is not None and app.anchor_rect("clock") is not None
+    app.clock("step")
+    assert app.tour.current is None and shown(app) is None

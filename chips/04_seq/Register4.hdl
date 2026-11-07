@@ -1,0 +1,7 @@
+// Register4: Remembers 4 bits; loads in when load is 1, else keeps its value.
+// You may use: Nand, Bit
+CHIP Register4 {
+    IN in[4], load;
+    OUT out[4];
+    PARTS:
+}

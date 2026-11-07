@@ -17,6 +17,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   The keys are Space (step), R (run / pause), Shift+R (reset) and [ ] (speed). Saving your
   chip keeps what its DFFs hold, unless you added or removed parts. The clock stops while a
   menu is open.
+- **Memory levels: Bit, Register4, Register8 and Register12.** A new Memory group after
+  Arithmetic. Bit stores one bit with a DFF and keeps it while `load` is 0; the registers put
+  Bits side by side, up to the 12 bits of the 4004's program counter. On Bit, two new tour
+  bubbles show the clock panel and ask for one step.
 
 ### Changed
 

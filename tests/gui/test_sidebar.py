@@ -56,10 +56,10 @@ def shown(app: GameApp) -> list[str]:
 
 def test_a_new_game_shows_the_tutorial_and_the_gates(tmp_path: Path) -> None:
     app = new_app(tmp_path)
-    groups = ["00_tutorial", "01_gates", "02_buses", "03_arith"]
+    groups = ["00_tutorial", "01_gates", "02_buses", "03_arith", "04_seq"]
     assert [g for _, g in app._group_rows] == groups
-    # Buses and Arithmetic stay folded: none of their levels is open before Not is solved.
-    folded = {"02_buses", "03_arith"}
+    # Buses, Arithmetic and Memory stay folded: none of their levels is open before Not is solved.
+    folded = {"02_buses", "03_arith", "04_seq"}
     assert shown(app) == [lv.name for lv in load_levels() if lv.group not in folded]
 
 

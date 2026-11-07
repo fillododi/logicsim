@@ -1,0 +1,8 @@
+// Reference solution for Register8. Never shown to the player.
+CHIP Register8 {
+    IN in[8], load;
+    OUT out[8];
+    PARTS:
+    Register4(in=in[0..3], load=load, out=out[0..3]);
+    Register4(in=in[4..7], load=load, out=out[4..7]);
+}
