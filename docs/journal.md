@@ -222,3 +222,45 @@ This became milestone 3, Tutorial and UI, which also takes on layout readability
 | Work since 0.4.0 | 6 merged PRs (#27–#32), 13 commits | `gh pr list`, `git log --no-merges v0.4.0..HEAD` |
 
 **Next:** milestone 6, Arithmetic: HalfAdder, FullAdder, Add4 with carry in and out, Inc4, Inc12 for the program counter, and the 4004's ALU (add and subtract with carry/borrow, increment and decrement, complement, rotate through carry, DAA, KBP, TCS, and the zero and carry flags JCN tests). It starts with an analysis of the ALU's operations and flags against Intel's MCS-4 manual, then the adders, which are ordinary levels.
+
+## Milestone 6 — Arithmetic (2026-11-07)
+
+**Built:** the arithmetic of the Intel 4004, in a new *Arithmetic* group of 10 levels.
+- **Adders:** HalfAdder, FullAdder, Add4 (`a[4], b[4], cin` → `out[4], cout`, the datapath of `ADD`), Inc4 (`INC` and `ISZ` on a register, no carry) and Inc12 (the program counter, from three chained Add4s).
+- **The 4004's quirks, one level each:** AddSub4 subtracts as `SUB` does, `a + ~b + ~cin`, where a carry of 1 means *no borrow*. Rotate4 is `RAL` and `RAR` through the carry. Daa4 adds 6 when the digit is over 9 or the carry is set, and never clears the carry. Kbp4 maps a one-hot key row to 1–4, with 15 for errors.
+- **The ALU:** `a[4], b[4], cin, op[4]` → `out[4], cout, zr`. Ops 0–12 are the low digit of the accumulator group `F0`–`FC`, so the CPU can pass it straight in. 13 is LD (`out = b`), so every accumulator write can go through the ALU. 14 and 15 are ADD and SUB. Its decision entry records the interface, since the CPU, the emulator project and saves will depend on it.
+- **The sidebar** names the group "Arithmetic", and a test now checks that every brief's tables fit the sidebar.
+
+**Problems and how they were solved:**
+- *A manual that wasn't there.* The analysis meant to check the ALU against Intel's MCS-4 manual, but its URL returned 404. Sources disagreed on DAA (does a set carry alone trigger +6?). The pyntel4004 docs, which quote the manual, settled it: +6 if A > 9 **or** CY, and the carry is never cleared. They also confirmed SUB, DAC, TCS and KBP. The decision entries name the source for each rule, and say the semantics should be checked against the manual if a copy turns up.
+- *Briefs that looked fine in Markdown.* Three ways a brief went wrong, each seen only in a screenshot:
+  - Hard-wrapped paragraphs broke early, because the renderer treats each source line as a paragraph.
+  - Two tables were wider than the sidebar and silently lost their last column.
+  - The ALU's brief pushed its own hint off the bottom.
+
+  The first two now have rules (one line per paragraph, narrow tables), and the second has a test against the sidebar's real width in characters. The third was fixed by shortening the brief.
+- *Tests of the tests.* As in milestone 5, plausible wrong solutions were run against each new `.tst`: 9 for the adders, 12 for the part levels, 15 for the ALU. All fail. One "wrong" Rotate4 passed at first. It was a broken mutant (it muxed a result with itself), not a weak test, and a real direction swap fails. A smoke-test "error" that didn't show was likewise valid HDL (`carry[0]` on a 1-bit wire).
+- *One model for two generators.* The ALU's `.tst` generator imports the part levels' model rather than re-deriving DAA and SUB, so the ALU and its parts can't disagree on the 4004's semantics.
+- *An ALU four times the size of anything before it.* The estimate was 400–600 NANDs; the reference is 1,319. Nearly 450 of them choose a single carry bit through two Mux8Way4s, the trick the hint teaches. It stays, since CLAUDE.md says not to optimize early, and a builtin ALU with its equivalence test is the plan if the CPU needs the speed.
+
+**Learned:**
+- Get the semantics from a source before writing a reference. Two of the 4004's rules (SUB's inverted borrow, DAA's sticky carry) are the opposite of what most CPUs do, and a reference written from habit would have made the tests reject correct chips.
+- Small levels before a big one: AddSub4, Rotate4, Daa4 and Kbp4 each carry one quirk, so the ALU level is only about choosing by `op`.
+- A rule that only lives in someone's head gets broken. The brief layout rules are now in a test and a decision entry.
+- Check a test-of-the-test before trusting it: a mutant that passes may be a no-op.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 489 (+51 since 0.5.0) | `uv run pytest --co -q` |
+| Levels | 31/31 pass against their references (10 new, 9,221 checks in the arithmetic `.tst` files, 5,856 of them the ALU's) | `uv run nandsim test --impl reference chips/` |
+| NAND count (depth) per arithmetic reference | HalfAdder 6 (3), FullAdder 15 (7), Add4 60 (19), Inc4 24 (9), Inc12 180 (51), AddSub4 80 (22), Rotate4 40 (5), Daa4 71 (23), Kbp4 33 (8), ALU 1,319 (42) | `elaborate()` on each reference: `gate_count` and `len(levels)` |
+| Engine on the ALU | 6.4k evals/s (8.5 M gate-evals/s, the same per-gate rate as Mux4Way12 in 0.5.0); elaboration 36 ms; the 1,952-row ALU `.tst` runs in 0.55 s | `Simulator.eval()` in a loop for 2 s with `op`, `a` and `cin` changing; `elaborate()` averaged over 10 runs; `time nandsim test` on `ALU.tst`; Python 3.12.3, this laptop |
+| Source LOC | 6075 (gui 4447, netlist 696, testing 385, hdl 362, sim 81); +7 since 0.5.0, all in gui | non-blank lines of `src/**/*.py` at HEAD and at v0.5.0, same script |
+| Test LOC | 3294 (+10) | non-blank lines of `tests/**/*.py`, same script |
+| Work since 0.5.0 | 3 merged PRs (#34–#36), 8 commits | `git log --merges` and `git log --no-merges v0.5.0..HEAD` |
+
+Almost all of this milestone is level data rather than code: 10 stubs, briefs, references and `.tst` files, plus three decision entries.
+
+**Next:** milestone 7, Sequential logic. It starts with the DFF in the GUI and the `tick`/`tock` commands in `.tst`, which `docs/tst.md` already promises. Then come Bit and Register4/8/12, the index register file (16 × 4, also as 8 pairs), the PC with its 3-level stack (Inc12 is ready for it), RAM up to the 4002 layout, a 4096 × 8 ROM, and clock controls. The `.tst` format will need a way to load ROM contents before milestone 8.
