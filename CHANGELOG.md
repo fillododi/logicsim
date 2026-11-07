@@ -21,6 +21,8 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   Arithmetic. Bit stores one bit with a DFF and keeps it while `load` is 0; the registers put
   Bits side by side, up to the 12 bits of the 4004's program counter. On Bit, two new tour
   bubbles show the clock panel and ask for one step.
+- **IndexRegs**, the 4004's 16 index registers in the Memory group: read and write one
+  4-bit register, or a pair of them as 8 bits, picked by the low digit of an instruction.
 
 ### Changed
 

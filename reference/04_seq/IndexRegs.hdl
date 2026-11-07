@@ -1,0 +1,49 @@
+// Reference solution for IndexRegs. Never shown to the player.
+CHIP IndexRegs {
+    IN in[8], addr[4], load, loadpair;
+    OUT out[4], pairout[8];
+    PARTS:
+    // Which register loads: one register, or both registers of a pair.
+    DMux(in=load, sel=addr[0], a=le, b=lo);
+    DMux8Way(in=le, sel=addr[1..3], a=le0, b=le1, c=le2, d=le3, e=le4, f=le5, g=le6, h=le7);
+    DMux8Way(in=lo, sel=addr[1..3], a=lo0, b=lo1, c=lo2, d=lo3, e=lo4, f=lo5, g=lo6, h=lo7);
+    DMux8Way(in=loadpair, sel=addr[1..3], a=lp0, b=lp1, c=lp2, d=lp3, e=lp4, f=lp5, g=lp6, h=lp7);
+    Or(a=le0, b=lp0, out=we0);
+    Or(a=le1, b=lp1, out=we1);
+    Or(a=le2, b=lp2, out=we2);
+    Or(a=le3, b=lp3, out=we3);
+    Or(a=le4, b=lp4, out=we4);
+    Or(a=le5, b=lp5, out=we5);
+    Or(a=le6, b=lp6, out=we6);
+    Or(a=le7, b=lp7, out=we7);
+    Or(a=lo0, b=lp0, out=wo0);
+    Or(a=lo1, b=lp1, out=wo1);
+    Or(a=lo2, b=lp2, out=wo2);
+    Or(a=lo3, b=lp3, out=wo3);
+    Or(a=lo4, b=lp4, out=wo4);
+    Or(a=lo5, b=lp5, out=wo5);
+    Or(a=lo6, b=lp6, out=wo6);
+    Or(a=lo7, b=lp7, out=wo7);
+    // An even register takes the high half when its whole pair loads.
+    Mux4(a=in[0..3], b=in[4..7], sel=loadpair, out=evenin);
+    Register4(in=evenin, load=we0, out=r0);
+    Register4(in=in[0..3], load=wo0, out=r1);
+    Register4(in=evenin, load=we1, out=r2);
+    Register4(in=in[0..3], load=wo1, out=r3);
+    Register4(in=evenin, load=we2, out=r4);
+    Register4(in=in[0..3], load=wo2, out=r5);
+    Register4(in=evenin, load=we3, out=r6);
+    Register4(in=in[0..3], load=wo3, out=r7);
+    Register4(in=evenin, load=we4, out=r8);
+    Register4(in=in[0..3], load=wo4, out=r9);
+    Register4(in=evenin, load=we5, out=r10);
+    Register4(in=in[0..3], load=wo5, out=r11);
+    Register4(in=evenin, load=we6, out=r12);
+    Register4(in=in[0..3], load=wo6, out=r13);
+    Register4(in=evenin, load=we7, out=r14);
+    Register4(in=in[0..3], load=wo7, out=r15);
+    // Reading: the row picks a pair, addr[0] a register in it.
+    Mux8Way4(a=r0, b=r2, c=r4, d=r6, e=r8, f=r10, g=r12, h=r14, sel=addr[1..3], out=even, out=pairout[4..7]);
+    Mux8Way4(a=r1, b=r3, c=r5, d=r7, e=r9, f=r11, g=r13, h=r15, sel=addr[1..3], out=odd, out=pairout[0..3]);
+    Mux4(a=even, b=odd, sel=addr[0], out=out);
+}

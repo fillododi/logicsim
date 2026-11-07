@@ -631,3 +631,19 @@ Ambiguous spec points and the option chosen. Newest last.
 - Letting every register use Bit directly: Register12 from 12 Bits is a chore, not a puzzle.
 - Tour steps that explain Run and Reset one at a time: the panel is small, and one bubble covers it.
 **Consequences:** `tutorial.ANCHORS` gains `clock` and `EVENTS` gains `clock_step`. A player who finished the tour before this change still sees the two Bit bubbles when they reach Bit. Exports may now use DFF once Bit is open.
+
+## 2026-11-07 — The index register file: one address, two widths
+**Context:** milestone 7 asks for the 4004's index registers: 16 × 4 bits, also read and written as 8 pairs. The CPU uses them in several ways. `ADD`, `SUB`, `LD`, `XCH`, `INC` and `ISZ` read one register, and `XCH`, `INC` and `ISZ` also write it back in the same instruction. `FIM` and `FIN` write a pair, and `SRC`, `JIN` and `FIN` read one. Open: the pins, how a pair is addressed, which half of a pair is high, and what happens when both kinds of write are asked for.
+**Decision:**
+- **`CHIP IndexRegs { IN in[8], addr[4], load, loadpair; OUT out[4], pairout[8]; }`.** One address port. `out` is always register `addr`, and `pairout` is always the pair that holds it, so the CPU never has to switch the chip between modes to read.
+- **`addr` is the instruction's low digit as encoded.** A pair is `addr[1..3]`, and `addr[0]` is ignored for pairs, as in the 4004's `RRR0`/`RRR1` encodings (`FIM`/`SRC`, `FIN`/`JIN`).
+- **The even register is the pair's high half**, as in the 4004: `FIM P0` puts the first data digit in R0, and `SRC` sends R0 out first.
+- **`load` writes `in[0..3]` into register `addr`. `loadpair` writes `in[4..7]` into the even register and `in[0..3]` into the odd one.** If both are set, `loadpair` wins. That falls out of the obvious design, and the test pins it down.
+- **One address is enough for the CPU.** `FIN` reads P0 and writes another pair, but in different cycles of a two-cycle instruction, so the CPU chooses `addr` per cycle.
+- **Parts:** Nand, Or, DMux, DMux8Way, Mux4, Mux8Way4, Register4.
+- **Test:** each register and each pair written and read back, a cycle with neither load, load against loadpair, then 64 random cycles with seed 4004, checked against a Python model. Every cycle checks the reads before the tick, after the tick and after the tock (712 checks). Registers not written yet are `*`. Three wrong versions fail it: pair halves swapped, a pair loading only when P0 loads, and the pair picked from `addr[0..2]`.
+**Alternatives:**
+- A `pair` mode bit that switches `out` between 4 and 8 bits: more muxing, and a mode to keep in step.
+- Separate read and write addresses: no 4004 instruction needs them in the same cycle.
+- Making both loads at once undefined: tests can't check "undefined" usefully, and the CPU never does it.
+**Consequences:** the CPU level will drive `addr` from the instruction's low digit (from R0's pair for `FIN`'s fetch), `load` for `XCH`/`INC`/`ISZ`, and `loadpair` for `FIM`/`FIN`. A builtin for this chip can come later if the CPU needs the speed, with an equivalence test.

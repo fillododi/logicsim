@@ -1,0 +1,7 @@
+// IndexRegs: The 4004's 16 index registers of 4 bits, read and written one at a time or as 8 pairs.
+// You may use: Nand, Or, DMux, DMux8Way, Mux4, Mux8Way4, Register4
+CHIP IndexRegs {
+    IN in[8], addr[4], load, loadpair;
+    OUT out[4], pairout[8];
+    PARTS:
+}
