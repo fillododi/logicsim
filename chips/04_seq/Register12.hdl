@@ -1,0 +1,7 @@
+// Register12: Remembers 12 bits; loads in when load is 1, else keeps its value.
+// You may use: Nand, Register4, Register8
+CHIP Register12 {
+    IN in[12], load;
+    OUT out[12];
+    PARTS:
+}

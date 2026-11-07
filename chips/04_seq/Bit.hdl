@@ -1,0 +1,7 @@
+// Bit: Remembers one bit. On each clock cycle, stores in when load is 1, else keeps its value.
+// You may use: Nand, Mux, DFF
+CHIP Bit {
+    IN in, load;
+    OUT out;
+    PARTS:
+}

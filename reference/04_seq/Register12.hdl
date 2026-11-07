@@ -1,0 +1,8 @@
+// Reference solution for Register12. Never shown to the player.
+CHIP Register12 {
+    IN in[12], load;
+    OUT out[12];
+    PARTS:
+    Register8(in=in[0..7], load=load, out=out[0..7]);
+    Register4(in=in[8..11], load=load, out=out[8..11]);
+}

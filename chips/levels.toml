@@ -166,3 +166,25 @@ parts = ["Nand", "Not", "And", "Or"]
 name = "ALU"
 group = "03_arith"
 parts = ["Nand", "Not", "Not4", "Or4Way", "Mux4", "Mux8Way4", "Add4", "AddSub4", "Rotate4", "Daa4", "Kbp4"]
+
+# Memory: the DFF holds a bit for one cycle, and a Mux in front of it keeps it
+# for as long as load stays 0. Registers are Bits side by side.
+[[level]]
+name = "Bit"
+group = "04_seq"
+parts = ["Nand", "Mux", "DFF"]
+
+[[level]]
+name = "Register4"
+group = "04_seq"
+parts = ["Nand", "Bit"]
+
+[[level]]
+name = "Register8"
+group = "04_seq"
+parts = ["Nand", "Register4"]
+
+[[level]]
+name = "Register12"
+group = "04_seq"
+parts = ["Nand", "Register4", "Register8"]
