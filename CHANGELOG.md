@@ -23,6 +23,8 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 8 = `0.8.0`).
   bubbles show the clock panel and ask for one step.
 - **IndexRegs**, the 4004's 16 index registers in the Memory group: read and write one
   4-bit register, or a pair of them as 8 bits, picked by the low digit of an instruction.
+- **PC**, the 4004's program counter and its 3-level address stack: count, jump, call and
+  return, with a fourth nested call overwriting the oldest return address, as on the real chip.
 
 ### Changed
 
