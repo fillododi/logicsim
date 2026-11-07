@@ -15,8 +15,11 @@ so they are part of the library. Deleting one moves its file to
 `<save dir>-backups/<time>/exports/`, and so does a reset for all of them.
 
 A level is *unlocked* when every level it may use as a part is solved; primitives
-are always available. *Solved* is sticky: it records that the chip passed its
-tests once, so later experiments never lock the player out of a level.
+are always available. An exported chip may use a primitive only once an unlocked
+level lists it, so exports never carry a DFF into the levels before it.
+
+*Solved* is sticky: it records that the chip passed its tests once, so later
+experiments never lock the player out of a level.
 """
 
 from __future__ import annotations
@@ -80,6 +83,12 @@ class SaveStore:
         needed = {p for p in level.parts if p not in PRIMITIVES}
         return needed <= self._solved
 
+    def unlocked_primitives(self) -> frozenset[str]:
+        """The primitives some unlocked level lists: the ones exported chips may use."""
+        return frozenset(
+            p for lv in self.levels if self.is_unlocked(lv) for p in lv.parts if p in PRIMITIVES
+        )
+
     # ---- exported chips -----------------------------------------------
 
     @property
@@ -130,10 +139,15 @@ class SaveStore:
             )
             top = lib.resolve(name)
             assert not isinstance(top, Primitive)
-            elaborate(top, lib)
+            netlist = elaborate(top, lib)
         except HdlError as e:
             where = f"line {e.pos.line}:{e.pos.col}: " if e.pos else ""
             raise ValueError(f"It doesn't build yet: {where}{e.message}") from None
+        # Checked on the flattened chip, so a DFF inside a saved or exported part counts.
+        allowed = self.unlocked_primitives()
+        for kind, gates in netlist.gates.items():
+            if gates.count and kind not in allowed:
+                raise ValueError(f"It uses {kind}, which no level you have unlocked allows yet.")
         return renamed
 
     def export(self, name: str, text: str) -> Path:

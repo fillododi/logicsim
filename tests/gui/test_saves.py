@@ -11,7 +11,7 @@ import pytest
 
 from nandsim.gui.saves import SaveStore
 from nandsim.hdl import HdlError
-from nandsim.testing import Impl, load_levels, run_tst
+from nandsim.testing import Impl, Level, load_levels, run_tst
 
 LEVELS = {lv.name: lv for lv in load_levels()}
 
@@ -173,6 +173,30 @@ def test_export_names_that_are_taken_or_invalid(store: SaveStore, name: str, pro
     with pytest.raises(ValueError, match=f"^{re.escape(problem)}$"):
         store.prepare_export(name, NOT_AS_BUF)
     assert store.name_problem("my_Chip2") is None
+
+
+DFF_CHIP = "CHIP Delay {\n    IN in;\n    OUT out;\n    PARTS:\n    DFF(in=in, out=out);\n}"
+NO_DFF_YET = "It uses DFF, which no level you have unlocked allows yet."
+
+
+def test_export_refuses_dff_until_a_level_allows_it(store: SaveStore) -> None:
+    # No level lists DFF yet, so it can't reach levels through an exported chip.
+    with pytest.raises(ValueError, match=f"^{re.escape(NO_DFF_YET)}$"):
+        store.prepare_export("Delay", DFF_CHIP)
+    # Hidden one level down, inside a saved chip, it is still found.
+    store.save(LEVELS["Not"], DFF_CHIP.replace("Delay", "Not"))
+    with pytest.raises(ValueError, match=f"^{re.escape(NO_DFF_YET)}$"):
+        store.prepare_export("Buf", NOT_AS_BUF)
+
+
+def test_export_may_use_dff_once_a_level_listing_it_is_unlocked(tmp_path: Path) -> None:
+    levels = load_levels()
+    bit = Level("Bit", "04_seq", ("Nand", "DFF", "Not"), levels[0].root)
+    store = SaveStore([*levels, bit], tmp_path / "save")
+    with pytest.raises(ValueError, match=f"^{re.escape(NO_DFF_YET)}$"):
+        store.prepare_export("Delay", DFF_CHIP)  # Bit still needs Not
+    solve_not(store)
+    assert store.prepare_export("Delay", DFF_CHIP) == DFF_CHIP
 
 
 def test_export_needs_a_chip_that_builds(store: SaveStore) -> None:
