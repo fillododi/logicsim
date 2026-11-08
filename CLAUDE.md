@@ -87,15 +87,15 @@ CHIP Xor {
 }
 ```
 
-- Supports buses (`IN a[32]`), slices (`a[0..7]`, `out[31]=sign`) and the constants `true` and `false`.
-- **The only primitives are `Nand` and `DFF`.** Every other chip is built in HDL from these.
+- Supports buses (`IN a[32]`), slices (`a[0..7]`, `out[31]=sign`), the constants `true` and `false`, and the clock signal `clock`.
+- **The only primitive the player gets is `Nand`.** Every other chip is built in HDL from it, latches and flip-flops included: the player builds the `DFF` from NAND latches and the clock. Once that level passes, the engine's DFF stands in for it as a builtin (below), with its equivalence test.
 - **Builtin chips:** for speed, a large chip (RAM, register file, ALU) may get a Python implementation, but only after its HDL version exists and passes its tests. An automated test must check that the builtin and HDL versions are equivalent. The GUI marks builtins visibly, and you can always switch back to the HDL version.
 - Errors must be clear and precise: unknown pin, wrong width, unconnected output, circular dependency between chips, and so on.
 
 ## Simulation semantics
 
-- **Combinational logic:** the netlist is flattened down to primitives and levelized (topological order). A combinational loop that does not pass through a DFF is an error, and the message names the involved pins.
-- **Sequential logic:** one global clock. `DFF`: `out(t) = in(t-1)`. Each cycle has two phases, tick and tock, as in nand2tetris.
+- **Combinational logic:** the netlist is flattened down to primitives and levelized (topological order). Feedback loops are allowed, since latches are made of them: the gates of a loop are evaluated together in unit-delay rounds until nothing changes. A loop that never settles goes undefined, and a failing check names its wires.
+- **Sequential logic:** one global clock, readable in HDL as `clock`. Each cycle has two phases, tick (clock 1) and tock (clock 0), as in nand2tetris. `DFF`: `out(t) = in(t-1)`, whether built from the player's latches or the builtin.
 - **Performance:** evaluate level by level with vectorized numpy operations over flat arrays, rather than a Python object per gate. Profile before optimizing. Report in the journal the simulated clock speed reached by the final CPU, next to the real 4004's rate of about 92.5 k instruction cycles per second (a 740 kHz clock, 8 clocks per instruction cycle). One simulated cycle is one instruction cycle, so compare against that rate, not the raw clock.
 - Inner wire values must stay inspectable, because the GUI shows them.
 
@@ -136,7 +136,7 @@ Complete them in order. Each one ends with green tests, updated docs, a journal 
    - Sound effects synthesized with numpy at startup (no asset files) through `pygame.mixer`: toggles, build errors, tests passed and failed, level solved, menus. Mute and volume in the menu, stored in a settings file next to the saves. Without an audio device the game runs silently.
 5. **Buses (4, 8 and 12 bits):** Not4, And4, Or4, Xor4, Mux4, Mux8, Mux12, Or4Way, Mux4Way4, Mux8Way4, Mux4Way12, DMux4Way, DMux8Way.
 6. **Arithmetic:** HalfAdder, FullAdder, Add4 (carry in and out), Inc4, Inc12 (for the PC), and the 4004 ALU: add and subtract with carry/borrow, increment and decrement, complement, rotate through carry, decimal adjust (DAA), KBP, TCS, with the zero and carry flags that JCN tests.
-7. **Sequential logic:** DFF in the GUI, Bit, Register4, Register8, Register12, the index register file (16 × 4 bits, also read and written as 8 pairs), the PC with its 3-level address stack, RAM at increasing sizes up to the 4002 layout (registers of 16 main and 4 status characters, selected by bank, chip and register), a 4096 × 8 program ROM. Clock controls in the GUI.
+7. **Sequential logic:** latches and the DFF, built from NAND and the clock, Bit, Register4, Register8, Register12, the index register file (16 × 4 bits, also read and written as 8 pairs), the PC with its 3-level address stack, RAM at increasing sizes up to the 4002 layout (registers of 16 main and 4 status characters, selected by bank, chip and register), a 4096 × 8 program ROM. Clock controls in the GUI.
 8. **CPU: the Intel 4004.** All 46 instructions, with the 4004's encodings: `NOP JCN FIM SRC FIN JIN JUN JMS INC ISZ ADD SUB LD XCH BBL LDM`, `WRM WMP WRR WPM WR0 WR1 WR2 WR3 SBM RDM RDR ADM RD0 RD1 RD2 RD3`, `CLB CLC IAC CMC CMA RAL RAR TCC DAC TCS STC DAA KBP DCL`. Separate program ROM and data RAM, as in the real MCS-4 system, with the ROM and RAM I/O ports as chip pins. One clock cycle per 4004 instruction cycle, so two-word instructions (`JCN FIM JUN JMS ISZ`) and `FIN` take two. Goal, the end of the game: run a hand-assembled 4004 program, such as multi-digit BCD addition, and check RAM and the output ports with a `.tst` file.
 
 ## Code conventions

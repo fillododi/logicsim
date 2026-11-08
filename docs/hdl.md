@@ -69,7 +69,9 @@ Not(in=g1.out, out=out);
 - `IN a[8]` declares an 8-bit bus. Bit 0 is the least significant bit.
 - `a[3]` is one bit, and `a[0..3]` is bits 0 through 3. Both sides of a connection can be sliced: `Foo(in[0..3]=a[4..7], out[7]=sign)`.
 - `true` and `false` are constants. They fill every bit of the pin they connect to: `Foo(in=false)` makes all bits of `in` zero.
-- Both sides of a connection must have the same width. Constants are the exception.
+- `clock` is the clock signal, read like a constant: 0 at power-on and after every tock, 1 after every tick. See [Feedback loops and the clock](#feedback-loops-and-the-clock).
+- Both sides of a connection must have the same width. Constants and `clock` are the exception.
+- `true`, `false` and `clock` are reserved: no pin or wire can take those names.
 - A new internal wire cannot be sliced where it is created. Write `out=w`, then read `w[0..3]` elsewhere.
 
 ## DFF: memory
@@ -90,7 +92,36 @@ Mux(a=prev, b=in, sel=load, out=d);
 DFF(in=d, out=prev, out=out);
 ```
 
-Without the DFF that loop would be a combinational loop, an error.
+## Feedback loops and the clock
+
+A signal may also depend on itself without a DFF. Two NANDs that read each other's output
+are a latch, which remembers a bit:
+
+```
+Nand(a=s, b=nq, out=q);
+Nand(a=r, b=q, out=nq);
+```
+
+The simulator settles a loop in rounds. In each round every gate of the loop reads what the
+others output the round before, as if each gate took one step of delay, and the rounds go on
+until nothing changes. Everything outside loops is computed once, as usual.
+
+- **A loop starts undefined** and stays undefined until a known value forces it: here `s = 0`
+  makes `q` 1 whatever `nq` is.
+- **A loop that never comes to rest goes undefined.** `Nand(a=en, b=x, out=x)` with `en = 1`
+  is a Not wired to its own input: `x` flips every round. After a limit (twice the loop's
+  gates, at most 1000 rounds) its wires become undefined, and a failing test check names
+  them: `out: expected 0, got undefined (a loop didn't settle: x)`. Other loops keep their
+  values.
+- **Races go undefined too.** Releasing both inputs of the latch above at the same time
+  (`s` and `r` from 0 to 1) makes both NANDs flip together every round, as two real gates
+  could, so `q` and `nq` become undefined.
+
+`clock` lets a loop change only on the clock. A tick raises it to 1 and the chip settles; a
+tock lowers it to 0 and the chip settles again. A latch that follows its input while `clock`
+is 1, feeding one that follows while `clock` is 0, is a flip-flop with the same
+`out(t) = in(t-1)` as the DFF: after a tick its output still shows the old value, after the
+tock the new one. A chip that reads `clock` gets the clock panel, like a chip with a DFF.
 
 ## Rules and errors
 
@@ -114,7 +145,8 @@ Every error shows `file:line:col` and stops at the first problem.
 | part input left open | `input pin 'b' of Nand is not connected` |
 | chip output left open | `output pin 'out' of Xor is not connected` |
 | chips using each other | `circular dependency between chips: Top -> A -> B -> A` |
-| combinational loop | `combinational loop (a signal depends on itself without a DFF): y -> x -> y` |
+| driving the clock | `output pin 'out' of Not cannot be connected to the clock` |
+| a reserved name as a pin | `expected a pin name, found 'clock', a name kept for the clock signal` |
 | connecting to an input | `'a' is an input pin of T: it cannot be assigned` |
 | new wire from a constant | `the width of new wire 'w' can't come from a constant; connect the constant to a pin instead` |
 | connections in a loop | `'p' would be driven only by itself: assignments form a loop with nothing driving it` |

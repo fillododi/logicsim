@@ -13,7 +13,7 @@ For each item, mark ✅, ❌ (with `path:line`), or n/a.
 
 - **Boundary:** no pygame import in `hdl`, `netlist`, `sim`, or `testing`. The GUI uses only the core's public API.
 - **Engine:** evaluation is levelized and uses vectorized numpy over flat arrays, with no Python object per gate. Inner wire values stay inspectable.
-- **Primitives:** only `Nand` and `DFF`. Every builtin has an HDL version that passes and an equivalence test.
+- **Primitives:** the player gets only `Nand`, and builds the DFF from latches. Every builtin has an HDL version that passes and an equivalence test.
 - **Errors:** messages are precise (`line:col`, the pins involved) and a player can understand them. Each one has a test. Errors never crash the GUI.
 - **Levels:** each new level has a stub, a brief, a `.tst`, a reference, and a `levels.toml` entry. The brief does not give away the solution. The reference is never reachable from the player's view.
 - **Conventions:** type hints, module docstrings, dataclasses for AST and netlist structures, no new runtime dependencies.
