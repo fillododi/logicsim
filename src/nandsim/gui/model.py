@@ -36,10 +36,12 @@ class PartView:
     primitive: bool
     pos: SourcePos
     name: str | None = None  # the part's label in the HDL, if it has one
+    builtin: bool = False  # a primitive standing in for the player's chip (DFF)
 
     @property
     def label(self) -> str:
-        return f"{self.name}: {self.chip}" if self.name else self.chip
+        base = f"{self.name}: {self.chip}" if self.name else self.chip
+        return f"{base} (built-in)" if self.builtin else base
 
 
 @dataclass(frozen=True)
@@ -146,6 +148,7 @@ def build_view(netlist: Netlist, lib: ChipLibrary, path: str) -> ChipView:
                 primitive=isinstance(target, Primitive),
                 pos=part.pos,
                 name=part.label,
+                builtin=isinstance(target, Primitive) and lib.is_builtin(part.chip),
             )
         )
 

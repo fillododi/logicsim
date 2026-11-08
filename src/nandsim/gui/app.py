@@ -39,6 +39,7 @@ HELP = (
     "Backspace: up  ·  wheel: zoom  ·  drag: pan  ·  F: fit  ·  H: hex/dec"
 )
 CLOCK_HELP = "Space: step a cycle  ·  R: run / pause  ·  Shift+R: reset clock  ·  [ ]: speed"
+BUILTIN_HELP = "B: built-in DFF / your DFF"
 CLOCK_PAD = 8  # inside the clock panel and between its items
 MAX_FRAME_DT = 0.25  # seconds; a longer stall (a drag, a slow rebuild) doesn't pile up cycles
 EDITOR_HELP = (
@@ -84,6 +85,7 @@ class ViewerApp:
         self.editor: EditorWidget | None = None
         self.value_field: ValueField | None = None  # a value being typed for an input pin
         self.field_rect: pygame.Rect | None = None  # where the value field was last drawn
+        self.notice: str | None = None  # a one-off message; the game shows it in its sidebar
         if edit_path is not None:
             buffer = TextBuffer(edit_path.read_text())
             self.editor = EditorWidget(buffer, self.fonts, self.editor_rect)
@@ -133,7 +135,12 @@ class ViewerApp:
     def help_text(self) -> str:
         if self.editing:
             return EDITOR_HELP
-        return f"{HELP}{SEP}{CLOCK_HELP}" if self.session.has_clock else HELP
+        items = [HELP]
+        if self.session.has_clock:
+            items.append(CLOCK_HELP)
+        if self.session.can_switch:
+            items.append(BUILTIN_HELP)
+        return SEP.join(items)
 
     def help_lines(self) -> list[str]:
         """The help line, wrapped between items to fit the window."""
@@ -381,9 +388,25 @@ class ViewerApp:
             self.fit()
         elif key == pygame.K_h:
             self.hex_mode = not self.hex_mode
+        elif key == pygame.K_b and plain and self.session.can_switch:
+            self.toggle_builtins()
         elif key == pygame.K_x and self.hover.node and self.hover.node[0] == "in":
             if self.session.at_top:
                 self.session.set_input(str(self.hover.node[1]), None)
+
+    def toggle_builtins(self) -> None:
+        """Run DFF parts as the built-in flip-flop or as the player's own DFF."""
+        why = self.session.toggle_builtins()
+        if why is not None:
+            self.notice = why  # nothing changed: the view stays where it was
+        else:
+            if self.session.builtins:
+                self.notice = "DFF parts run as the built-in flip-flop again: faster, same results."
+            else:
+                self.notice = "DFF parts now run as your own DFF: click one to see its latches."
+            self.fit()  # a new circuit: the DFF boxes changed size
+            self.on_action("builtins")
+        self._update_hover()
 
     def _on_clock(self, pos: tuple[int, int]) -> bool:
         """Whether `pos` is on the clock panel as last drawn, and the chip still has a clock."""
@@ -463,8 +486,20 @@ class ViewerApp:
         self._draw_clock(surf)
         self._draw_value_field(surf)
         self._draw_header(surf)
+        self._draw_notice(surf)
         self._draw_footer(surf)
         self._draw_tooltip(surf)
+
+    def _draw_notice(self, surf: pygame.Surface) -> None:
+        """The last notice, under the header at the canvas's left; the game uses its sidebar."""
+        if not self.notice:
+            return
+        x, y, w, _ = self.canvas_area
+        font = self.fonts.get(13)
+        cols = max(20, int(w - 24) // font.size("M")[0])
+        for i, line in enumerate(textwrap.wrap(self.notice, cols)):
+            t = font.render(line, True, theme.WIRE_X)
+            surf.blit(t, (x + 12, y + 8 + i * font.get_linesize()))
 
     def _draw_value_field(self, surf: pygame.Surface) -> None:
         """The value field, just under its input pin, kept inside the canvas."""
@@ -547,6 +582,7 @@ class ViewerApp:
         pygame.draw.rect(surf, theme.PANEL, (0, 0, w, HEADER))
         font = self.fonts.get(15, bold=True)
         x = self.left_width + 12
+        end = x  # where the breadcrumbs end
         self._crumbs = []
         crumbs = breadcrumbs(self.session.path) if self.session.path else []
         for i, (label, path) in enumerate(crumbs):
@@ -554,17 +590,26 @@ class ViewerApp:
             t = font.render(label, True, theme.TEXT if current else theme.ACCENT)
             rect = t.get_rect(topleft=(x, (HEADER - t.get_height()) // 2))
             surf.blit(t, rect)
+            end = rect.right
             if not current:
                 self._crumbs.append((rect.inflate(6, 6), path))
                 sep = font.render("  ›  ", True, theme.TEXT_DIM)
                 surf.blit(sep, (rect.right, rect.y))
                 x = rect.right + sep.get_width()
         right = w - self.editor_width
+        notes: list[str] = []
+        if self.session.can_switch and not self.session.builtins:
+            notes.append("DFFs: yours (B: built-in)")
         if not self.session.at_top:
-            note = self.fonts.get(12).render(
-                "inputs are set at the top level", True, theme.TEXT_DIM
-            )
-            surf.blit(note, (right - note.get_width() - 12, (HEADER - note.get_height()) // 2))
+            notes.append("inputs are set at the top level")
+        small = self.fonts.get(12)
+        while notes:  # never over the breadcrumbs: drop the last note until the rest fits
+            note = small.render("  ·  ".join(notes), True, theme.TEXT_DIM)
+            left = right - note.get_width() - 12
+            if left >= end + 24:
+                surf.blit(note, (left, (HEADER - note.get_height()) // 2))
+                break
+            notes.pop()
         if self.editor is not None and self.edit_path is not None:
             dirty = self.editor.buffer.dirty
             label = f"{self.edit_path.name}{'  ● unsaved' if dirty else ''}"

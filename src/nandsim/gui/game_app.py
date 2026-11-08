@@ -192,7 +192,9 @@ class GameApp(ViewerApp):
         self.editor.focused = True
         self._attempted = self.game.store.has_save(self.game.current)
         self.edit_path = Path(self.game.path)
+        builtins = self.session.builtins  # the player's choice holds from level to level
         self.session = ChipSession(self.game.loader())
+        self.session.builtins = builtins
         self.session.reload()
         self._sync_error()
         self.fit()
@@ -693,6 +695,9 @@ class GameApp(ViewerApp):
                 dim(surf)
         if self.menus:
             self.menus[-1].draw(surf, self.fonts, pygame.Rect(0, 0, *self.size))
+
+    def _draw_notice(self, surf: pygame.Surface) -> None:
+        """The game shows its notice in the sidebar instead (see `_draw_sidebar`)."""
 
     def _draw_tour(self, surf: pygame.Surface) -> None:
         step = self.tour.visible(self.game.current.name)

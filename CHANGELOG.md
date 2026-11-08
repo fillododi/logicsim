@@ -12,7 +12,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   that build a flip-flop from nothing but NAND: a latch of two NANDs that hold each other, a
   latch that follows its input while `load` is 1, and the DFF, whose output is its input one
   clock cycle earlier, made of two latches and the clock. Once your DFF passes, every DFF part
-  you use runs as a built-in flip-flop that behaves the same, only faster. Tests can run the
+  you use runs as a built-in flip-flop that behaves the same, only faster, titled
+  "DFF (built-in)" on the circuit. Press B on the circuit to run your own DFF in its place
+  and click into its latches; B again switches back. Tests can run the
   clock with `tick` and `tock`, and a failing check in a clocked test says which cycle it
   happened in. A chip you export can contain a DFF only once you have solved the DFF level.
 - **Clock controls.** A chip with DFFs gets a clock panel over its circuit: step one cycle,
