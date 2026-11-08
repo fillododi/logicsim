@@ -762,3 +762,18 @@ Ambiguous spec points and the option chosen. Newest last.
 - Marking the stand-in in the GUI and switching back to HDL now: that is the next PR, with the general builtin mechanism.
 **Consequences:** a player who solved Bit before this change keeps it solved. Its DFF parts still build, and Register4 and later levels stay open. Bit itself now waits for DFF on a new save. Exports may contain a DFF once the DFF level is solved (Bit lists DFF, and Bit is unlocked only then).
 
+## 2026-11-08 — The built-in DFF: marked on the canvas, switchable to the player's own
+**Context:** CLAUDE.md asks that a builtin be marked visibly in the GUI and that the player can always switch back to the HDL version. Since the previous entry, every DFF part runs as the engine's primitive in place of the player's latch DFF. Open: how to mark it, how to switch, and how far the switch reaches.
+**Decision:**
+- **The mark is in the title:** a built-in part is titled `DFF (built-in)`. The layout already sizes boxes by their title, so nothing else changes. It still doesn't open, as before.
+- **One switch for the whole circuit,** `B` on the canvas, without modifiers. It is shown in the help line, and works only when a DFF part sits anywhere under the chip (`ChipSession.has_stand_in`, found by walking the chip definitions, not the netlist). It sets `ChipLibrary.builtins = False` on the next library, whose `resolve` then returns the player's DFF HDL for a `DFF` part, and the session rebuilds. With no DFF HDL around (the developer viewer on a folder without one), the part stays the primitive and stays marked.
+- **Per-part switching:** rejected. A DFF from latches inside one Bit and a primitive in the next would make a chip whose timing and gate count depend on clicks nobody sees.
+- **A DFF that no longer builds keeps the built-in one.** If the player edited their saved DFF after solving it, the switch rebuilds, fails, switches back and puts the reason in the notice. The circuit never shows the error, because it isn't about the chip being edited.
+- **The clock starts over on a switch.** The DFF paths change (the primitive is gone, or back), and the reload rule already resets the clock when they do.
+- **Not saved:** the choice lasts for the session, and the game keeps it from level to level. It always starts built-in, the fast default. Run tests and the CLI always use the built-in DFF. The equivalence test from the previous entry is what makes that safe.
+- **The header says `DFFs: yours (B: built-in)`** while the player's DFF runs, so a slow circuit explains itself.
+**Alternatives:**
+- A setting in the Esc menu, saved with the sound settings: one more menu item for something done to look inside, not a preference.
+- A badge or a different fill colour for built-in parts: primitives already have their own fill, and a word says more than a colour.
+**Consequences:** with this, the three steps toward a player-built DFF are done. Other builtins (RAM, ALU) can reuse `STAND_INS`, `builtins` and the label once their HDL versions pass.
+

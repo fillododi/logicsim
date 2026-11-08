@@ -91,6 +91,14 @@ DFF level is solved, every `DFF` you use as a part runs as a built-in flip-flop 
 behaves like yours at every tick and tock, only faster. The DFF level itself always tests
 your own HDL.
 
+On the circuit a built-in part is titled `DFF (built-in)` and doesn't open. Press **B** on
+the circuit of any chip with a DFF part inside it to run every DFF part as your own DFF
+instead: the circuit rebuilds with your latches, and clicking a DFF opens them. The header
+then says `DFFs: yours`. **B** again switches back. The clock starts over each time, since
+the DFFs are no longer the same ones. If your DFF no longer builds, the built-in one stays
+and a notice says why. The choice lasts until you quit, from level to level. Run tests
+always uses the built-in DFF.
+
 A signal may depend on itself through a DFF, which is how a register keeps its value:
 
 ```

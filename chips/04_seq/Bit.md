@@ -2,7 +2,7 @@
 
 A register of one bit. Each clock cycle, if `load` is 1, `out` becomes `in` from the cycle before; if `load` is 0, `out` keeps its value however `in` changes. Before the first load it holds nothing: its output is undefined.
 
-Your `DFF` does half of this: it remembers for exactly one cycle. From here on every DFF part runs as a built-in flip-flop that behaves like yours, only faster.
+Your `DFF` does half of this: it remembers for exactly one cycle. From here on every DFF part runs as a built-in flip-flop that behaves like yours, only faster. To watch your own latches at work instead, press **B** on the circuit.
 
 **Parts you may use:** Nand, Mux, DFF.
 
