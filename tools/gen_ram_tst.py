@@ -197,7 +197,9 @@ def rambank(rng: random.Random) -> Gen:
 
 # The main characters DataRAM writes in every bank: 0, each address bit alone, and 255. A bank
 # whose address bit k is stuck or crossed puts the write to 1 << k somewhere else, which the
-# read-back sees, because no two of them hold the same value.
+# read-back sees, because no two of them hold the same value. Status characters only get
+# one per chip: what picks one inside a chip is RAMBank's test's job, and DataRAM gives every
+# bank the same `addr` and `status`, so it can't wire them differently in one bank.
 DATARAM_MAIN = [0] + [1 << k for k in range(8)] + [255]
 # Its status characters, one per chip, at addresses that are also main characters above, so a
 # bank whose status pin is stuck at 0 overwrites a main character the read-back checks.
@@ -212,7 +214,7 @@ def dataram(rng: random.Random) -> Gen:
             "and status characters at addresses 0, 64, 128 and 255, one in each chip. Fill",
             "them, rewrite each with a different value, read them all back. No two cells of",
             "a bank hold the same value, and no cell shares its value with the same cell in",
-            f"another bank. Then 200 random cycles (seed {SEED}), most on those cells.",
+            f"another bank. Then 200 random cycles (seed {SEED}) on those cells.",
             "Each write checks out after its tick (the old value) and after its tock.",
         ],
         status=True,
@@ -223,7 +225,10 @@ def dataram(rng: random.Random) -> Gen:
     n = len(sample)
     # Value of cell i in bank b: perm[i] + b, distinct along a bank and across banks.
     perm = rng.sample(range(16), n)
-    shift = 1 + rng.randrange(15)
+    # The rewrite adds the same shift to every cell, which keeps those values distinct. It is
+    # 8 or more, so it never equals b - b' for two banks: during the rewrite a wrong bank's
+    # cell, rewritten or not, never holds the value its after-tick check expects.
+    shift = 8 + rng.randrange(8)
     g.fill_rewrite_read(
         cells,
         rng,
@@ -231,14 +236,11 @@ def dataram(rng: random.Random) -> Gen:
         rewrite=lambda j, old: (old + shift) & 15,
         fill_note="the same cells in every bank",
     )
-    g.note("200 random cycles, load on about 60% of them, 3 in 4 on the cells above")
+    # Only on cells that hold a value, so that no check is `*`.
+    g.note("200 random cycles on the cells above, load on about 60% of them")
     for _ in range(200):
-        if rng.random() < 0.75:
-            addr, st = rng.choice(sample)
-        else:
-            st = int(rng.random() < 0.3)
-            addr = rng.randrange(256)
-        g.write(rng.randrange(8) << 8 | addr, rng.randrange(16), st, int(rng.random() < 0.6))
+        addr, st = rng.choice(cells)
+        g.write(addr, rng.randrange(16), st, int(rng.random() < 0.6))
     return g
 
 
