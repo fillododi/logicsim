@@ -1,29 +1,35 @@
-"""Generate the RAM levels' .tst files (RAM8, RAM64, RAM4002, RAMBank) from a Python model.
+"""Generate the RAM levels' .tst files (RAM8 up to DataRAM) from a Python model.
 
 A development script, not part of the game. Run it after changing the RAM levels' rules:
 
     uv run python tools/gen_ram_tst.py chips/04_seq
 
 The output is deterministic (seed 4004), and `tests/test_tools.py` checks that the committed
-files match it. Every test has the same shape:
+files match it. Every test up to RAMBank has the same shape:
 
 1. fill: write every cell once (its old value is undefined, so after the tick that check is `*`);
 2. rewrite: write every cell again with a different value, so the check after the tick
    compares against a real old value and catches a RAM that shows `in` before the clock edge;
 3. read every cell back with `load` off;
 4. random cycles, which now always read cells that hold a known value.
+
+DataRAM has 2,560 cells, too many to fill in a test the player waits for, so it does the same
+on a sample of each bank that reaches every address bit (see `dataram`).
 """
 
 from __future__ import annotations
 
 import random
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
 SEED = 4004
 
-Key = tuple[str, int, int]  # ("main", address, 0) or ("status", register bits, character)
+# ("main", address, 0) or ("status", register bits, character). With banks, the address
+# carries the bank above its 8 bits, so the keys of different banks never meet.
+Key = tuple[str, int, int]
 
 
 @dataclass
@@ -33,6 +39,7 @@ class Gen:
     name: str
     header: list[str]
     status: bool  # whether the chip has a `status` pin
+    banks: bool = False  # whether the chip has a `bank` pin, taken from addr >> 8
     mem: dict[Key, int] = field(default_factory=dict)
     lines: list[str] = field(default_factory=list)
 
@@ -51,7 +58,11 @@ class Gen:
         return "*" if v is None else f"0x{v:X}"
 
     def _set(self, v: int, addr: int, st: int, load: int) -> None:
-        self.lines += [f"set in 0x{v:X}", f"set addr {addr}", f"set load {load}"]
+        assert self.banks or addr < 256, f"{self.name} has no bank pin for address {addr}"
+        self.lines += [f"set in 0x{v:X}", f"set addr {addr & 255}"]
+        if self.banks:
+            self.lines.append(f"set bank {addr >> 8}")
+        self.lines.append(f"set load {load}")
         if self.status:
             self.lines.append(f"set status {st}")
 
@@ -72,15 +83,28 @@ class Gen:
     def note(self, text: str) -> None:
         self.lines.append(f"// {text}")
 
-    def fill_rewrite_read(self, cells: list[tuple[int, int]], rng: random.Random) -> None:
-        """Steps 1-3 for `cells`, a list of (addr, status)."""
-        self.note("Fill: every cell once")
-        for addr, st in cells:
-            self.write(addr, rng.randrange(16), st)
+    def fill_rewrite_read(
+        self,
+        cells: list[tuple[int, int]],
+        rng: random.Random,
+        fill: Callable[[int], int] | None = None,
+        rewrite: Callable[[int, int], int] | None = None,
+        fill_note: str = "every cell once",
+    ) -> None:
+        """Steps 1-3 for `cells`, a list of (addr, status).
+
+        `fill(j)` gives cell j's first value and `rewrite(j, old)` its second, which must
+        differ from `old`. By default both are random.
+        """
+        self.note(f"Fill: {fill_note}")
+        for j, (addr, st) in enumerate(cells):
+            self.write(addr, fill(j) if fill else rng.randrange(16), st)
         self.note("Rewrite: every cell again, each with a different value")
-        for addr, st in cells:
+        for j, (addr, st) in enumerate(cells):
             old = self.mem[self.key(addr, st)]
-            self.write(addr, (old + 1 + rng.randrange(15)) & 15, st)
+            new = rewrite(j, old) if rewrite else (old + 1 + rng.randrange(15)) & 15
+            assert new != old
+            self.write(addr, new, st)
         self.note("Read everything back")
         for addr, st in cells:
             self.read(addr, st)
@@ -171,10 +195,60 @@ def rambank(rng: random.Random) -> Gen:
     return g
 
 
+# The main characters DataRAM writes in every bank: 0, each address bit alone, and 255. A bank
+# whose address bit k is stuck or crossed puts the write to 1 << k somewhere else, which the
+# read-back sees, because no two of them hold the same value. Status characters only get
+# one per chip: what picks one inside a chip is RAMBank's test's job, and DataRAM gives every
+# bank the same `addr` and `status`, so it can't wire them differently in one bank.
+DATARAM_MAIN = [0] + [1 << k for k in range(8)] + [255]
+# Its status characters, one per chip, at addresses that are also main characters above, so a
+# bank whose status pin is stuck at 0 overwrites a main character the read-back checks.
+DATARAM_STATUS = [0, 64, 128, 255]
+
+
+def dataram(rng: random.Random) -> Gen:
+    g = Gen(
+        "DataRAM",
+        [
+            "DataRAM: in each of the 8 banks, main characters 0, 1, 2, 4, ..., 128 and 255,",
+            "and status characters at addresses 0, 64, 128 and 255, one in each chip. Fill",
+            "them, rewrite each with a different value, read them all back. No two cells of",
+            "a bank hold the same value, and no cell shares its value with the same cell in",
+            f"another bank. Then 200 random cycles (seed {SEED}) on those cells.",
+            "Each write checks out after its tick (the old value) and after its tock.",
+        ],
+        status=True,
+        banks=True,
+    )
+    sample = [(a, 0) for a in DATARAM_MAIN] + [(a, 1) for a in DATARAM_STATUS]
+    cells = [(b << 8 | addr, st) for b in range(8) for addr, st in sample]
+    n = len(sample)
+    # Value of cell i in bank b: perm[i] + b, distinct along a bank and across banks.
+    perm = rng.sample(range(16), n)
+    # The rewrite adds the same shift to every cell, which keeps those values distinct. It is
+    # 8 or more, so it never equals b - b' for two banks: during the rewrite a wrong bank's
+    # cell, rewritten or not, never holds the value its after-tick check expects.
+    shift = 8 + rng.randrange(8)
+    g.fill_rewrite_read(
+        cells,
+        rng,
+        fill=lambda j: (perm[j % n] + j // n) & 15,
+        rewrite=lambda j, old: (old + shift) & 15,
+        fill_note="the same cells in every bank",
+    )
+    # Only on cells that hold a value, so that no check is `*`.
+    g.note("200 random cycles on the cells above, load on about 60% of them")
+    for _ in range(200):
+        addr, st = rng.choice(cells)
+        g.write(addr, rng.randrange(16), st, int(rng.random() < 0.6))
+    return g
+
+
 def generate() -> dict[str, str]:
     """Every RAM level's .tst text, by chip name. One generator, so the order is fixed."""
     rng = random.Random(SEED)
-    return {g.name: g.text() for g in (ram8(rng), ram64(rng), ram4002(rng), rambank(rng))}
+    gens = (ram8(rng), ram64(rng), ram4002(rng), rambank(rng), dataram(rng))
+    return {g.name: g.text() for g in gens}
 
 
 def main(argv: list[str]) -> int:

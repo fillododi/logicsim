@@ -1,0 +1,7 @@
+// DataRAM: Eight RAMBanks, picked by bank.
+// You may use: Nand, DMux8Way, Mux8Way4, RAMBank
+CHIP DataRAM {
+    IN in[4], addr[8], bank[3], status, load;
+    OUT out[4];
+    PARTS:
+}

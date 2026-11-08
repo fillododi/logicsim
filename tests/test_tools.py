@@ -20,7 +20,7 @@ def load_tool(name: str):  # noqa: ANN201 - a module loaded from a path
 
 def test_ram_tests_match_their_generator() -> None:
     generated = load_tool("gen_ram_tst").generate()
-    assert sorted(generated) == ["RAM4002", "RAM64", "RAM8", "RAMBank"]
+    assert sorted(generated) == ["DataRAM", "RAM4002", "RAM64", "RAM8", "RAMBank"]
     for name, text in generated.items():
         committed = (ROOT / "chips" / "04_seq" / f"{name}.tst").read_text()
         assert committed == text, f"{name}.tst is stale: run tools/gen_ram_tst.py chips/04_seq"
