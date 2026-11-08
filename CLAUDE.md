@@ -87,15 +87,15 @@ CHIP Xor {
 }
 ```
 
-- Supports buses (`IN a[32]`), slices (`a[0..7]`, `out[31]=sign`) and the constants `true` and `false`.
-- **The only primitives are `Nand` and `DFF`.** Every other chip is built in HDL from these.
+- Supports buses (`IN a[32]`), slices (`a[0..7]`, `out[31]=sign`), the constants `true` and `false`, and the clock signal `clock`.
+- **The only primitive the player gets is `Nand`.** Every other chip is built in HDL from it, latches and flip-flops included: the player builds the `DFF` from NAND latches and the clock. Once that level passes, the engine's DFF stands in for it as a builtin (below), with its equivalence test.
 - **Builtin chips:** for speed, a large chip (RAM, register file, ALU) may get a Python implementation, but only after its HDL version exists and passes its tests. An automated test must check that the builtin and HDL versions are equivalent. The GUI marks builtins visibly, and you can always switch back to the HDL version.
 - Errors must be clear and precise: unknown pin, wrong width, unconnected output, circular dependency between chips, and so on.
 
 ## Simulation semantics
 
-- **Combinational logic:** the netlist is flattened down to primitives and levelized (topological order). A combinational loop that does not pass through a DFF is an error, and the message names the involved pins.
-- **Sequential logic:** one global clock. `DFF`: `out(t) = in(t-1)`. Each cycle has two phases, tick and tock, as in nand2tetris.
+- **Combinational logic:** the netlist is flattened down to primitives and levelized (topological order). Feedback loops are allowed, since latches are made of them: the gates of a loop are evaluated together in unit-delay rounds until nothing changes. A loop that never settles goes undefined, and a failing check names its wires.
+- **Sequential logic:** one global clock, readable in HDL as `clock`. Each cycle has two phases, tick (clock 1) and tock (clock 0), as in nand2tetris. `DFF`: `out(t) = in(t-1)`, whether built from the player's latches or the builtin.
 - **Performance:** evaluate level by level with vectorized numpy operations over flat arrays, rather than a Python object per gate. Profile before optimizing. Report in the journal the simulated clock speed reached by the final CPU, next to the real 4004's rate of about 92.5 k instruction cycles per second (a 740 kHz clock, 8 clocks per instruction cycle). One simulated cycle is one instruction cycle, so compare against that rate, not the raw clock.
 - Inner wire values must stay inspectable, because the GUI shows them.
 

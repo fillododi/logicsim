@@ -75,10 +75,9 @@ def draw_circuit(
                 pygame.draw.lines(surf, theme.ACCENT, False, hpts, halo)
         color, w = wire_style(session, r.edge.nets)
         width = max(1, round(w * s * (1.8 if id(r) in lit_ids else 1.0)))
-        if r.label_at is not None:  # constant
-            text = small.render(
-                r.edge.label, True, theme.bit_color(1 if r.edge.label == "true" else 0)
-            )
+        if r.label_at is not None:  # true, false or clock: coloured by its value now
+            bit = theme.bit_color(session.value(r.edge.nets[:1]))
+            text = small.render(r.edge.label, True, bit)
             surf.blit(text, cam.to_screen(r.label_at))
             continue
         pts = [cam.to_screen(p) for p in r.points]

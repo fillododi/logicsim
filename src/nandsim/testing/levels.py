@@ -16,7 +16,7 @@ from nandsim.netlist import PRIMITIVES
 from nandsim.paths import data_root
 
 CHIP_NAME = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
-KEYWORDS = frozenset({"CHIP", "IN", "OUT", "PARTS", "true", "false"})
+KEYWORDS = frozenset({"CHIP", "IN", "OUT", "PARTS", "true", "false", "clock"})
 
 
 @dataclass(frozen=True)

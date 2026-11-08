@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from nandsim.hdl import ChipDef, Const, PinRef, SourcePos
-from nandsim.netlist import FALSE_NET, TRUE_NET, ChipLibrary, Netlist, Primitive, interface_of
+from nandsim.netlist import SIGNAL_NETS, ChipLibrary, Netlist, Primitive, interface_of
 
 EndKind = Literal["input", "output", "part", "const"]
 
@@ -220,7 +220,7 @@ def build_view(netlist: Netlist, lib: ChipLibrary, path: str) -> ChipView:
             ilo, ihi = _span(c.inner, iface.inputs[c.inner.name])
             dst = Endpoint("part", c.inner.name, i, None if c.inner.lo is None else (ilo, ihi))
             if isinstance(c.outer, Const):
-                net = TRUE_NET if c.outer.value else FALSE_NET
+                net = SIGNAL_NETS[c.outer.name]
                 edges.append(
                     Edge(
                         Endpoint("const", str(c.outer)), dst, (net,) * (ihi - ilo + 1), str(c.outer)

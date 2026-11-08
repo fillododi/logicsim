@@ -12,7 +12,7 @@ Kind = Literal["plain", "comment", "keyword", "constant", "number", "chip", "pun
 Span = tuple[int, int, Kind]  # [start, end) columns
 
 KEYWORDS = {"CHIP", "IN", "OUT", "PARTS"}
-CONSTANTS = {"true", "false"}
+CONSTANTS = {"true", "false", "clock"}
 
 
 def highlight(lines: list[str]) -> list[list[Span]]:

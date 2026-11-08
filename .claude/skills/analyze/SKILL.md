@@ -12,7 +12,7 @@ Investigate. **Do not edit, create, or delete project files, and do not commit.*
 1. Restate the question in one sentence. If it is too vague to investigate, ask one clarifying question.
 2. Read the relevant code, docs (`docs/hdl.md`, `docs/tst.md`, `docs/decisions.md`), and tests. Check `docs/decisions.md` for decisions already taken on this topic, so you don't reopen them.
 3. For a bug, reproduce it: give the exact command, the observed output, and the expected output. If it does not reproduce, say so.
-4. Check the question against the hard rules in `CLAUDE.md`: no pygame in the core, the levelized numpy engine, only `Nand`/`DFF` as primitives, builtins only with an equivalence test, the reference never visible to the player.
+4. Check the question against the hard rules in `CLAUDE.md`: no pygame in the core, the levelized numpy engine, only `Nand` as the player's primitive (the DFF is built from latches), builtins only with an equivalence test, the reference never visible to the player.
 
 ## Report
 

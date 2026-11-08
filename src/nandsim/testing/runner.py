@@ -12,7 +12,7 @@ from pathlib import Path
 from typing import Literal
 
 from nandsim.hdl import ChipDef, HdlError, SourcePos, parse
-from nandsim.netlist import ChipLibrary, Primitive, elaborate
+from nandsim.netlist import ChipLibrary, Primitive, elaborate, net_names
 from nandsim.paths import data_root, default_save_dir, exports_dir
 from nandsim.sim import Simulator
 from nandsim.testing.levels import Level, exported_chips, find_level, load_levels
@@ -158,8 +158,18 @@ def _when(sim: Simulator) -> str:
     return f"cycle {sim.cycle}" + (" after tick" if sim.mid_cycle else "")
 
 
+def _unsettled(sim: Simulator, names: dict[int, str]) -> str:
+    """`a loop didn't settle: x, y`, naming up to three of the nets it left undefined."""
+    if not names:
+        names.update(net_names(sim.netlist))  # walks every wire: only once, on a failure
+    shown = sorted({names.get(int(n), f"net {n}") for n in sim.unsettled})
+    more = f" and {len(shown) - 3} more" if len(shown) > 3 else ""
+    return f"a loop didn't settle: {', '.join(shown[:3])}{more}"
+
+
 def _run_steps(script: TstScript, sim: Simulator, result: TstResult) -> None:
     nl = sim.netlist
+    names: dict[int, str] = {}  # filled on the first failure that needs them
     clocked = any(isinstance(s, TickStep | TockStep) for s in script.steps)
     for step in script.steps:
         if isinstance(step, SetStep):
@@ -187,6 +197,8 @@ def _run_steps(script: TstScript, sim: Simulator, result: TstResult) -> None:
                 notes = [f"inputs {step.context}"] if step.context else []
                 if clocked:
                     notes.append(_when(sim))
+                if got is None and len(sim.unsettled):
+                    notes.append(_unsettled(sim, names))
                 where = f" ({', '.join(notes)})" if notes else ""
                 result.failures.append(
                     Failure(step.pos, f"{step.pin}: expected {step.value.text}, got {shown}{where}")

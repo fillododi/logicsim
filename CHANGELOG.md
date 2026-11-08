@@ -30,8 +30,17 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   status characters, addressed the way the 4004's `SRC` instruction does.
 - **DataRAM**, the last RAM level: eight RAMBanks, all 2,560 characters of data memory a 4004
   can reach, with a `bank` pin for the bank its `DCL` instruction picks.
+- **Feedback loops and the `clock` signal.** A wire may now feed back into itself, so two
+  NANDs that read each other's output make a latch that remembers a bit. `clock` can be read
+  like `true` and `false`: it is 1 after a tick and 0 after a tock, so a pair of latches
+  makes a flip-flop. A chip that reads `clock` gets the clock panel. A loop that never comes
+  to rest shows as undefined, and a failing test names its wires, with a tip.
 
 ### Changed
+
+- **A loop is no longer a build error.** A chip whose signal depends on itself used to fail
+  with "combinational loop"; it now builds and simulates. `clock` is a reserved name, like
+  `true` and `false`, so a pin or wire called `clock` must be renamed.
 
 - **The level brief and *Your chips* scroll.** In a short window, scroll the brief with the
   mouse wheel to read it to its end. *Your chips* shows four chips at a time and scrolls

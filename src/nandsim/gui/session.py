@@ -162,8 +162,8 @@ class ChipSession:
 
     @property
     def has_clock(self) -> bool:
-        """Whether the chip has DFFs, so the clock does something."""
-        return self.sim is not None and self.sim.dff_count > 0
+        """Whether the chip has DFFs or reads `clock`, so the clock does something."""
+        return self.sim is not None and self.sim.clocked
 
     @property
     def cycle(self) -> int:

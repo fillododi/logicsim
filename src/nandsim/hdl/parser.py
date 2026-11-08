@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from nandsim.hdl.ast import Assign, ChipDef, Connection, Const, Part, PinDecl, PinRef
+from nandsim.hdl.ast import SIGNALS, Assign, ChipDef, Connection, Const, Part, PinDecl, PinRef
 from nandsim.hdl.errors import HdlError, SourcePos
 from nandsim.hdl.lexer import Kind, Token, tokenize
 
-KEYWORDS = {"CHIP", "IN", "OUT", "PARTS", "true", "false"}
+KEYWORDS = {"CHIP", "IN", "OUT", "PARTS", *SIGNALS}
 
 
 class _Parser:
@@ -37,7 +37,8 @@ class _Parser:
     def ident(self, what: str) -> Token:
         t = self.tok
         if t.kind is not Kind.IDENT or t.text in KEYWORDS:
-            raise HdlError(f"expected {what}, found {t.describe()}", t.pos)
+            note = ", a name kept for the clock signal" if t.text == "clock" else ""
+            raise HdlError(f"expected {what}, found {t.describe()}{note}", t.pos)
         return self.next()
 
     def number(self, what: str) -> int:
@@ -160,9 +161,9 @@ class _Parser:
 
     def pin_ref(self, allow_const: bool, allow_part: bool = True) -> PinRef | Const:
         t = self.tok
-        if allow_const and t.kind is Kind.IDENT and t.text in ("true", "false"):
+        if allow_const and t.kind is Kind.IDENT and t.text in SIGNALS:
             self.next()
-            return Const(t.text == "true", t.pos)
+            return Const(t.text, t.pos)
         name = self.ident("a pin name")
         part: str | None = None
         if allow_part and self.at("."):

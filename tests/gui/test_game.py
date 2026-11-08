@@ -61,6 +61,18 @@ def test_wrong_solution_lists_failing_rows(game: GameState) -> None:
     assert game.status(LEVELS["Not"]) == "open"
 
 
+def test_a_loop_that_never_settles_is_named_with_a_tip(game: GameState) -> None:
+    # y = Nand(in, y): with in=1 it is a Not wired to itself.
+    looped = "CHIP Not { IN in; OUT out; PARTS: Nand(a=in, b=y, out=y, out=out); }"
+    r = game.run_tests(looped)
+    assert not r.passed and r.summary == "1 of 2 checks failed"
+    assert r.lines == [
+        "test line 5: out: expected 0, got undefined (inputs in=1, a loop didn't settle: y)",
+        "Tip: A wire that feeds back into itself must come to rest, but y kept flipping, "
+        "like a Not wired to its own input. A wire that never settles shows as undefined.",
+    ]
+
+
 def test_solving_unlocks_and_uses_the_players_chips(game: GameState) -> None:
     r = game.run_tests(solution("Not"))
     assert r.passed and r.summary == "All 2 checks passed"
