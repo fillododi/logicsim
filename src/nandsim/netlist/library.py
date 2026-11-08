@@ -39,16 +39,29 @@ class ChipLibrary:
 
     `sources` lets the GUI editor (and tests) supply HDL that is not on disk.
     Files are searched as `<dir>/**/<Name>.hdl`, in the order the dirs are given.
+
+    With `builtins` off, a stand-in part (`DFF`) resolves to its HDL wherever some
+    exists, so the player can see and open their own flip-flop; without HDL it stays
+    the primitive. Set it before the first lookup: elaboration caches per library.
     """
 
     def __init__(
         self,
         search_dirs: list[Path] | None = None,
         sources: dict[str, tuple[str, str]] | None = None,
+        builtins: bool = True,
     ) -> None:
         self.search_dirs = list(search_dirs or [])
         self.sources = dict(sources or {})
+        self.builtins = builtins
         self._cache: dict[str, ChipDef] = {}
+
+    def has_hdl(self, name: str) -> bool:
+        return name in self.sources or self.find_file(name) is not None
+
+    def is_builtin(self, name: str) -> bool:
+        """Whether a part with this name runs as a primitive standing in for HDL."""
+        return name in STAND_INS and (self.builtins or not self.has_hdl(name))
 
     def find_file(self, name: str) -> Path | None:
         for d in self.search_dirs:
@@ -57,7 +70,12 @@ class ChipLibrary:
         return None
 
     def resolve(self, name: str, used_at: SourcePos | None = None) -> ChipDef | Primitive:
-        """A chip used as a part: a primitive wins over HDL of the same name."""
+        """A chip used as a part: a primitive wins over HDL of the same name.
+
+        The exception is a stand-in with `builtins` off, if its HDL exists.
+        """
+        if name in STAND_INS and not self.builtins and self.has_hdl(name):
+            return self._load(name, used_at)
         if name in PRIMITIVES:
             return PRIMITIVES[name]
         return self._load(name, used_at)
@@ -68,7 +86,7 @@ class ChipLibrary:
         Only a part named `DFF` becomes the primitive; the DFF level itself builds
         the player's latches.
         """
-        if name in STAND_INS and (name in self.sources or self.find_file(name) is not None):
+        if name in STAND_INS and self.has_hdl(name):
             return self._load(name, used_at)
         return self.resolve(name, used_at)
 

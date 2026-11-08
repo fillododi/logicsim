@@ -9,6 +9,9 @@ A chip with DFFs has a clock: `step` runs one whole cycle (tick and tock), and
 `advance` runs as many cycles as the speed asks for while `running`. A reload keeps
 the DFFs' values and the cycle count only if every DFF still sits in the same place
 in the hierarchy (`Reg2/Bit#1/DFF#5`); otherwise the clock starts over.
+
+`builtins` says whether DFF parts run as the built-in flip-flop (the default) or
+as the player's own DFF chip, latches and all, which can then be opened.
 """
 
 from __future__ import annotations
@@ -22,8 +25,8 @@ import numpy as np
 
 from nandsim.gui.layout import Layout, Style, layout
 from nandsim.gui.model import ChipView, PartView, build_view, child_path, parent_path
-from nandsim.hdl import HdlError
-from nandsim.netlist import ChipLibrary, Netlist, Primitive, elaborate
+from nandsim.hdl import ChipDef, HdlError
+from nandsim.netlist import STAND_INS, ChipLibrary, Netlist, Primitive, elaborate
 from nandsim.sim import Simulator
 
 # Returns the top chip's name and the library to find it and its parts in.
@@ -57,6 +60,8 @@ class ChipSession:
         self.running = False
         self.speed = DEFAULT_SPEED
         self._owed = 0.0  # cycles due but not yet run, while running
+        self.builtins = True  # DFF parts run as the built-in flip-flop
+        self.has_stand_in = False  # the chip has a DFF part, built-in or the player's
 
     # ---- loading -------------------------------------------------------
 
@@ -64,6 +69,7 @@ class ChipSession:
         """(Re)build from the loader. On error keep the old circuit and set `error`."""
         try:
             name, lib = self.loader()
+            lib.builtins = self.builtins  # the loader's library is fresh: set before lookups
             top = lib.resolve_top(name)
             if isinstance(top, Primitive):
                 raise HdlError(f"'{name}' is a primitive; open a chip built from parts", None)
@@ -76,6 +82,7 @@ class ChipSession:
             return False
         old = self.sim
         self.netlist, self.lib, self.error = netlist, lib, None
+        self.has_stand_in = _uses_stand_in(top, lib)
         self.sim = Simulator(netlist)
         self._carry_clock(old, self.sim)
         kept = {}
@@ -158,6 +165,22 @@ class ChipSession:
             return None
         return int((self.sim.value[idx].astype(np.int64) << np.arange(len(idx))).sum())
 
+    # ---- built-in parts --------------------------------------------------
+
+    def toggle_builtins(self) -> str | None:
+        """Switch DFF parts between the built-in flip-flop and the player's own DFF.
+
+        Returns None if the chip rebuilt, else why not; then nothing changes. The
+        clock starts over, since the DFFs are no longer the same ones.
+        """
+        self.builtins = not self.builtins
+        if self.reload():
+            return None
+        why = self.error.message if self.error is not None else "it doesn't build"
+        self.builtins = not self.builtins
+        self.reload()
+        return why
+
     # ---- the clock -------------------------------------------------------
 
     @property
@@ -237,6 +260,24 @@ class ChipSession:
         assert self.sim is not None
         idx = np.asarray(nets, dtype=np.int64)
         return float(self.sim.known[idx].mean()) if len(idx) else 1.0
+
+
+def _uses_stand_in(top: ChipDef, lib: ChipLibrary) -> bool:
+    """Whether a DFF part sits anywhere below `top`, as the primitive or as HDL."""
+    seen: set[str] = set()
+    todo = [top]
+    while todo:
+        chip = todo.pop()
+        for part in chip.parts:
+            if part.chip in STAND_INS:
+                return True
+            if part.chip in seen:
+                continue
+            seen.add(part.chip)
+            target = lib.resolve(part.chip)
+            if not isinstance(target, Primitive):
+                todo.append(target)
+    return False
 
 
 def file_loader(path: Path, search_dirs: list[Path] | None = None) -> Loader:

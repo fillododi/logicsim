@@ -39,6 +39,7 @@ HELP = (
     "Backspace: up  ·  wheel: zoom  ·  drag: pan  ·  F: fit  ·  H: hex/dec"
 )
 CLOCK_HELP = "Space: step a cycle  ·  R: run / pause  ·  Shift+R: reset clock  ·  [ ]: speed"
+BUILTIN_HELP = "B: built-in DFF / your DFF"
 CLOCK_PAD = 8  # inside the clock panel and between its items
 MAX_FRAME_DT = 0.25  # seconds; a longer stall (a drag, a slow rebuild) doesn't pile up cycles
 EDITOR_HELP = (
@@ -84,6 +85,7 @@ class ViewerApp:
         self.editor: EditorWidget | None = None
         self.value_field: ValueField | None = None  # a value being typed for an input pin
         self.field_rect: pygame.Rect | None = None  # where the value field was last drawn
+        self.notice: str | None = None  # a one-off message; the game shows it in its sidebar
         if edit_path is not None:
             buffer = TextBuffer(edit_path.read_text())
             self.editor = EditorWidget(buffer, self.fonts, self.editor_rect)
@@ -133,7 +135,12 @@ class ViewerApp:
     def help_text(self) -> str:
         if self.editing:
             return EDITOR_HELP
-        return f"{HELP}{SEP}{CLOCK_HELP}" if self.session.has_clock else HELP
+        items = [HELP]
+        if self.session.has_clock:
+            items.append(CLOCK_HELP)
+        if self.session.has_stand_in:
+            items.append(BUILTIN_HELP)
+        return SEP.join(items)
 
     def help_lines(self) -> list[str]:
         """The help line, wrapped between items to fit the window."""
@@ -381,9 +388,23 @@ class ViewerApp:
             self.fit()
         elif key == pygame.K_h:
             self.hex_mode = not self.hex_mode
+        elif key == pygame.K_b and plain and self.session.has_stand_in:
+            self.toggle_builtins()
         elif key == pygame.K_x and self.hover.node and self.hover.node[0] == "in":
             if self.session.at_top:
                 self.session.set_input(str(self.hover.node[1]), None)
+
+    def toggle_builtins(self) -> None:
+        """Run DFF parts as the built-in flip-flop or as the player's own DFF."""
+        why = self.session.toggle_builtins()
+        if why is not None:
+            self.notice = f"Your DFF doesn't build, so DFF parts stay built-in: {why}"
+        elif self.session.builtins:
+            self.notice = "DFF parts run as the built-in flip-flop again: faster, same results."
+        else:
+            self.notice = "DFF parts now run as your own DFF: click one to see its latches."
+        self.fit()
+        self.on_action("builtins")
 
     def _on_clock(self, pos: tuple[int, int]) -> bool:
         """Whether `pos` is on the clock panel as last drawn, and the chip still has a clock."""
@@ -560,10 +581,13 @@ class ViewerApp:
                 surf.blit(sep, (rect.right, rect.y))
                 x = rect.right + sep.get_width()
         right = w - self.editor_width
+        notes = []
+        if self.session.has_stand_in and not self.session.builtins:
+            notes.append("DFFs: yours (B: built-in)")
         if not self.session.at_top:
-            note = self.fonts.get(12).render(
-                "inputs are set at the top level", True, theme.TEXT_DIM
-            )
+            notes.append("inputs are set at the top level")
+        if notes:
+            note = self.fonts.get(12).render("  ·  ".join(notes), True, theme.TEXT_DIM)
             surf.blit(note, (right - note.get_width() - 12, (HEADER - note.get_height()) // 2))
         if self.editor is not None and self.edit_path is not None:
             dirty = self.editor.buffer.dirty
