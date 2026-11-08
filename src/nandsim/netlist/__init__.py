@@ -14,14 +14,16 @@ from nandsim.netlist.netlist import (
     LevelOp,
     Netlist,
 )
-from nandsim.netlist.primitives import PRIMITIVES, Primitive
+from nandsim.netlist.primitives import FREE_PRIMITIVES, PRIMITIVES, STAND_INS, Primitive
 
 __all__ = [
     "CLOCK_NET",
     "FALSE_NET",
     "FIXED_NETS",
+    "FREE_PRIMITIVES",
     "PRIMITIVES",
     "SIGNAL_NETS",
+    "STAND_INS",
     "TRUE_NET",
     "ChipLibrary",
     "GateArrays",

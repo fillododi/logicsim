@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from nandsim.hdl import ChipDef, HdlError, SourcePos, parse
-from nandsim.netlist.primitives import PRIMITIVES, Primitive
+from nandsim.netlist.primitives import PRIMITIVES, STAND_INS, Primitive
 
 
 @dataclass(frozen=True)
@@ -57,8 +57,22 @@ class ChipLibrary:
         return None
 
     def resolve(self, name: str, used_at: SourcePos | None = None) -> ChipDef | Primitive:
+        """A chip used as a part: a primitive wins over HDL of the same name."""
         if name in PRIMITIVES:
             return PRIMITIVES[name]
+        return self._load(name, used_at)
+
+    def resolve_top(self, name: str, used_at: SourcePos | None = None) -> ChipDef | Primitive:
+        """The chip being built, tested or shown: its HDL, if there is any.
+
+        Only a part named `DFF` becomes the primitive; the DFF level itself builds
+        the player's latches.
+        """
+        if name in STAND_INS and (name in self.sources or self.find_file(name) is not None):
+            return self._load(name, used_at)
+        return self.resolve(name, used_at)
+
+    def _load(self, name: str, used_at: SourcePos | None) -> ChipDef:
         if name in self._cache:
             return self._cache[name]
         if name in self.sources:

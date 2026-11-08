@@ -1,8 +1,8 @@
 # Bit
 
-Your first chip with memory. Each clock cycle, if `load` is 1, `out` becomes `in` from the cycle before; if `load` is 0, `out` keeps its value however `in` changes. Before the first load it holds nothing: its output is undefined.
+A register of one bit. Each clock cycle, if `load` is 1, `out` becomes `in` from the cycle before; if `load` is 0, `out` keeps its value however `in` changes. Before the first load it holds nothing: its output is undefined.
 
-The new part is the `DFF`: `DFF(in=d, out=q)` outputs, this cycle, what its `in` was the cycle before. Once your chip has a DFF, the clock panel appears over the circuit: **Step** runs one cycle (so does Space, after a click on the circuit).
+Your `DFF` does half of this: it remembers for exactly one cycle. From here on every DFF part runs as a built-in flip-flop that behaves like yours, only faster.
 
 **Parts you may use:** Nand, Mux, DFF.
 

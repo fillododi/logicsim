@@ -64,7 +64,7 @@ class ChipSession:
         """(Re)build from the loader. On error keep the old circuit and set `error`."""
         try:
             name, lib = self.loader()
-            top = lib.resolve(name)
+            top = lib.resolve_top(name)
             if isinstance(top, Primitive):
                 raise HdlError(f"'{name}' is a primitive; open a chip built from parts", None)
             netlist = elaborate(top, lib)

@@ -1,0 +1,7 @@
+// SRLatch: Remembers one bit. set makes out 1, reset makes out 0, neither keeps it.
+// You may use: Nand, Not
+CHIP SRLatch {
+    IN set, reset;
+    OUT out;
+    PARTS:
+}

@@ -109,7 +109,7 @@ def resolve_path(netlist: Netlist, lib: ChipLibrary, path: str) -> ChipDef:
     segs = path.split("/")
     if segs[0] != netlist.top:
         raise KeyError(path)
-    chip = lib.resolve(netlist.top)
+    chip = lib.resolve_top(netlist.top)
     for seg in segs[1:]:
         name, _, num = seg.partition("#")
         assert isinstance(chip, ChipDef)

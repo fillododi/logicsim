@@ -108,7 +108,7 @@ def test_new_player_solves_not_and_and(tmp_path: Path) -> None:
     keydown(app, pygame.K_RETURN, CTRL)
     report = app.game.report
     assert report is not None and report.passed, report
-    assert report.lines == ["Unlocked: And, Not4"]
+    assert report.lines == ["Unlocked: And, Not4, SRLatch"]
     assert app.session.snapshot is not None and len(app.session.snapshot.view.parts) == 1
     app.screenshot(shots / "2-not-solved.png")
 

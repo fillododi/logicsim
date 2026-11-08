@@ -1,0 +1,7 @@
+// DFF: A data flip-flop. Each clock cycle, out becomes what in was at the cycle's tick.
+// You may use: Nand, Not, DLatch, and the signal clock
+CHIP DFF {
+    IN in;
+    OUT out;
+    PARTS:
+}

@@ -22,7 +22,7 @@ def view_of(src_or_name: str) -> ChipView:
         top = parse(src_or_name, "T.hdl")
         lib.sources[top.name] = (src_or_name, "T.hdl")
     else:
-        top = lib.resolve(src_or_name)
+        top = lib.resolve_top(src_or_name)
     nl = elaborate(top, lib)
     return build_view(nl, lib, nl.top)
 

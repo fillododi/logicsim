@@ -1,0 +1,7 @@
+// DLatch: While load is 1, out follows in. While load is 0, out keeps its value.
+// You may use: Nand, Not, And, SRLatch
+CHIP DLatch {
+    IN in, load;
+    OUT out;
+    PARTS:
+}
