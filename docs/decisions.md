@@ -693,3 +693,15 @@ Ambiguous spec points and the option chosen. Newest last.
 - Keeping `wires` an eager dict: 1.3M lists for DataRAM, built on every save.
 - A builtin RAMBank first, as planned: still useful for simulation speed (DataRAM runs about 490 cycles/s in HDL), but the build time no longer blocks the level.
 **Consequences:** net numbers are now compact (placeholders no longer take a slot), so `num_nets` is smaller than before. Code that needs every wire should use `wires.walk()` rather than one lookup per path. The DataRAM level can now be added in HDL. Whether it still waits for a builtin depends only on simulation speed.
+
+## 2026-11-08 — DataRAM in HDL, with a sampled test
+**Context:** the RAM entry above held the eight-bank memory back for a builtin, because it took 7.4 s to build. Since the compile cache it builds in 0.09 s, and the entry after it says only simulation speed is left to decide. Open: the pins, and how to test 2,560 cells in a test the player waits for.
+**Decision:**
+- **Ship DataRAM now, in HDL.** It runs about 490 cycles/s, enough for its own test. A builtin is still the plan for the CPU's speed, and doesn't change these pins.
+- **`CHIP DataRAM { IN in[4], addr[8], bank[3], status, load; OUT out[4]; }`.** RAMBank's pins plus `bank`, the low 3 bits of `DCL`, as decided above. Parts: Nand, DMux8Way, Mux8Way4, RAMBank.
+- **The test samples each bank instead of filling it.** RAMBank's test already checks everything inside a bank, so DataRAM's checks how the banks are wired. In each bank it writes main characters 0, each power of two and 255, so every address bit matters, and status characters at 0, 64, 128 and 255, one per chip. Those addresses are also main characters the test writes, so a bank whose `status` is stuck at 0 overwrites a value that the read-back checks. The first version picked random status addresses, and that wrong version passed it. A cell's value differs from every other cell in its bank and from the same cell in every other bank, so a crossed or stuck address bit, or a wrong bank, always reads a wrong value. Then 200 random cycles, three in four on those cells. That is 960 checks, about 1 s.
+- **Wrong versions fail:** bank select bits swapped on `out`, `load` ignoring `bank[2]`, bank 0 loading every time, banks 1 and 2 crossed on `out`, a bank with address bit 0, 3, 6 or 7 stuck at 0, and a bank with `status` stuck at 0 (banks 0, 5, 7).
+**Alternatives:**
+- Filling all 2,560 cells: about 5,000 cycles, over 10 s for each Run tests.
+- Waiting for the builtin: it would hold the level back for speed it doesn't need yet.
+**Consequences:** the CPU level can use DataRAM directly, with `bank` from its `DCL` register. A builtin RAMBank/DataRAM comes next with the CPU's speed in mind.

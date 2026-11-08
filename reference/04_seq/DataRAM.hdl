@@ -1,0 +1,16 @@
+// Reference solution for DataRAM. Never shown to the player.
+CHIP DataRAM {
+    IN in[4], addr[8], bank[3], status, load;
+    OUT out[4];
+    PARTS:
+    DMux8Way(in=load, sel=bank, a=l0, b=l1, c=l2, d=l3, e=l4, f=l5, g=l6, h=l7);
+    RAMBank(in=in, addr=addr, status=status, load=l0, out=b0);
+    RAMBank(in=in, addr=addr, status=status, load=l1, out=b1);
+    RAMBank(in=in, addr=addr, status=status, load=l2, out=b2);
+    RAMBank(in=in, addr=addr, status=status, load=l3, out=b3);
+    RAMBank(in=in, addr=addr, status=status, load=l4, out=b4);
+    RAMBank(in=in, addr=addr, status=status, load=l5, out=b5);
+    RAMBank(in=in, addr=addr, status=status, load=l6, out=b6);
+    RAMBank(in=in, addr=addr, status=status, load=l7, out=b7);
+    Mux8Way4(a=b0, b=b1, c=b2, d=b3, e=b4, f=b5, g=b6, h=b7, sel=bank, out=out);
+}
