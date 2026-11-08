@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import random
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -57,10 +58,10 @@ class Gen:
         return "*" if v is None else f"0x{v:X}"
 
     def _set(self, v: int, addr: int, st: int, load: int) -> None:
+        assert self.banks or addr < 256, f"{self.name} has no bank pin for address {addr}"
+        self.lines += [f"set in 0x{v:X}", f"set addr {addr & 255}"]
         if self.banks:
-            self.lines += [f"set in 0x{v:X}", f"set addr {addr & 255}", f"set bank {addr >> 8}"]
-        else:
-            self.lines += [f"set in 0x{v:X}", f"set addr {addr}"]
+            self.lines.append(f"set bank {addr >> 8}")
         self.lines.append(f"set load {load}")
         if self.status:
             self.lines.append(f"set status {st}")
@@ -82,15 +83,28 @@ class Gen:
     def note(self, text: str) -> None:
         self.lines.append(f"// {text}")
 
-    def fill_rewrite_read(self, cells: list[tuple[int, int]], rng: random.Random) -> None:
-        """Steps 1-3 for `cells`, a list of (addr, status)."""
-        self.note("Fill: every cell once")
-        for addr, st in cells:
-            self.write(addr, rng.randrange(16), st)
+    def fill_rewrite_read(
+        self,
+        cells: list[tuple[int, int]],
+        rng: random.Random,
+        fill: Callable[[int], int] | None = None,
+        rewrite: Callable[[int, int], int] | None = None,
+        fill_note: str = "every cell once",
+    ) -> None:
+        """Steps 1-3 for `cells`, a list of (addr, status).
+
+        `fill(j)` gives cell j's first value and `rewrite(j, old)` its second, which must
+        differ from `old`. By default both are random.
+        """
+        self.note(f"Fill: {fill_note}")
+        for j, (addr, st) in enumerate(cells):
+            self.write(addr, fill(j) if fill else rng.randrange(16), st)
         self.note("Rewrite: every cell again, each with a different value")
-        for addr, st in cells:
+        for j, (addr, st) in enumerate(cells):
             old = self.mem[self.key(addr, st)]
-            self.write(addr, (old + 1 + rng.randrange(15)) & 15, st)
+            new = rewrite(j, old) if rewrite else (old + 1 + rng.randrange(15)) & 15
+            assert new != old
+            self.write(addr, new, st)
         self.note("Read everything back")
         for addr, st in cells:
             self.read(addr, st)
@@ -204,26 +218,23 @@ def dataram(rng: random.Random) -> Gen:
         status=True,
         banks=True,
     )
-    cells = [(a, 0) for a in DATARAM_MAIN] + [(a, 1) for a in DATARAM_STATUS]
+    sample = [(a, 0) for a in DATARAM_MAIN] + [(a, 1) for a in DATARAM_STATUS]
+    cells = [(b << 8 | addr, st) for b in range(8) for addr, st in sample]
+    n = len(sample)
     # Value of cell i in bank b: perm[i] + b, distinct along a bank and across banks.
-    perm = rng.sample(range(16), len(cells))
+    perm = rng.sample(range(16), n)
     shift = 1 + rng.randrange(15)
-    g.note("Fill: the same cells in every bank")
-    for b in range(8):
-        for i, (addr, st) in enumerate(cells):
-            g.write(b << 8 | addr, (perm[i] + b) & 15, st)
-    g.note("Rewrite: every cell again, each with a different value")
-    for b in range(8):
-        for i, (addr, st) in enumerate(cells):
-            g.write(b << 8 | addr, (perm[i] + b + shift) & 15, st)
-    g.note("Read everything back")
-    for b in range(8):
-        for addr, st in cells:
-            g.read(b << 8 | addr, st)
+    g.fill_rewrite_read(
+        cells,
+        rng,
+        fill=lambda j: (perm[j % n] + j // n) & 15,
+        rewrite=lambda j, old: (old + shift) & 15,
+        fill_note="the same cells in every bank",
+    )
     g.note("200 random cycles, load on about 60% of them, 3 in 4 on the cells above")
     for _ in range(200):
         if rng.random() < 0.75:
-            addr, st = rng.choice(cells)
+            addr, st = rng.choice(sample)
         else:
             st = int(rng.random() < 0.3)
             addr = rng.randrange(256)
