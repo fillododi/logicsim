@@ -243,7 +243,7 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     press_next(app)
     assert step_id(app) == "done"
     press_next(app)
-    # The tour's last steps wait for Bit, the first level with a clock.
+    # The tour's last steps wait for SRLatch, the first level with memory.
     assert step_id(app) == "memory" and shown(app) is None
     for p in shots.iterdir():
         assert p.stat().st_size > 0
@@ -365,23 +365,37 @@ def test_both_unreadable_files_are_reported(tmp_path: Path) -> None:
     assert "progress.json.bad" in app.notice and "tutorial.json.bad" in app.notice
 
 
-def test_bit_introduces_the_clock(tmp_path: Path) -> None:
-    """On Bit, the last two bubbles ask for a chip with a DFF, then for one clock step."""
+def test_memory_levels_introduce_loops_and_the_clock(tmp_path: Path) -> None:
+    """SRLatch asks for a first chip with memory; DFF for a chip with the clock, then a step."""
     levels = load_levels()
+    by_name = {lv.name: lv for lv in levels}
     store = SaveStore(levels, tmp_path / "save")
-    for lv in levels[: [x.name for x in levels].index("Bit")]:
+    for lv in levels[: [x.name for x in levels].index("SRLatch")]:
         store.save(lv, lv.reference.read_text())
         store.mark_solved(lv)
     app = GameApp(store, size=(1440, 860))
-    app.tour.seen.update(s.id for s in app.tour.steps if s.level != "Bit")
-    app.open_level(next(lv for lv in levels if lv.name == "Bit"))
+    memory = {"memory", "flipflop", "clock"}
+    app.tour.seen.update(s.id for s in app.tour.steps if s.id not in memory)
+
+    def build(name: str) -> None:
+        assert app.editor is not None
+        app.editor.buffer.select_all()
+        app.editor.buffer.insert(by_name[name].reference.read_text())
+        keydown(app, pygame.K_s, CTRL)
+        assert app.session.error is None
+
+    app.open_level(by_name["SRLatch"])
     assert step_id(app) == "memory" and shown(app) is not None
-    assert app.anchor_rect("clock") is None  # the stub has no DFF, so no clock yet
-    assert app.editor is not None
-    app.editor.buffer.select_all()
-    app.editor.buffer.insert(next(lv for lv in levels if lv.name == "Bit").reference.read_text())
-    keydown(app, pygame.K_s, CTRL)
-    assert app.session.error is None and step_id(app) == "clock"
+    build("SRLatch")
+    assert step_id(app) == "flipflop" and shown(app) is None  # waits for the DFF level
+    for name in ("SRLatch", "DLatch"):
+        store.save(by_name[name], by_name[name].reference.read_text())
+        store.mark_solved(by_name[name])
+    app.open_level(by_name["DFF"])
+    assert step_id(app) == "flipflop" and shown(app) is not None
+    assert app.anchor_rect("clock") is None  # the stub doesn't read the clock yet
+    build("DFF")
+    assert step_id(app) == "clock"
     b = shown(app)  # beside the clock panel, not over it
     assert b is not None and app.anchor_rect("clock") is not None
     app.clock("step")

@@ -3,6 +3,10 @@
 Elaboration and the engine look primitives up here instead of hard-wiring them,
 so Python builtins can be added as new rows. `Nand` is combinational; `DFF` is
 sequential: levelization leaves it out, and the engine updates it on the clock.
+
+The player gets only `Nand`. `DFF` stands in for a chip the player builds: the DFF
+level builds the player's HDL (latches and the clock), and every chip that uses a
+`DFF` part gets the primitive, which is the same flip-flop, only faster.
 """
 
 from __future__ import annotations
@@ -27,3 +31,8 @@ PRIMITIVES: dict[str, Primitive] = {
     "Nand": Primitive("Nand", inputs=("a", "b"), outputs=("out",)),
     "DFF": Primitive("DFF", inputs=("in",), outputs=("out",), sequential=True),
 }
+
+# Primitives standing in for a level's chip: a part needs that level solved first.
+STAND_INS = frozenset({"DFF"})
+# Primitives every level may use from the start.
+FREE_PRIMITIVES = frozenset(PRIMITIVES) - STAND_INS

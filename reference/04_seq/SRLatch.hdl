@@ -1,0 +1,10 @@
+// Reference solution for SRLatch. Never shown to the player.
+CHIP SRLatch {
+    IN set, reset;
+    OUT out;
+    PARTS:
+    Not(in=set, out=ns);
+    Not(in=reset, out=nr);
+    Nand(a=ns, b=nq, out=q, out=out);
+    Nand(a=nr, b=q, out=nq);
+}

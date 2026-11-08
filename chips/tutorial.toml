@@ -6,7 +6,7 @@
 #             levels, level:<Name>, brief, editor, line:<text>, canvas,
 #             pin:<name>, part, wire (the first part-to-part wire), header,
 #             run_button, results, footer, chips (the "Your chips" list),
-#             clock (the clock panel, once the chip has a DFF)
+#             clock (the clock panel, once the chip has a DFF or reads clock)
 #   until   the player action that completes the step:
 #             next (the bubble's Next button), save, build_ok, toggle,
 #             set_value (an input's value typed in; it counts as a toggle too),
@@ -239,23 +239,33 @@ text = """
 That's the tour for now: the clock gets its own bubbles when you reach Memory. Every chip from here to the CPU is built the same way. Good luck!
 """
 
-# Memory: the first level with a DFF introduces the clock panel.
+# Memory: SRLatch is the first chip whose wires feed back, and DFF the first that
+# reads the clock, so it introduces the clock panel.
 [[step]]
 id = "memory"
-level = "Bit"
+level = "SRLatch"
 anchor = "brief"
 until = "build_ok"
 text = """
-Bit is your first chip with memory, and the DFF is its new part. Build a Bit with a DFF in it and press Ctrl+S.
+SRLatch is your first chip with memory. Its wires feed back into the parts that drive them, and that loop is what holds the bit. Build it and press Ctrl+S.
+"""
+
+[[step]]
+id = "flipflop"
+level = "DFF"
+anchor = "brief"
+until = "build_ok"
+text = """
+The DFF is the first chip that reads the clock: write clock wherever a part takes a signal, like true or false. Build a DFF and press Ctrl+S.
 """
 
 [[step]]
 id = "clock"
-level = "Bit"
+level = "DFF"
 anchor = "clock"
 until = "clock_step"
 text = """
-A chip with a DFF gets a clock. Set in and load, then click Step: one cycle runs, and out shows what the DFF stored. Space steps too, once you have clicked the circuit.
+A chip that reads the clock gets a clock panel. Set in, then click Step: one cycle runs, a tick and a tock, and out shows what in was at the tick. Space steps too, once you have clicked the circuit.
 
 Run plays cycles by itself at the speed beside it, and Reset forgets every stored bit.
 """

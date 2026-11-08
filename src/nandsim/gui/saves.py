@@ -14,9 +14,10 @@ beside the save directory for the same reason. Every level may use them as parts
 so they are part of the library. Deleting one moves its file to
 `<save dir>-backups/<time>/exports/`, and so does a reset for all of them.
 
-A level is *unlocked* when every level it may use as a part is solved; primitives
-are always available. An exported chip may use a primitive only once an unlocked
-level lists it, so exports never carry a DFF into the levels before it.
+A level is *unlocked* when every level it may use as a part is solved; `Nand` is
+always available, `DFF` once the DFF level is solved. An exported chip may use a
+primitive only once an unlocked level lists it, so exports never carry a DFF into
+the levels before it.
 
 *Solved* is sticky: it records that the chip passed its tests once, so later
 experiments never lock the player out of a level.
@@ -30,7 +31,7 @@ from datetime import datetime
 from pathlib import Path
 
 from nandsim.hdl import ChipDef, HdlError, parse
-from nandsim.netlist import PRIMITIVES, ChipLibrary, Primitive, elaborate
+from nandsim.netlist import FREE_PRIMITIVES, PRIMITIVES, ChipLibrary, Primitive, elaborate
 from nandsim.paths import default_save_dir, exports_dir, settings_file
 from nandsim.testing import Level, exported_chips
 from nandsim.testing.levels import CHIP_NAME, KEYWORDS
@@ -80,7 +81,7 @@ class SaveStore:
             self._write_progress()
 
     def is_unlocked(self, level: Level) -> bool:
-        needed = {p for p in level.parts if p not in PRIMITIVES}
+        needed = {p for p in level.parts if p not in FREE_PRIMITIVES}
         return needed <= self._solved
 
     def unlocked_primitives(self) -> frozenset[str]:

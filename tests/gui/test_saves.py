@@ -196,6 +196,9 @@ def test_export_may_use_dff_once_a_level_listing_it_is_unlocked(tmp_path: Path) 
     with pytest.raises(ValueError, match=f"^{re.escape(NO_DFF_YET)}$"):
         store.prepare_export("Delay", DFF_CHIP)  # Bit still needs Not
     solve_not(store)
+    with pytest.raises(ValueError, match=f"^{re.escape(NO_DFF_YET)}$"):
+        store.prepare_export("Delay", DFF_CHIP)  # and the player's own DFF
+    store.mark_solved(next(lv for lv in levels if lv.name == "DFF"))
     assert store.prepare_export("Delay", DFF_CHIP) == DFF_CHIP
 
 

@@ -1,0 +1,10 @@
+// Reference solution for DFF. Never shown to the player.
+// The master latch is open while the clock is 1, the slave while it is 0.
+CHIP DFF {
+    IN in;
+    OUT out;
+    PARTS:
+    DLatch(in=in, load=clock, out=held);
+    Not(in=clock, out=low);
+    DLatch(in=held, load=low, out=out);
+}

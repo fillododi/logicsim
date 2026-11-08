@@ -111,7 +111,7 @@ def run_script(
 def _resolve_top(script: TstScript, lib: ChipLibrary, where: str) -> ChipDef:
     if lib.find_file(script.chip) is None and script.chip not in lib.sources:
         raise HdlError(f"no implementation of '{script.chip}' found in {where}", script.chip_pos)
-    top = lib.resolve(script.chip, script.chip_pos)
+    top = lib.resolve_top(script.chip, script.chip_pos)
     if isinstance(top, Primitive):
         raise HdlError(f"'{script.chip}' is a primitive and cannot be tested", script.chip_pos)
     return top

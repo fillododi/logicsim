@@ -12,7 +12,7 @@ from typing import Literal
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import Loader
 from nandsim.gui.tips import tip_for
-from nandsim.netlist import PRIMITIVES, ChipLibrary
+from nandsim.netlist import FREE_PRIMITIVES, ChipLibrary
 from nandsim.testing import Level, TstResult, parse_tst, run_script
 
 Status = Literal["solved", "open", "locked"]
@@ -57,7 +57,7 @@ class GameState:
 
     def missing(self, level: Level) -> list[str]:
         """Chips the player must solve before this level unlocks."""
-        return [p for p in level.parts if p not in PRIMITIVES and p not in self.store.solved]
+        return [p for p in level.parts if p not in FREE_PRIMITIVES and p not in self.store.solved]
 
     # ---- level groups -------------------------------------------------------
 

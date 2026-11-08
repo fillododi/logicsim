@@ -1,0 +1,10 @@
+// Reference solution for DLatch. Never shown to the player.
+CHIP DLatch {
+    IN in, load;
+    OUT out;
+    PARTS:
+    Not(in=in, out=nin);
+    And(a=in, b=load, out=set);
+    And(a=nin, b=load, out=reset);
+    SRLatch(set=set, reset=reset, out=out);
+}

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from nandsim.netlist import PRIMITIVES, ChipLibrary
+from nandsim.netlist import FREE_PRIMITIVES, ChipLibrary
 from nandsim.testing import Impl, Level, load_levels, parse_tst, run_script, run_tst
 
 LEVELS = load_levels()
@@ -19,7 +19,7 @@ def test_levels_exist() -> None:
 def test_level_files_and_parts(level: Level) -> None:
     for path in (level.stub, level.brief, level.tst, level.reference):
         assert path.is_file(), f"missing {path}"
-    unlocked = set(PRIMITIVES) | {lv.name for lv in LEVELS[: LEVELS.index(level)]}
+    unlocked = set(FREE_PRIMITIVES) | {lv.name for lv in LEVELS[: LEVELS.index(level)]}
     assert set(level.parts) <= unlocked, f"{level.name} allows parts not unlocked yet"
 
 

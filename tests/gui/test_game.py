@@ -76,7 +76,7 @@ def test_a_loop_that_never_settles_is_named_with_a_tip(game: GameState) -> None:
 def test_solving_unlocks_and_uses_the_players_chips(game: GameState) -> None:
     r = game.run_tests(solution("Not"))
     assert r.passed and r.summary == "All 2 checks passed"
-    assert r.lines == ["Unlocked: And, Not4"]  # Not4 widens Not
+    assert r.lines == ["Unlocked: And, Not4, SRLatch"]  # Not4 widens Not; SRLatch needs only Not
     assert game.status(LEVELS["Not"]) == "solved"
     game.save(solution("Not"))
     assert game.select(LEVELS["And"])
