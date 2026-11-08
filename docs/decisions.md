@@ -291,7 +291,7 @@ Ambiguous spec points and the option chosen. Newest last.
 **Decision:**
 - **CPU:** the Intel 4004, compatible at the instruction level: 4-bit accumulator and carry, 16 four-bit index registers (8 pairs), a 12-bit PC with a 3-level stack, all 46 instructions with their real encodings, and the 4001 ROM and 4002 RAM organization and I/O ports. Not modelled: the multiplexed 4-bit bus and the 8-phase clock. Our single clock fits the simulator's tick/tock semantics, and an instruction-level match is what a `.tst` can check.
 - **Timing:** one clock cycle per 4004 instruction cycle, so the two-word instructions (`JCN FIM JUN JMS ISZ`) and `FIN` take two cycles, as on the real chip. Test programs can then count cycles the way 4004 documentation does.
-- **The end of the game** is the 4004 (milestone 8). This replaces the "CPU, then a whole computer" aim of the entry above: the program ROM, data RAM and I/O ports of the CPU milestone already form a small MCS-4 computer. A stage after it would need a new decision.
+- **The end of the game** is the 4004 (milestone 8). *(Superseded by 2026-11-08, the Busicom 141-PF as milestone 9.)* This replaces the "CPU, then a whole computer" aim of the entry above: the program ROM, data RAM and I/O ports of the CPU milestone already form a small MCS-4 computer. A stage after it would need a new decision.
 - **New milestone 4, "Chip files and sound",** before Buses, because it polishes what exists and is small. Renumbered: Buses 5, Arithmetic 6, Sequential logic 7, CPU 8. Releases stay one per milestone, up to `0.8.0`.
 - **Widths:** Buses, Arithmetic and Sequential logic are rescoped from 32 bits to the 4004's 4-bit data, 8-bit instructions and register pairs, and 12-bit addresses. The barrel shifter and RV32I comparisons are dropped; decimal adjust, rotate through carry and the 3-level stack are added.
 - **Chip files:** an exports folder beside the save dir, never inside it (`ChipLibrary` searches the save dir recursively, as found with backups), browsed from an in-game menu instead of a file dialog. An imported chip is unsaved editor text until Ctrl+S or Run tests, so importing alone never solves a level.
@@ -722,3 +722,27 @@ Ambiguous spec points and the option chosen. Newest last.
 - Keeping the loop build error for loops that can never settle: telling them apart takes solving the circuit. Undefined, with the wires named, is honest and cheap.
 - Carrying latch state across a rebuild in the GUI: the DFF rule needs stable DFF paths. Loop nets have no such identity yet, so a rebuild starts latches undefined. That can wait for the builtin, which brings DFF paths back.
 **Consequences:** a loop costs about seven times the primitive. 256 Bits built from latches run at 4,250 cycles/s with 3,329 gates, against 29,000 cycles/s and 1,281 gates with the DFF primitive. So the CPU will need the DFF builtin from the third PR, and the player's latch DFF stays for the levels that teach it. `Netlist.levels` is now a list of `Level` (ops plus a loop count). `levelize` no longer needs source positions. Net numbers inside chips moved up by one.
+## 2026-11-08 — The Busicom 141-PF as milestone 9, and a ROM in the 4001 layout
+**Context:** milestone 7 lists a 4096 × 8 program ROM, and its contents need a way in. The only primitives are `Nand` and `DFF`, so a player's ROM is memory built from DFFs, and the game can't tell which DFF holds which bit. Asked how programs get in, the user chose an in-game editor where the player types binary code, loaded through a write port, and said the ROM should follow the computer that comes after the 4004 as a new milestone: the Busicom 141-PF calculator.
+**Decision:**
+- **Milestone 9, the Busicom 141-PF, is the new end of the game,** replacing the 4004 (2026-11-06 entry). The 141-PF is a 4004, four 4001 ROMs (1 KB, a fifth for the square-root option), two 4002 RAMs and a 4003 shift register for the printer, running an interpreter whose registers live in RAM. Sources disagree on the number of 4003s, so its scope (keyboard, printer, program, 4003s) gets its own decision before work starts. Releases go up to `0.9.0`.
+- **The ROM follows the 4001, as the RAM follows the 4002:** `ROM4001` (`IN in[8], addr[8], load; OUT out[8];`, 256 × 8) and `ROM4K` (`IN in[8], addr[12], load; OUT out[8];`, sixteen ROM4001s picked by `addr[8..11]`, the 4004's whole address space). The 141-PF fills four or five of the sixteen.
+- **A write port, though the 4001 is mask-programmed.** Writing through the chip's own pins is the only way to load a ROM the player built, whatever its insides. The CPU keeps `load` at 0. MCS-4 systems did run from program RAM (4008/4009 with `WPM`), so it isn't foreign to the platform.
+- **The 4001's I/O port** waits for the CPU milestone, like the 4002's output port.
+- **A ROM editor:** the player types bytes in binary, with `//` comments, saved as a `.rom` file with the saves. On reset the game writes them in through `in`, `addr` and `load`, one per cycle, before handing over the clock. A `.tst` command loads a `.rom` file the same way. The file format and the command get their own entry when built.
+**Alternatives:**
+- A read-only ROM whose contents come from a file: it must be a Python builtin, so the player builds nothing, against "HDL version first".
+- A 1 KB ROM sized for the 141-PF: the 4004 addresses 4 KB, and the milestone asks for 4096 × 8.
+- Keeping the 4004 as the end: the user asked for the calculator.
+**Consequences:** a ROM4K in HDL holds about three times DataRAM's bits and will run at about 150 cycles/s, so loading the 141-PF's 1 KB takes about 7 s. Builtin memories, with their equivalence tests, are needed by milestone 9 at the latest. The CPU milestone's pins should leave room for the 4003 and for the 141-PF's keyboard and printer.
+
+## 2026-11-08 — The program ROM comes after the CPU
+**Context:** the entry above put the ROM levels and the ROM editor in milestone 7. The user asked for them after the CPU instead. The CPU milestone's tests still have to give the CPU a program.
+**Decision:**
+- **The ROM levels (`ROM4001`, `ROM4K`) and the ROM editor move to the start of milestone 9,** with the Busicom 141-PF, which is the machine that uses the 4001s. Their pins and loading model stay as the entry above decided. Milestone 7 now closes without a ROM.
+- **In milestone 8, the test runner holds the program.** A `.tst` command attaches a program memory to the CPU's ROM pins: each cycle the runner reads the CPU's address output and drives its instruction input. This is test-harness code, not a chip, so it bends neither "only Nand and DFF" nor "HDL version first". The command's syntax and the `.rom` file format get their own entry when built, and the ROM editor in milestone 9 reuses that format.
+**Alternatives:**
+- Straight-line programs set by hand in each `.tst`: no jumps or calls, so most of the 46 instructions couldn't be tested in a program.
+- Moving the ROM levels to the end of milestone 8, after the CPU: the CPU doesn't need them, and the 141-PF is what fills them.
+**Consequences:** the CPU level's pins are a ROM address out and an instruction in, which the runner's memory and, later, the player's ROM4K both plug into. The ROM's own I/O port still waits for the CPU milestone.
+
