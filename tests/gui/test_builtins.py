@@ -78,7 +78,7 @@ def test_dff_parts_are_marked_built_in(chips: Path) -> None:
     s = session(chips)
     p = dff_part(s)
     assert p.primitive and p.builtin and p.label == "DFF (built-in)"
-    assert s.has_stand_in and s.builtins
+    assert s.can_switch and s.builtins
 
 
 def test_switching_to_your_dff_opens_its_latches_and_keeps_results(chips: Path) -> None:
@@ -104,17 +104,39 @@ def test_switching_to_your_dff_opens_its_latches_and_keeps_results(chips: Path) 
     assert s.toggle_builtins() is None and s.builtins and dff_part(s).builtin
 
 
-def test_a_broken_dff_keeps_the_built_in_one(chips: Path) -> None:
+def test_a_broken_dff_keeps_the_built_in_one_without_rebuilding(chips: Path) -> None:
     (chips / "DFF.hdl").write_text("CHIP DFF { IN in; OUT out; PARTS: Nope(in=in, out=out); }")
     s = session(chips)
+    sim = s.sim
     why = s.toggle_builtins()
-    assert why == "unknown chip 'Nope'"
+    assert why == "Your DFF doesn't build, so DFF parts stay built-in: unknown chip 'Nope'"
     assert s.builtins and s.error is None and dff_part(s).builtin
+    assert s.sim is sim  # the running circuit was never replaced
+
+
+def test_a_chip_that_doesnt_build_is_refused_and_the_dff_not_blamed(chips: Path) -> None:
+    s = session(chips)
+    (chips / "Bit.hdl").write_text(BIT.replace("Mux(", "Muxx("))
+    assert not s.reload() and s.error is not None  # the last good circuit stays
+    why = s.toggle_builtins()
+    assert why == "Fix the errors in your chip first: B switches only a chip that builds."
+    assert s.builtins and s.error is not None  # the chip's own error is still shown
+
+
+def test_without_your_dff_there_is_nothing_to_switch(tmp_path: Path) -> None:
+    """A save from before the DFF level, or a folder without DFF.hdl: parts stay built-in."""
+    (tmp_path / "Bit.hdl").write_text(
+        "CHIP Bit { IN in, load; OUT out; PARTS: Nand(a=in, b=load, out=x); DFF(in=x, out=out); }"
+    )
+    s = ChipSession(file_loader(tmp_path / "Bit.hdl", [tmp_path]))
+    assert s.reload() and not s.can_switch and dff_part(s).builtin
+    assert s.toggle_builtins() == "There is no DFF of yours to switch to in this chip."
+    assert s.builtins
 
 
 def test_chips_without_a_dff_part_have_nothing_to_switch(chips: Path) -> None:
-    assert not session(chips, "Mux").has_stand_in
-    assert not session(chips, "DFF").has_stand_in  # the DFF level itself is always yours
+    assert not session(chips, "Mux").can_switch
+    assert not session(chips, "DFF").can_switch  # the DFF level itself is always yours
 
 
 def test_reg_of_bits_finds_the_dff_two_levels_down(chips: Path) -> None:
@@ -122,7 +144,7 @@ def test_reg_of_bits_finds_the_dff_two_levels_down(chips: Path) -> None:
         "CHIP Reg2 { IN in[2], load; OUT out[2]; PARTS:"
         " Bit(in=in[0], load=load, out=out[0]); Bit(in=in[1], load=load, out=out[1]); }"
     )
-    assert session(chips, "Reg2").has_stand_in
+    assert session(chips, "Reg2").can_switch
 
 
 # ---- the app -------------------------------------------------------------------
@@ -147,6 +169,45 @@ def test_b_switches_and_the_help_and_header_say_so(chips: Path) -> None:
     assert app.notice == "DFF parts run as the built-in flip-flop again: faster, same results."
 
 
+def test_the_viewer_draws_the_notice(chips: Path) -> None:
+    app = ViewerApp(session(chips), size=(1100, 600))
+    x, y, w, _ = app.canvas_area
+    area = pygame.Rect(int(x), int(y), int(w), 40)  # under the header, where it goes
+    before = pygame.Surface(app.size)
+    app.render(before)
+    press(app, pygame.K_b)
+    press(app, pygame.K_b)  # back to the same circuit, so only the notice differs
+    after = pygame.Surface(app.size)
+    app.render(after)
+    assert app.notice is not None
+    assert pygame.image.tobytes(before.subsurface(area), "RGB") != pygame.image.tobytes(
+        after.subsurface(area), "RGB"
+    )
+
+
+def test_hover_follows_the_new_layout_after_b(chips: Path) -> None:
+    app = ViewerApp(session(chips), size=(1100, 600))
+    app.render(pygame.Surface(app.size))
+    snap = app.session.snapshot
+    assert snap is not None
+    i = next(p.index for p in snap.view.parts if p.chip == "DFF")
+    b = snap.layout.boxes[("part", i)]
+    app.mouse = app.screen_of((b.x + b.w / 2, b.y + b.h / 2))
+    app.hover.node = ("part", 99)  # stale on purpose: B must recompute it
+    press(app, pygame.K_b)
+    new = app.session.snapshot
+    assert new is not None and new is not snap
+    assert app.hover.node == ("part", i)  # the mouse is over the new DFF box
+
+
+def test_a_narrow_window_drops_the_header_note_rather_than_overlap(chips: Path) -> None:
+    app = ViewerApp(session(chips), size=(700, 400))
+    press(app, pygame.K_b)
+    app.session.goto(f"Bit/DFF#{dff_part(app.session).index}/DLatch#1")
+    app.render(pygame.Surface(app.size))  # the crumbs fill the header: no note, no crash
+    assert app._crumbs  # the breadcrumbs are still there to click
+
+
 def test_the_game_keeps_the_choice_from_level_to_level(tmp_path: Path) -> None:
     from nandsim.gui.game_app import GameApp
     from nandsim.gui.saves import SaveStore
@@ -161,12 +222,12 @@ def test_the_game_keeps_the_choice_from_level_to_level(tmp_path: Path) -> None:
     app = GameApp(store, size=(1440, 860))
     app.tour.skip()
     app.open_level(by["Bit"])
-    assert app.session.has_stand_in and app.session.builtins
+    assert app.session.can_switch and app.session.builtins
     app.editor.focused = False
     press(app, pygame.K_b)
     assert not app.session.builtins and dff_part(app.session).label == "DFF"
     app.open_level(by["Register4"])
-    assert not app.session.builtins and app.session.has_stand_in
+    assert not app.session.builtins and app.session.can_switch
 
 
 def test_b_does_nothing_without_a_dff_part(chips: Path) -> None:

@@ -696,6 +696,9 @@ class GameApp(ViewerApp):
         if self.menus:
             self.menus[-1].draw(surf, self.fonts, pygame.Rect(0, 0, *self.size))
 
+    def _draw_notice(self, surf: pygame.Surface) -> None:
+        """The game shows its notice in the sidebar instead (see `_draw_sidebar`)."""
+
     def _draw_tour(self, surf: pygame.Surface) -> None:
         step = self.tour.visible(self.game.current.name)
         if step is None:

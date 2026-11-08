@@ -55,9 +55,17 @@ class ChipLibrary:
         self.sources = dict(sources or {})
         self.builtins = builtins
         self._cache: dict[str, ChipDef] = {}
+        self._has_hdl: dict[str, bool] = {}
 
     def has_hdl(self, name: str) -> bool:
-        return name in self.sources or self.find_file(name) is not None
+        """Whether some HDL defines `name`, in `sources` or a file.
+
+        Remembered per library, like parsed chips: the GUI asks for every DFF part it
+        draws, and a library is rebuilt on every reload anyway.
+        """
+        if name not in self._has_hdl:
+            self._has_hdl[name] = name in self.sources or self.find_file(name) is not None
+        return self._has_hdl[name]
 
     def is_builtin(self, name: str) -> bool:
         """Whether a part with this name runs as a primitive standing in for HDL."""

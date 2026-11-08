@@ -61,7 +61,8 @@ class ChipSession:
         self.speed = DEFAULT_SPEED
         self._owed = 0.0  # cycles due but not yet run, while running
         self.builtins = True  # DFF parts run as the built-in flip-flop
-        self.has_stand_in = False  # the chip has a DFF part, built-in or the player's
+        # B can switch: a DFF part sits under the chip, and the player's DFF HDL exists.
+        self.can_switch = False
 
     # ---- loading -------------------------------------------------------
 
@@ -82,7 +83,7 @@ class ChipSession:
             return False
         old = self.sim
         self.netlist, self.lib, self.error = netlist, lib, None
-        self.has_stand_in = _uses_stand_in(top, lib)
+        self.can_switch = _uses_stand_in(top, lib) and all(lib.has_hdl(s) for s in STAND_INS)
         self.sim = Simulator(netlist)
         self._carry_clock(old, self.sim)
         kept = {}
@@ -170,16 +171,23 @@ class ChipSession:
     def toggle_builtins(self) -> str | None:
         """Switch DFF parts between the built-in flip-flop and the player's own DFF.
 
-        Returns None if the chip rebuilt, else why not; then nothing changes. The
-        clock starts over, since the DFFs are no longer the same ones.
+        Returns None if the chip rebuilt, else why not, for the player; then nothing
+        changes. The clock starts over, since the DFFs are no longer the same ones.
+        A chip that doesn't build is refused up front, so a failure here is the DFF's.
         """
+        if not self.can_switch:
+            return "There is no DFF of yours to switch to in this chip."
+        if self.error is not None:
+            return "Fix the errors in your chip first: B switches only a chip that builds."
         self.builtins = not self.builtins
         if self.reload():
             return None
         why = self.error.message if self.error is not None else "it doesn't build"
         self.builtins = not self.builtins
-        self.reload()
-        return why
+        self.error = None  # a failed reload leaves the running circuit as it was
+        if self.builtins:
+            return f"Your DFF doesn't build, so DFF parts stay built-in: {why}"
+        return f"The chip doesn't build with the built-in DFF: {why}"
 
     # ---- the clock -------------------------------------------------------
 
