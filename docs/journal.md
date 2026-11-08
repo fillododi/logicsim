@@ -264,3 +264,53 @@ This became milestone 3, Tutorial and UI, which also takes on layout readability
 Almost all of this milestone is level data rather than code: 10 stubs, briefs, references and `.tst` files, plus three decision entries.
 
 **Next:** milestone 7, Sequential logic. It starts with the DFF in the GUI and the `tick`/`tock` commands in `.tst`, which `docs/tst.md` already promises. Then come Bit and Register4/8/12, the index register file (16 × 4, also as 8 pairs), the PC with its 3-level stack (Inc12 is ready for it), RAM up to the 4002 layout, a 4096 × 8 ROM, and clock controls. The `.tst` format will need a way to load ROM contents before milestone 8.
+
+## Milestone 7 — Sequential logic (2026-11-08)
+
+**Built:** memory, in a new *Memory* group of 14 levels, and the clock to drive it.
+- **The clock:** `tick` and `tock` in `.tst`, with failures that name their cycle. A clock panel in the GUI (step, run at 1–1000 cycles/s, reset, speed) that keeps the stored bits across a rebuild when every DFF is still where it was.
+- **Flip-flops from NAND.** The engine now simulates feedback loops, and HDL can read the clock as `clock`. The player builds SRLatch, DLatch and the DFF itself. Every DFF part after that runs as the engine's DFF, a built-in shown as `DFF (built-in)`, and B swaps the player's own DFF back in, down to its latches.
+- **The 4004's storage:** Bit, Register4/8/12, IndexRegs (16 × 4, also as 8 pairs), PC (12-bit counter with the 3-level address stack, wrapping as on the chip), and RAM8, RAM64, RAM4002, RAMBank and DataRAM. The last is all 2,560 characters a 4004 can address, picked by `SRC` and `DCL`.
+- **Plan changes, recorded as decisions:** the program ROM and its editor moved after the CPU (#49), and a milestone 9, the Busicom 141-PF calculator, became the end of the game (#48).
+
+**Problems and how they were solved:**
+- *A DFF the player never built.* Midway, the user decided the player should build flip-flops too. That broke two rules in CLAUDE.md: loops without a DFF were errors, and DFF was a primitive. The work came in three PRs.
+  - #50, the engine. Loops are found as strongly connected components, but only among the gates that plain levelization can't order, so chips without loops are untouched. Each loop runs in vectorized unit-delay rounds until it settles. Unit delay matters: with one delay per gate, a master–slave flip-flop locks its closing latch before new data can race through, as real gates do. A loop that won't settle is set undefined and settled again from there, which three-valued logic guarantees to finish.
+  - #51, the levels.
+  - #52, the switch back to the player's DFF.
+- *The latch DFF is about 7× slower than the primitive* (measured below). So a part named `DFF` stays the primitive once the DFF level passes. An equivalence test runs both on random sets, ticks, tocks and evals. They differ in one documented case, an `eval` between tick and tock with a new input, which no test and no GUI action produces.
+- *DataRAM took 7.4 s to build.* Elaboration re-checked every instance of a chip. Since #46, each chip is compiled once into a template and stamped out, and levelization runs as numpy frontiers instead of a loop per gate. DataRAM now builds in about 0.1 s and shipped in HDL, without waiting for a builtin.
+- *A DFF leaked into early exports.* Review of #38 found a one-DFF chip exportable from Not, usable in every level. Exports may now use a primitive only once an unlocked level lists it, checked on the flattened netlist (#39).
+- *A clock that kept values on the wrong DFF.* Review of #40 found that carrying state across a rebuild one path at a time put a register's high bit into its low bit. State is now carried only when every DFF path is unchanged.
+- *Tests that passed wrong chips.* As in earlier milestones, wrong versions were run against every new `.tst`. Several reached the fix only that way:
+  - DataRAM's first sampled test let a stuck `status` bit and a bank-7-for-0 swap pass (shift 7, from the review of #47).
+  - DFF's test needed checks after the tick, while the clock is low and between tick and tock: each one fails a different single-latch design.
+- *Messages that blamed the wrong thing.* Review of #52 reproduced two:
+  - B claimed "your DFF" when no DFF HDL existed.
+  - B blamed the player's DFF for the chip's own error.
+
+  Both are now refused with an accurate message, each with a regression test.
+
+**Learned:**
+- A rule in CLAUDE.md is the user's to change. The analysis named both rules this would break and asked first. Then the change went in small, merged steps, each green.
+- Simulation semantics decide correctness, not just speed. Zero-delay settling in level order would have let data race through a flip-flop; unit-delay rounds get it right for the same reason hardware does.
+- A stand-in needs an equivalence test with its exceptions spelled out, or "the same, only faster" is a promise nobody checked.
+- For each new check, write the wrong chip it is meant to catch. Several tests in this milestone looked thorough and weren't, until a specific mutant passed them.
+- Messages are behaviour too. Both bugs found in the review of #52 were wrong *messages*, not wrong circuits, and only a reproduction showed them.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 664 (+175 since 0.6.0) | `uv run pytest --co -q` |
+| Levels | 45/45 pass against their references (14 new, 5,574 checks in the Memory `.tst` files, 1,920 of them RAMBank's) | `uv run nandsim test --impl reference chips/` |
+| Reference size (NANDs, DFFs) | SRLatch 4, DLatch 9, DFF 19 (latches only, 2 loops); Bit 9 + 1 DFF; Register12 108 + 12; IndexRegs 1,169 + 64; PC 1,620 + 50; RAM4002 5,803 + 320; RAMBank 23,323 + 1,280; DataRAM 186,843 + 10,240 | `elaborate()` on each reference: `gate_count`, `dff_count`, loop count from `Netlist.levels` |
+| Clock speed, built-in DFF | Register12 24.4k cycles/s, IndexRegs 7.1k, PC 1.8k, RAM4002 3.8k, RAMBank 2.1k, DataRAM 557 cycles/s; DataRAM builds in 97 ms | `Simulator.tick()` + `tock()` in a loop for 1.5 s with every input changing each cycle; `elaborate()` timed once; Python 3.12.3, this laptop |
+| Clock speed, the player's DFF (B) | Register12 6.4k, IndexRegs 1.5k, PC 417, RAMBank 390, DataRAM 63 cycles/s (371,163 NANDs), 4–9× slower | same loop, `ChipLibrary(builtins=False)` |
+| Source LOC | 6,974 (gui 4,824, netlist 1,027, testing 424, hdl 372, sim 223), +899 since 0.6.0 | non-blank lines of `src/**/*.py` at HEAD and at v0.6.0, same script |
+| Test LOC | 4,486 (+1,192) | non-blank lines of `tests/**/*.py`, same script |
+| Work since 0.6.0 | 15 merged PRs (#38–#52), 41 commits | `git log --merges` and `git log --no-merges v0.6.0..HEAD` |
+
+The real 4004 runs about 92.5k instruction cycles per second. The CPU will be several times DataRAM's size in its datapath alone, so DataRAM's 557 cycles/s is the number to watch. The builtins planned for RAMBank and the ALU, each with its equivalence test, are the likely next step for speed.
+
+**Next:** milestone 8, the Intel 4004. It starts with the `.tst` command that attaches a program memory, held by the runner, to the CPU's ROM pins, since the ROM levels now come in milestone 9. Then the instruction decoder and the two-cycle instructions (`JCN FIM JUN JMS ISZ`, and `FIN`), from the parts already built: ALU, IndexRegs, PC and DataRAM. The goal is a hand-assembled BCD addition checked in RAM. The journal must report the CPU's simulated clock against 92.5k cycles/s.

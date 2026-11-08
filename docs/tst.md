@@ -28,8 +28,8 @@ expect out 1
 | `table <inputs> \| <outputs>` | Starts a truth table. Each following row lists input values, `\|`, then expected outputs. For each row the runner sets the inputs, evaluates, and checks the outputs. `end` closes the table. |
 | `set <pin> <value>` | Sets an input pin. |
 | `eval` | Propagates the inputs through the chip. |
-| `tick` | First half of a clock cycle: evaluates, then every DFF stores its input. Outputs don't change yet. |
-| `tock` | Second half: every DFF outputs what it stored at the last `tick`, then the chip evaluates. |
+| `tick` | First half of a clock cycle: evaluates, then every DFF stores its input and `clock` rises to 1, and the chip settles again. Outputs of DFFs don't change yet. |
+| `tock` | Second half: every DFF outputs what it stored at the last `tick`, `clock` falls to 0, then the chip evaluates. |
 | `expect <pin> <value>` | Checks an output (or input) pin. Each `expect`, and each output in a table row, is one check. |
 
 A full clock cycle is `tick` then `tock`. Inputs set before the `tick` are what the DFFs store:

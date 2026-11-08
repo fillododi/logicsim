@@ -6,55 +6,56 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-08
+
+Milestone 7: sequential logic. Your chips learn to remember. A new *Memory* group of 14
+levels starts from two NANDs that hold each other and ends with all 2,560 characters of data
+memory a 4004 can reach, with the registers and the program counter on the way. Nothing is
+given: even the flip-flop is yours, built from NAND and the clock.
+
 ### Added
 
-- **Memory from NAND: SRLatch, DLatch and DFF.** The Memory group opens with three levels
-  that build a flip-flop from nothing but NAND: a latch of two NANDs that hold each other, a
-  latch that follows its input while `load` is 1, and the DFF, whose output is its input one
-  clock cycle earlier, made of two latches and the clock. Once your DFF passes, every DFF part
-  you use runs as a built-in flip-flop that behaves the same, only faster, titled
-  "DFF (built-in)" on the circuit. Press B on the circuit to run your own DFF in its place
-  and click into its latches; B again switches back. Tests can run the
-  clock with `tick` and `tock`, and a failing check in a clocked test says which cycle it
-  happened in. A chip you export can contain a DFF only once you have solved the DFF level.
-- **Clock controls.** A chip with DFFs gets a clock panel over its circuit: step one cycle,
-  run and pause at 1 to 1000 cycles a second, and reset, with the cycle count beside them.
-  The keys are Space (step), R (run / pause), Shift+R (reset) and [ ] (speed). Saving your
-  chip keeps what its DFFs hold, unless you added or removed parts. The clock stops while a
-  menu is open.
-- **Memory levels: Bit, Register4, Register8 and Register12.** A new Memory group after
-  Arithmetic. Bit stores one bit with a DFF and keeps it while `load` is 0; the registers put
-  Bits side by side, up to the 12 bits of the 4004's program counter. New tour bubbles
-  introduce memory on SRLatch, then the clock on DFF, where they show the clock panel and ask
-  for one step.
-- **IndexRegs**, the 4004's 16 index registers in the Memory group: read and write one
-  4-bit register, or a pair of them as 8 bits, picked by the low digit of an instruction.
+- **Feedback loops and the `clock` signal.** A wire may now feed back into the parts that
+  drive it, so two NANDs that read each other's output make a latch that remembers a bit.
+  `clock` can be read like `true` and `false`: it is 1 after a tick and 0 after a tock. A loop
+  that never comes to rest shows as undefined, and a failing test names its wires, with a tip.
+- **Memory from NAND: SRLatch, DLatch and DFF.** The Memory group opens by building a
+  flip-flop from nothing but NAND: a latch of two NANDs, a latch that follows its input while
+  `load` is 1, and the DFF, whose output is its input one clock cycle earlier, made of two
+  latches and the clock. Tour bubbles introduce memory on SRLatch and the clock on DFF.
+- **The built-in DFF.** Once your DFF passes, every DFF part you use runs as a built-in
+  flip-flop that behaves the same, only faster, titled "DFF (built-in)" on the circuit. Press
+  B on the circuit to run your own DFF in its place and click into its latches; B again
+  switches back. A chip you export can contain a DFF once you have solved the DFF level.
+- **Registers: Bit, Register4, Register8 and Register12.** Bit keeps a bit for as long as
+  `load` is 0; the registers put Bits side by side, up to the 12 bits of the 4004's program
+  counter.
+- **IndexRegs**, the 4004's 16 index registers: read and write one 4-bit register, or a pair
+  of them as 8 bits, picked by the low digit of an instruction.
 - **PC**, the 4004's program counter and its 3-level address stack: count, jump, call and
   return, with a fourth nested call overwriting the oldest return address, as on the real chip.
-- **RAM levels: RAM8, RAM64, RAM4002 and RAMBank.** Data memory in 4-bit characters, from
-  eight characters up to a bank of four 4002 chips, each with 4 registers of 16 main and 4
-  status characters, addressed the way the 4004's `SRC` instruction does.
-- **DataRAM**, the last RAM level: eight RAMBanks, all 2,560 characters of data memory a 4004
-  can reach, with a `bank` pin for the bank its `DCL` instruction picks.
-- **Feedback loops and the `clock` signal.** A wire may now feed back into itself, so two
-  NANDs that read each other's output make a latch that remembers a bit. `clock` can be read
-  like `true` and `false`: it is 1 after a tick and 0 after a tock, so a pair of latches
-  makes a flip-flop. A chip that reads `clock` gets the clock panel. A loop that never comes
-  to rest shows as undefined, and a failing test names its wires, with a tip.
+- **RAM levels: RAM8, RAM64, RAM4002, RAMBank and DataRAM.** Data memory in 4-bit characters,
+  from eight characters up to a 4002 chip (4 registers of 16 main and 4 status characters), a
+  bank of four, and all eight banks, addressed the way the 4004's `SRC` and `DCL` do.
+- **Clock controls.** A chip with a clock gets a panel over its circuit: step one cycle, run
+  and pause at 1 to 1000 cycles a second, and reset, with the cycle count beside them. The
+  keys are Space (step), R (run / pause), Shift+R (reset) and [ ] (speed). Saving your chip
+  keeps what its DFFs hold, unless you added or removed parts. The clock stops while a menu
+  is open.
+- **Clocked tests.** `.tst` scripts run the clock with `tick` and `tock`, and a failing check
+  in a clocked test says which cycle it happened in.
 
 ### Changed
 
 - **A loop is no longer a build error.** A chip whose signal depends on itself used to fail
   with "combinational loop"; it now builds and simulates. `clock` is a reserved name, like
   `true` and `false`, so a pin or wire called `clock` must be renamed.
-
 - **The level brief and *Your chips* scroll.** In a short window, scroll the brief with the
-  mouse wheel to read it to its end. *Your chips* shows four chips at a time and scrolls
-  past that, so a long library no longer pushes the brief off the sidebar.
+  mouse wheel to read it to its end. *Your chips* shows four chips at a time and scrolls past
+  that, so a long library no longer pushes the brief off the sidebar.
 - **Big chips build in a blink.** Saving a chip or running its tests now builds each kind of
-  part once and reuses it, so a chip made of many copies of the same part no longer stalls:
-  a bank of four RAM chips builds in 0.02 s instead of 0.8 s, and eight banks in under 0.1 s
-  instead of over 7 s. Running the clock is as fast as before.
+  part once and reuses it: a bank of four RAM chips builds in 0.02 s instead of 0.8 s, and
+  eight banks in 0.1 s instead of over 7 s.
 
 ## [0.6.0] — 2026-11-07
 
@@ -248,7 +249,8 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/fillododi/logicsim/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/fillododi/logicsim/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/fillododi/logicsim/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/fillododi/logicsim/compare/v0.3.0...v0.4.0
