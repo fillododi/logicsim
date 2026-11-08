@@ -166,4 +166,7 @@ def _report(result: TstResult) -> TestReport:
     lines = [f"test line {f.pos.line}: {f.message}" for f in result.failures[:12]]
     if bad > 12:
         lines.append(f"... and {bad - 12} more")
+    tip = next((t for f in result.failures if (t := tip_for(f.message))), None)
+    if tip:
+        lines.append(f"Tip: {tip}")
     return TestReport(False, f"{bad} of {result.checks} checks failed", lines)

@@ -1,4 +1,4 @@
-"""Short tips for the most common build errors. Pure Python, no pygame.
+"""Short tips for the most common build errors and test failures. Pure Python, no pygame.
 
 The error message already says *what* is wrong, precisely. A tip adds *what to do
 about it*, in the words of a player who is still learning the HDL. Tips match
@@ -81,9 +81,9 @@ _TIPS: list[tuple[re.Pattern[str], str]] = [
         "A signal has exactly one source. Send the second output to a new wire name.",
     ),
     (
-        re.compile(r"^combinational loop "),
-        "A signal can't depend on itself without a DFF in between. "
-        "Follow the wires in the message to find the cycle.",
+        re.compile(r"a loop didn't settle: (?P<wires>.+?)\)?$"),
+        "A wire that feeds back into itself must come to rest, but {wires} kept flipping, "
+        "like a Not wired to its own input. A wire that never settles shows as undefined.",
     ),
     (
         re.compile(r"^\w+ must keep the level's pins "),
@@ -111,7 +111,7 @@ _TIPS: list[tuple[re.Pattern[str], str]] = [
 
 
 def tip_for(message: str) -> str | None:
-    """A one-line hint for a build error message, or None if there is no tip for it."""
+    """A one-line hint for a build error or test failure message, or None if there is none."""
     for pattern, tip in _TIPS:
         m = pattern.search(message)
         if m:

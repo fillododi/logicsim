@@ -50,8 +50,8 @@ def test_buses_slices_constants() -> None:
     conns = chip.parts[0].connections
     assert conns[0].outer == PinRef("a", 0, 3, conns[0].outer.pos)
     assert conns[1].outer == PinRef("a", 7, 7, conns[1].outer.pos)
-    assert isinstance(conns[2].outer, Const) and conns[2].outer.value is True
-    assert isinstance(conns[3].outer, Const) and conns[3].outer.value is False
+    assert isinstance(conns[2].outer, Const) and conns[2].outer.name == "true"
+    assert isinstance(conns[3].outer, Const) and conns[3].outer.name == "false"
     assert conns[4].inner == PinRef("out", 0, 7, conns[4].inner.pos)
 
 
@@ -98,6 +98,11 @@ def test_empty_parts_and_no_inputs() -> None:
         ("CHIP X { IN a$; }", "X.hdl:1:14: error: unexpected character '$'"),
         ("CHIP X { /* never closed", "X.hdl:1:10: error: comment is never closed: missing '*/'"),
         ("CHIP X {\n  IN true;\n}", "X.hdl:2:6: error: expected a pin name, found 'true'"),
+        (
+            "CHIP X { IN clock; }",
+            "X.hdl:1:13: error: expected a pin name, found 'clock', a name kept for the clock "
+            "signal",
+        ),
         ("chip X {}", "X.hdl:1:1: error: expected 'CHIP', found 'chip'"),
     ],
 )

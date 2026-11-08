@@ -139,13 +139,20 @@ def load_bit(s: ChipSession, value: int) -> None:
     s.set_input("load", 0)
 
 
-def test_only_chips_with_dffs_have_a_clock(
-    mux: tuple[ChipSession, Path], bit: tuple[ChipSession, Path]
+def test_only_chips_with_dffs_or_the_clock_signal_have_a_clock(
+    mux: tuple[ChipSession, Path], bit: tuple[ChipSession, Path], tmp_path: Path
 ) -> None:
     assert not mux[0].has_clock
     mux[0].toggle_run()
     assert not mux[0].running  # nothing to run
     assert bit[0].has_clock
+    path = tmp_path / "Blink.hdl"
+    path.write_text("CHIP Blink { OUT out; PARTS: Nand(a=clock, b=true, out=out); }")
+    s = ChipSession(file_loader(path))
+    assert s.reload() and s.has_clock
+    assert out(s) == 1
+    s.step()  # a whole cycle ends with the clock low again
+    assert out(s) == 1 and s.cycle == 1
 
 
 def test_step_runs_one_cycle_and_reset_keeps_inputs(bit: tuple[ChipSession, Path]) -> None:

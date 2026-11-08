@@ -49,13 +49,25 @@ class PinRef:
 
 @dataclass(frozen=True)
 class Const:
-    """The constant `true` or `false`, repeated over every bit it connects to."""
+    """`true`, `false` or `clock`, repeated over every bit it connects to.
 
-    value: bool
+    `clock` isn't constant: the engine raises it on every tick and lowers it on
+    every tock. Like the constants it can be read anywhere and never driven.
+    """
+
+    name: str  # one of SIGNALS
     pos: SourcePos
 
+    @property
+    def what(self) -> str:
+        """How error messages name it."""
+        return "the clock" if self.name == "clock" else "a constant"
+
     def __str__(self) -> str:
-        return "true" if self.value else "false"
+        return self.name
+
+
+SIGNALS = ("true", "false", "clock")  # the names a Const can have
 
 
 @dataclass(frozen=True)

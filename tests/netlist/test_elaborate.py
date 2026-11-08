@@ -7,7 +7,7 @@ import importlib
 import pytest
 
 from nandsim.hdl import HdlError, parse
-from nandsim.netlist import FALSE_NET, TRUE_NET, ChipLibrary, elaborate
+from nandsim.netlist import CLOCK_NET, FALSE_NET, TRUE_NET, ChipLibrary, elaborate
 
 NOT = "CHIP Not { IN in; OUT out; PARTS: Nand(a=in, b=in, out=out); }"
 AND = "CHIP And { IN a, b; OUT out; PARTS: Nand(a=a, b=b, out=n); Not(in=n, out=out); }"
@@ -120,12 +120,6 @@ ERRORS = [
         "write 'out=w'",
     ),
     (
-        "CHIP Top { IN a; OUT o; PARTS: Nand(a=a, b=y, out=x); Not(in=x, out=y);"
-        " Not(in=y, out=o); }",
-        "Top.hdl:1:55: error: combinational loop (a signal depends on itself without a DFF): "
-        "y -> x -> y",
-    ),
-    (
         "CHIP Top { IN a; OUT o; PARTS: DFF(d=a, out=o); }",
         "Top.hdl:1:36: error: DFF has no pin 'd' (its pins are: in, out)",
     ),
@@ -133,13 +127,29 @@ ERRORS = [
         "CHIP Top { IN a; OUT o; PARTS: DFF(out=o); }",
         "Top.hdl:1:32: error: input pin 'in' of DFF is not connected",
     ),
-    (  # a DFF elsewhere in the chip doesn't excuse a loop that skips it
-        "CHIP Top { IN a; OUT o; PARTS: DFF(in=a, out=w); Nand(a=w, b=x, out=x);"
-        " Nand(a=x, b=x, out=o); }",
-        "Top.hdl:1:50: error: combinational loop (a signal depends on itself without a DFF): "
-        "x -> x",
+    (
+        "CHIP Top { IN a; OUT o; PARTS: Not(in=a, out=clock); }",
+        "Top.hdl:1:46: error: output pin 'out' of Not cannot be connected to the clock",
+    ),
+    (
+        "CHIP Top { IN a; OUT o; PARTS: w = clock; Not(in=w, out=o); }",
+        "Top.hdl:1:36: error: the width of new wire 'w' can't come from the clock; "
+        "connect the clock to a pin instead",
     ),
 ]
+
+
+def test_feedback_loops_build() -> None:
+    """A signal may depend on itself: a latch is just two NANDs."""
+    nl = build(
+        "CHIP Top { IN s, r; OUT q; PARTS: Nand(a=s, b=nq, out=q); Nand(a=r, b=q, out=nq); }"
+    )
+    assert [lv.loops for lv in nl.levels] == [1]
+
+
+def test_clock_fills_every_bit_like_a_constant() -> None:
+    nl = build("CHIP Top { OUT o[2]; PARTS: o = clock; }")
+    assert nl.outputs["o"] == [CLOCK_NET, CLOCK_NET]
 
 
 @pytest.mark.parametrize(("src", "message"), ERRORS)

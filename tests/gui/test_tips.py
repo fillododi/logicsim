@@ -53,11 +53,6 @@ CASES = [
         "A signal has exactly one source. Send the second output to a new wire name.",
     ),
     (
-        build_error("Nand(a=in, b=y, out=y); Nand(a=y, b=y, out=out);"),
-        "A signal can't depend on itself without a DFF in between. "
-        "Follow the wires in the message to find the cycle.",
-    ),
-    (
         build_error("Nand(a=in, b=in, out=out);", pins="IN in[2]; OUT out;"),
         "Keep the IN and OUT lines as the level gave them: the tests rely on them.",
     ),

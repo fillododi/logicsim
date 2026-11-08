@@ -29,7 +29,15 @@ import numpy as np
 from nandsim.hdl import Assign, ChipDef, Const, HdlError, Part, PinRef, SourcePos
 from nandsim.netlist.levelize import levelize
 from nandsim.netlist.library import ChipLibrary, Interface, interface_of
-from nandsim.netlist.netlist import FALSE_NET, TRUE_NET, GateArrays, Netlist
+from nandsim.netlist.netlist import (
+    CLOCK_NET,
+    FALSE_NET,
+    FIXED_NETS,
+    SIGNAL_NETS,
+    TRUE_NET,
+    GateArrays,
+    Netlist,
+)
 from nandsim.netlist.primitives import PRIMITIVES, Primitive
 
 
@@ -53,7 +61,7 @@ class _Scope:
 class _Template:
     """One chip, flattened and checked once, in its own net numbering.
 
-    Nets 0 and 1 are the constants, `2 .. 2 + input_bits - 1` the input pins in
+    Nets 0, 1 and 2 are false, true and the clock, `3 .. 3 + input_bits - 1` the input pins in
     declaration order, the rest its internal nets (every gate output inside it).
     `parts` maps each part's path segment (`Nand#2`) to the part's template and the
     map from the part's nets to this chip's nets. `wires` holds only this chip's
@@ -80,13 +88,13 @@ def _frozen(a: np.ndarray) -> np.ndarray:
 
 def _primitive_template(prim: Primitive) -> _Template:
     n_in, n_out = len(prim.inputs), len(prim.outputs)
-    ins = [_frozen(np.array([2 + k], dtype=np.int64)) for k in range(n_in)]
-    outs = [_frozen(np.array([2 + n_in + k], dtype=np.int64)) for k in range(n_out)]
+    ins = [_frozen(np.array([FIXED_NETS + k], dtype=np.int64)) for k in range(n_in)]
+    outs = [_frozen(np.array([FIXED_NETS + n_in + k], dtype=np.int64)) for k in range(n_out)]
     pins = dict(zip(prim.inputs, ins, strict=True)) | dict(zip(prim.outputs, outs, strict=True))
     return _Template(
         name=prim.name,
         primitive=True,
-        num_nets=2 + n_in + n_out,
+        num_nets=FIXED_NETS + n_in + n_out,
         input_bits=n_in,
         outputs=dict(zip(prim.outputs, outs, strict=True)),
         gates={prim.name: GateArrays(inputs=ins, outputs=outs)},
@@ -156,7 +164,7 @@ class _Builder:
         self.compiler = compiler
         self.lib = compiler.lib
         self.chip = chip
-        self.next_net = 2
+        self.next_net = FIXED_NETS
         self.alias: dict[int, int] = {}
         self.parts: list[tuple[str, Part, _Template, np.ndarray]] = []
 
@@ -170,7 +178,7 @@ class _Builder:
     def build(self) -> _Template:
         chip = self.chip
         scope = _Scope(chip, signals={p.name: self.nets(p.width) for p in chip.inputs})
-        input_bits = self.next_net - 2
+        input_bits = self.next_net - FIXED_NETS
         for o in chip.outputs:
             scope.signals[o.name] = self.nets(o.width)
             scope.driven[o.name] = [None] * o.width
@@ -278,13 +286,13 @@ class _Builder:
 
         # Instantiate: the part's inputs come from here, its internal nets get a new block.
         sub = self.compiler.template(target)
-        inner = sub.num_nets - 2 - sub.input_bits
+        inner = sub.num_nets - FIXED_NETS - sub.input_bits
         start = self.next_net
         self.next_net += inner
         ins = [n for bits in pin_nets.values() for n in bits if n is not None]
         net_map = np.concatenate(
             [
-                np.array([FALSE_NET, TRUE_NET, *ins], dtype=np.int64),
+                np.array([FALSE_NET, TRUE_NET, CLOCK_NET, *ins], dtype=np.int64),
                 np.arange(start, start + inner, dtype=np.int64),
             ]
         )
@@ -322,7 +330,7 @@ class _Builder:
     def _read(self, scope: _Scope, outer: PinRef | Const, width: int, what: str) -> list[int]:
         """The nets of a signal read by `what`, which has `width` bits."""
         if isinstance(outer, Const):
-            return [TRUE_NET if outer.value else FALSE_NET] * width
+            return [SIGNAL_NETS[outer.name]] * width
         self._check_part_ref(scope, outer)
         nets = scope.signals.get(outer.key)
         if nets is None:
@@ -402,8 +410,9 @@ class _Builder:
                     )
                 if isinstance(src, Const):
                     raise HdlError(
-                        f"the width of new wire '{t.name}' can't come from a constant; "
-                        f"connect the constant to a pin instead",
+                        f"the width of new wire '{t.name}' can't come from {src.what}; "
+                        f"connect {'the clock' if src.name == 'clock' else 'the constant'} "
+                        f"to a pin instead",
                         src.pos,
                     )
                 if src.key not in scope.signals:
@@ -464,7 +473,7 @@ class _Builder:
     ) -> None:
         if isinstance(outer, Const):
             raise HdlError(
-                f"output pin '{inner}' of {part.chip} cannot be connected to a constant",
+                f"output pin '{inner}' of {part.chip} cannot be connected to {outer.what}",
                 outer.pos,
             )
         if outer.part is not None:
@@ -521,7 +530,7 @@ class _Builder:
         renumber = np.full(self.next_net, -1, dtype=np.int64)
         renumber[keep] = np.arange(len(keep), dtype=np.int64)
         final = renumber[resolved]
-        assert np.array_equal(final[: 2 + input_bits], np.arange(2 + input_bits))
+        assert np.array_equal(final[: FIXED_NETS + input_bits], np.arange(FIXED_NETS + input_bits))
 
         ins: dict[str, list[list[np.ndarray]]] = {}
         outs: dict[str, list[list[np.ndarray]]] = {}
@@ -663,8 +672,7 @@ def elaborate(top: ChipDef, lib: ChipLibrary) -> Netlist:
     """Flatten `top` and everything it uses into a levelized netlist.
 
     Raises `HdlError` for wiring mistakes (unknown chip or pin, wrong width,
-    double drivers, unconnected pins, circular chip dependencies) and for
-    combinational loops.
+    double drivers, unconnected pins, circular chip dependencies).
     """
     t = _Compiler(lib).template(top)
     netlist = Netlist(
@@ -676,5 +684,5 @@ def elaborate(top: ChipDef, lib: ChipLibrary) -> Netlist:
         wires=WireMap(top.name, t),
         gate_paths=GatePaths(top.name, t),
     )
-    netlist.levels = levelize(netlist, PRIMITIVES, t.gate_pos, top.pos)
+    netlist.levels = levelize(netlist, PRIMITIVES)
     return netlist

@@ -4,14 +4,25 @@ Each net has two boolean planes: `known` (is the value defined?) and `value`
 (meaningful only where known; kept False elsewhere). NAND follows Kleene logic:
 a known 0 on any input forces a known 1, even if the other input is undefined.
 
-DFFs are clocked: `tick` evaluates and latches every DFF's input, `tock` puts the
-latched values on the DFF outputs and evaluates again, so `out(t) = in(t-1)`.
-Both are one vectorized copy over all DFFs. DFFs start undefined.
+A plain level is evaluated once. A loop level (feedback loops, such as a latch
+made of NANDs) is evaluated in rounds: every gate of the level reads the values
+of the round before, as if each gate took one delay, until a round changes
+nothing. A loop still changing after `MAX_ROUNDS` (or twice its size, if smaller)
+oscillates: its nets go undefined and settle again from there, which always ends,
+because from undefined Kleene logic can only learn values, never flip them.
 
-`tick` skips its evaluation when nothing changed since the last one (no `set`,
-`tock`, `reset` or `load_dff_state`): a step in the GUI or a `.tst` that ticks
-right after a tock then costs one evaluation instead of two. Write nets only
-through these methods, or the skip can miss a change.
+The clock is net 2, readable from HDL as `clock`. It is 0 at power-on. `tick`
+evaluates, latches every DFF's input, then raises the clock and evaluates again;
+`tock` puts the latched values on the DFF outputs, lowers the clock and evaluates,
+so a DFF gives `out(t) = in(t-1)`, and so does a flip-flop built from latches that
+takes `in` while the clock is 1 and shows it while the clock is 0. DFFs start
+undefined.
+
+`tick` skips its first evaluation when nothing changed since the last one (no
+`set`, `tock`, `reset` or `load_dff_state`): a step in the GUI or a `.tst` that
+ticks right after a tock then costs one evaluation instead of two, or none for a
+chip that doesn't read the clock. Write nets only through these methods, or the
+skip can miss a change.
 """
 
 from __future__ import annotations
@@ -20,9 +31,11 @@ from collections.abc import Callable
 
 import numpy as np
 
-from nandsim.netlist import FALSE_NET, PRIMITIVES, TRUE_NET, Netlist
+from nandsim.netlist import CLOCK_NET, FALSE_NET, PRIMITIVES, TRUE_NET, Level, Netlist
 
 Planes = tuple[np.ndarray, np.ndarray]  # (value, known)
+
+MAX_ROUNDS = 1000  # rounds a loop level may take to settle before it counts as oscillating
 
 
 def _nand(ins: list[Planes]) -> list[Planes]:
@@ -49,6 +62,7 @@ class Simulator:
         empty = np.zeros(0, dtype=np.int64)
         self._dff_in = np.concatenate([g.inputs[0] for g in clocked]) if clocked else empty
         self._dff_out = np.concatenate([g.outputs[0] for g in clocked]) if clocked else empty
+        self.reads_clock = netlist.reads_clock
         self.reset()
 
     # ---- inputs and outputs -------------------------------------------
@@ -92,45 +106,62 @@ class Simulator:
     def eval(self) -> None:
         """Propagate inputs through all combinational logic, one vectorized step per level."""
         value, known = self.value, self.known
+        unsettled: list[np.ndarray] = []
         for level in self.netlist.levels:
-            for op in level:
+            if level.is_loop:
+                bad = self._settle(level)
+                if bad is not None:
+                    unsettled.append(bad)
+                continue
+            for op in level.ops:
                 ins = [(value[i], known[i]) for i in op.inputs]
                 outs = EVALUATORS[op.kind](ins)
                 for idx, (v, k) in zip(op.outputs, outs, strict=True):
                     value[idx] = v
                     known[idx] = k
+        self.unsettled = np.concatenate(unsettled) if unsettled else np.zeros(0, np.int64)
         self._stale = False
 
     def tick(self) -> None:
-        """First half of a clock cycle: evaluate, then every DFF latches its input."""
+        """First half of a clock cycle: evaluate, every DFF latches its input, clock rises."""
         if self._stale:
             self.eval()
         self._latch_value = self.value[self._dff_in]
         self._latch_known = self.known[self._dff_in]
+        self.value[CLOCK_NET] = True
+        if self.reads_clock:
+            self.eval()
         self.mid_cycle = True
 
     def tock(self) -> None:
-        """Second half: DFF outputs take the values latched at the last tick, then evaluate.
+        """Second half: DFF outputs take the values latched at the last tick, clock falls.
 
         Before any tick the latches hold undefined, so a lone tock leaves DFFs undefined.
         """
         self.value[self._dff_out] = self._latch_value
         self.known[self._dff_out] = self._latch_known
+        self.value[CLOCK_NET] = False
         self.eval()
         self.cycle += 1
         self.mid_cycle = False
 
     def reset(self) -> None:
-        """Back to power-on: every input, wire and DFF undefined, cycle 0."""
+        """Back to power-on: every input, wire and DFF undefined, clock 0, cycle 0."""
         self.value = np.zeros(self.netlist.num_nets, dtype=bool)
         self.known = np.zeros(self.netlist.num_nets, dtype=bool)
-        self.known[[FALSE_NET, TRUE_NET]] = True
+        self.known[[FALSE_NET, TRUE_NET, CLOCK_NET]] = True
         self.value[TRUE_NET] = True
         self._latch_value = np.zeros(len(self._dff_out), dtype=bool)
         self._latch_known = np.zeros(len(self._dff_out), dtype=bool)
         self.cycle = 0  # completed clock cycles (tocks) since power-on
         self._stale = True  # nets may not match the inputs: the next tick must evaluate
         self.mid_cycle = False  # True between a tick and its tock
+        self.unsettled = np.zeros(0, np.int64)  # nets a loop left undefined at the last eval
+
+    @property
+    def clocked(self) -> bool:
+        """Whether the clock does anything: the chip has DFFs or reads `clock`."""
+        return self.dff_count > 0 or self.reads_clock
 
     @property
     def dff_count(self) -> int:
@@ -162,6 +193,57 @@ class Simulator:
         self._latch_value[which] = value & known
         self._latch_known[which] = known
         self._stale = True
+
+    # ---- feedback loops ------------------------------------------------
+
+    def _round(self, level: Level) -> list[np.ndarray] | None:
+        """One gate delay over a loop level: every gate reads the previous round.
+
+        Returns, per op, which gates changed their output; None if none did.
+        """
+        value, known = self.value, self.known
+        results = [
+            EVALUATORS[op.kind]([(value[i], known[i]) for i in op.inputs]) for op in level.ops
+        ]
+        masks: list[np.ndarray] = []
+        changed = False
+        for op, outs in zip(level.ops, results, strict=True):
+            mask = np.zeros(len(op.outputs[0]), dtype=bool)
+            for idx, (v, k) in zip(op.outputs, outs, strict=True):
+                mask |= (value[idx] != v) | (known[idx] != k)
+                value[idx] = v
+                known[idx] = k
+            masks.append(mask)
+            changed = changed or bool(mask.any())
+        return masks if changed else None
+
+    def _settle(self, level: Level) -> np.ndarray | None:
+        """Run a loop level until it settles. Returns the nets of loops that oscillated."""
+        gates = sum(len(op.outputs[0]) for op in level.ops)
+        masks = None
+        for _ in range(min(2 * gates + 4, MAX_ROUNDS)):
+            masks = self._round(level)
+            if masks is None:
+                return None
+        assert masks is not None
+        bad = np.zeros(level.loops, dtype=bool)
+        for op, mask in zip(level.ops, masks, strict=True):
+            assert op.loop is not None
+            bad[op.loop[mask]] = True
+        nets: list[np.ndarray] = []
+        for op in level.ops:
+            assert op.loop is not None
+            sel = bad[op.loop]
+            for out in op.outputs:
+                nets.append(out[sel])
+        lost = np.concatenate(nets)
+        self.value[lost] = False
+        self.known[lost] = False
+        # From undefined every round only adds known values, so this ends.
+        for _ in range(len(lost) + 2):
+            if self._round(level) is None:
+                return lost[~self.known[lost]]
+        raise AssertionError("a loop level did not settle from undefined")
 
     # ---- helpers -------------------------------------------------------
 
