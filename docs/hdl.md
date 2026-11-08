@@ -1,8 +1,8 @@
 # HDL reference
 
 The language you build chips in. A chip has input pins, output pins, and a list of
-**parts**: other chips wired together. The only chips you don't build yourself are the two
-primitives, `Nand` and `DFF`.
+**parts**: other chips wired together. The only chip you don't build yourself is the
+primitive `Nand`. Even memory is built from it: latches, then the `DFF` flip-flop.
 
 ## A complete chip
 
@@ -23,7 +23,7 @@ CHIP Xor {
 - `IN` and `OUT` list the pins, separated by commas and ending with `;`. A chip may have no `IN` line.
 - `PARTS:` is followed by zero or more parts, each ending with `;`.
 - Comments: `// to the end of the line` and `/* across lines */`.
-- Names are letters, digits and `_`, starting with a letter or `_`. `CHIP`, `IN`, `OUT`, `PARTS`, `true` and `false` are reserved.
+- Names are letters, digits and `_`, starting with a letter or `_`. `CHIP`, `IN`, `OUT`, `PARTS`, `true`, `false` and `clock` are reserved.
 
 ## Parts and connections
 
@@ -76,14 +76,20 @@ Not(in=g1.out, out=out);
 
 ## DFF: memory
 
-`DFF(in=d, out=q)` is a data flip-flop, the one primitive with memory. Its output is its input
-one clock cycle earlier: `out(t) = in(t-1)`. Each cycle has two halves:
+`DFF(in=d, out=q)` is a data flip-flop. Its output is its input one clock cycle earlier:
+`out(t) = in(t-1)`. Each cycle has two halves:
 
 - **tick:** the chip settles, then every DFF stores its `in`. Outputs don't change yet.
 - **tock:** every DFF puts the stored value on `out`, all at once, and the chip settles again.
 
 A DFF starts undefined, and stays undefined until it stores a known value. Anything else
 uses it like a part: `DFF(in=d, out=q, out=out)` sends its output to two places.
+
+You build the DFF yourself, in the Memory levels: an SR latch from two NANDs, a D latch from
+that, and the DFF from two D latches and the [clock](#feedback-loops-and-the-clock). Once the
+DFF level is solved, every `DFF` you use as a part runs as a built-in flip-flop that
+behaves like yours at every tick and tock, only faster. The DFF level itself always tests
+your own HDL.
 
 A signal may depend on itself through a DFF, which is how a register keeps its value:
 
@@ -160,7 +166,7 @@ A level adds two more rules:
 - Your chip must keep the pins of the level's starting text.
 - It may use only the parts the level lists, plus the chips you exported under a name of your own (*Export this chip as…* in the Esc menu), such as `'Mux' is not allowed in this level; Xor may use: Nand, Not, And, Or, MyAnd`.
 
-An exported chip's name must be an identifier that isn't an HDL word (`CHIP IN OUT PARTS true false`), a primitive (`Nand`, `DFF`) or a level's chip. It may use a primitive, even inside one of its parts, only once a level you have unlocked lists it: until then an export with a `DFF` is refused with `It uses DFF, which no level you have unlocked allows yet.`
+An exported chip's name must be an identifier that isn't an HDL word (`CHIP IN OUT PARTS true false clock`), a primitive (`Nand`, `DFF`) or a level's chip. It may use a primitive, even inside one of its parts, only once a level you have unlocked lists it (for `DFF`, that means solving the DFF level first): until then an export with a `DFF` is refused with `It uses DFF, which no level you have unlocked allows yet.`
 
 ## Values
 
