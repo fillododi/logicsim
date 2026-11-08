@@ -719,3 +719,14 @@ Ambiguous spec points and the option chosen. Newest last.
 - A 1 KB ROM sized for the 141-PF: the 4004 addresses 4 KB, and the milestone asks for 4096 × 8.
 - Keeping the 4004 as the end: the user asked for the calculator.
 **Consequences:** a ROM4K in HDL holds about three times DataRAM's bits and will run at about 150 cycles/s, so loading the 141-PF's 1 KB takes about 7 s. Builtin memories, with their equivalence tests, are needed by milestone 9 at the latest. The CPU milestone's pins should leave room for the 4003 and for the 141-PF's keyboard and printer.
+
+## 2026-11-08 — The program ROM comes after the CPU
+**Context:** the entry above put the ROM levels and the ROM editor in milestone 7. The user asked for them after the CPU instead. The CPU milestone's tests still have to give the CPU a program.
+**Decision:**
+- **The ROM levels (`ROM4001`, `ROM4K`) and the ROM editor move to the start of milestone 9,** with the Busicom 141-PF, which is the machine that uses the 4001s. Their pins and loading model stay as the entry above decided. Milestone 7 now closes without a ROM.
+- **In milestone 8, the test runner holds the program.** A `.tst` command attaches a program memory to the CPU's ROM pins: each cycle the runner reads the CPU's address output and drives its instruction input. This is test-harness code, not a chip, so it bends neither "only Nand and DFF" nor "HDL version first". The command's syntax and the `.rom` file format get their own entry when built, and the ROM editor in milestone 9 reuses that format.
+**Alternatives:**
+- Straight-line programs set by hand in each `.tst`: no jumps or calls, so most of the 46 instructions couldn't be tested in a program.
+- Moving the ROM levels to the end of milestone 8, after the CPU: the CPU doesn't need them, and the 141-PF is what fills them.
+**Consequences:** the CPU level's pins are a ROM address out and an instruction in, which the runner's memory and, later, the player's ROM4K both plug into. The ROM's own I/O port still waits for the CPU milestone.
+
