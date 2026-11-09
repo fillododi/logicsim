@@ -6,6 +6,8 @@ This chip reads the **clock**. `clock` works like `true` and `false`, wherever a
 
 After a tick, `out` must still show the old value. After the tock it shows what `in` was at the tick. While the clock is 0, `out` must ignore `in`.
 
+The real 4004 runs on a 740 kHz clock. In this game one clock cycle, a tick and a tock, stands for one 4004 clock period, and 8 of them make one instruction cycle.
+
 **Parts you may use:** Nand, Not, DLatch, and the signal `clock`.
 
 **Hint:** One latch is never enough: whenever it is open, its output follows `in`. Use two latches in a row that are never open at the same time.

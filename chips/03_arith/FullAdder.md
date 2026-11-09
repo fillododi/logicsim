@@ -13,6 +13,8 @@ Adds three bits: `a`, `b`, and a carry `c` coming from the column to the right. 
 | 1 | 1 | 0 | 1 | 0 |
 | 1 | 1 | 1 | 1 | 1 |
 
+Four FullAdders in a row make the 4-bit adder at the heart of the 4004's ALU. The carry out of the last one becomes the CY flag that `JCN` can test.
+
 **Parts you may use:** Nand, HalfAdder, Or.
 
 **Hint:** Add `a` and `b`, then add `c` to that sum. Can both additions carry at once?

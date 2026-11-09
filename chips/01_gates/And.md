@@ -11,6 +11,8 @@ Outputs 1 only when both inputs are 1.
 
 This is the first chip with two parts in a row. To use one part's output as another part's input, connect them through a **wire**: a name of your own, written as the first part's output and as an input of the second. For example, `Not(in=a, out=na); Not(in=na, out=out);` passes `a` through two Nots, carried between them by the wire `na`.
 
+Most of a CPU's control logic is Ands: "write the accumulator when this is the execute period and the instruction is `ADD`". Your 4004 will be full of them.
+
 **Parts you may use:** Nand, Not.
 
 **Hint:** Nand is "not And". What undoes a "not"?
