@@ -69,6 +69,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   what their chip does inside the 4004, from the Mux that picks the next address to the
   Xor that turns `SUB` into an addition.
 
+### Fixed
+
+- **The CPU's test now runs all 46 instructions.** It never ran `RD1` or `RD2`, and the
+  value `RD3` read was never checked, so a CPU that read the wrong status character
+  could pass. The test now reads back status characters 1, 2 and 3 and checks them.
+
 ## [0.7.0] — 2026-11-08
 
 Milestone 7: sequential logic. Your chips learn to remember. A new *Memory* group of 14

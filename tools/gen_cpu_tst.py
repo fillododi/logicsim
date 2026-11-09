@@ -257,8 +257,13 @@ io:     FIM P0 0x25     ; bank 0: chip 0, register 2, character 5
         STC
         SBM             ; 9 - 9 with a borrow in
         WR2
+        RD1             ; each status character back, stored once in bank 0
+        XCH R8
+        RD2
+        XCH R9
         RDM
         RD3
+        XCH R10
         CLB
         DCL             ; back to bank 0, still at 0x25
         LDM 13
@@ -273,6 +278,12 @@ io:     FIM P0 0x25     ; bank 0: chip 0, register 2, character 5
         SRC P1          ; bank 0, chip 3 now
         LDM 1
         WMP
+        LD R8           ; status characters 1, 2 and 3 of bank 6, chip 3
+        JMS put
+        LD R9
+        JMS put
+        LD R10
+        JMS put
         JUN decimal
 """,
     ),
