@@ -1,0 +1,19 @@
+// InstrReg: Takes the instruction from the bus at M1 and M2, and the second word of a two-word one.
+CHIP InstrReg {
+    IN din[4], period[3], second;
+    OUT opr[4], opa[4], data[8];
+    PARTS:
+    // M1 is period 3 and M2 is period 4.
+    DMux8Way(in=true, sel=period, d=m1, e=m2);
+    Not(in=second, out=first);
+    // The first word: OPR at M1, OPA at M2.
+    And(a=m1, b=first, out=loadopr);
+    And(a=m2, b=first, out=loadopa);
+    Register4(in=din, load=loadopr, out=opr);
+    Register4(in=din, load=loadopa, out=opa);
+    // The second word: its high digit at M1, its low digit at M2.
+    And(a=m1, b=second, out=loadhigh);
+    And(a=m2, b=second, out=loadlow);
+    Register4(in=din, load=loadhigh, out=data[4..7]);
+    Register4(in=din, load=loadlow, out=data[0..3]);
+}

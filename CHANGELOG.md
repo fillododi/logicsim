@@ -15,6 +15,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 - **Cond and CmLines,** two more CPU levels. Cond answers whether the 4004's conditional
   jump `JCN` jumps, from its condition code, the accumulator, the carry and the TEST pin.
   CmLines turns the RAM bank chosen by `DCL` into the four CM-RAM lines that select it.
+- **InstrReg,** the CPU's instruction register. It takes each instruction from the bus one
+  digit at a time and keeps it for the whole instruction cycle, along with the second
+  byte of the 4004's two-word instructions.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
   their I/O ports. Programs go in inline or from a `.rom` file (one byte per line, in

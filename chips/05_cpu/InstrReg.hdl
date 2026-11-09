@@ -1,0 +1,7 @@
+// InstrReg: Takes the instruction from the bus at M1 and M2, and the second word of a two-word one.
+// You may use: Nand, Not, And, Mux4, DMux8Way, Register4, Register8
+CHIP InstrReg {
+    IN din[4], period[3], second;
+    OUT opr[4], opa[4], data[8];
+    PARTS:
+}
