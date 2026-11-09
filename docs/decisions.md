@@ -781,3 +781,15 @@ Ambiguous spec points and the option chosen. Newest last.
 - A badge or a different fill colour for built-in parts: primitives already have their own fill, and a word says more than a colour.
 **Consequences:** with this, the three steps toward a player-built DFF are done. Other builtins (RAM, ALU) can reuse `STAND_INS`, `builtins` and the label once their HDL versions pass.
 
+## 2026-11-09 — Data RAM comes after the CPU, as the program ROM does
+**Context:** milestone 7 shipped the RAM levels (RAM8 up to DataRAM) in the Memory group, and milestone 8 would have put a DataRAM inside the CPU. The user asked for the RAM levels after the CPU, because data memory is part of the computer around it, like the program ROM (2026-11-08, "The program ROM comes after the CPU").
+**Decision:**
+- **The CPU level has data-RAM pins instead of a RAM inside it.** They mirror DataRAM's pins, so a DataRAM plugs straight in later: the CPU drives `addr[8]` (its `SRC` register, which the CPU holds), `bank[3]` (from `DCL`), `status`, `load` and the 4-bit character to write, and reads the 4-bit character back. The exact pin names, and the 4002's output port for `WMP`, are settled with the CPU level.
+- **In milestone 8, the test runner holds the data memory**, as it holds the program: a `.tst` command attaches a runner-held data memory to the CPU's RAM pins, and `.tst` checks can read its cells. Its model is the one in `tools/gen_ram_tst.py`. Like the program memory, it is test-harness code, not a chip. Its syntax gets its own entry when built.
+- **The RAM levels move to a new group, `06_computer`, shown as "Computer".** The CPU will be `05_cpu`, between Memory and Computer. Milestone 9 starts with the RAM levels, then the ROM levels and the ROM editor, then the 141-PF. The levels, pins and tests are unchanged, and saves are named by level, so no player loses a solution.
+- **The gate comes with the CPU level.** Unlocking goes by parts: RAM8 opens once Register4 is solved, wherever it sits in the list. To open the Computer group only after the CPU, the CPU branch adds `requires = ["CPU"]` to RAM8 in `levels.toml`, read by `is_unlocked` and checked by the level-order test. Adding it now would name a level that doesn't exist yet and lock RAM8 for every player until then. Until the CPU lands, the RAM levels are only listed last.
+**Alternatives:**
+- RAM at the end of milestone 8, with a closing CPU + DataRAM level: it splits the computer between two milestones.
+- Only reordering the list, with no gate: RAM8 would still open right after Register4.
+**Consequences:** CPU tests don't simulate a DataRAM, the largest chip so far (187k NANDs, about 557 cycles/s), so they run at the CPU's own speed. Milestone 8 checks data memory through the runner, and the player's DataRAM first runs a program in milestone 9. A player who already solved the RAM levels keeps them solved, but will see them locked until the CPU is solved once the gate lands.
+
