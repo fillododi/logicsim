@@ -85,7 +85,7 @@ class GameApp(ViewerApp):
         self.chips_scroll = 0  # pixels of the chip list scrolled past, in whole rows
         self.chips_view = pygame.Rect(0, 0, 0, 0)  # its visible rows, as last drawn
         self._show_chip: str | None = None  # a chip just exported, to scroll into view
-        session = ChipSession(self.game.loader())
+        session = ChipSession(self.game.loader(), program=self.game.program())
         session.reload()
         super().__init__(session, size=size)
         self.edit_path = Path(self.game.path)
@@ -193,7 +193,7 @@ class GameApp(ViewerApp):
         self._attempted = self.game.store.has_save(self.game.current)
         self.edit_path = Path(self.game.path)
         builtins = self.session.builtins  # the player's choice holds from level to level
-        self.session = ChipSession(self.game.loader())
+        self.session = ChipSession(self.game.loader(), program=self.game.program())
         self.session.builtins = builtins
         self.session.reload()
         self._sync_error()

@@ -157,3 +157,11 @@ def test_missing_names_a_required_level(game: GameState) -> None:
     for name in ("DMux8Way", "Mux8Way4", "Register4"):
         game.store.mark_solved(LEVELS[name])
     assert game.missing(LEVELS["RAM8"]) == ["CPU"]
+
+
+def test_only_the_cpu_level_has_a_demo_program() -> None:
+    from nandsim.gui.game import level_program
+
+    assert level_program(LEVELS["CPU"])[:2] == [0x20, 0x00]  # FIM P0 0x00
+    assert level_program(LEVELS["Not"]) is None
+    assert level_program(None) is None

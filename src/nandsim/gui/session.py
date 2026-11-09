@@ -12,6 +12,11 @@ in the hierarchy (`Reg2/Bit#1/DFF#5`); otherwise the clock starts over.
 
 `builtins` says whether DFF parts run as the built-in flip-flop (the default) or
 as the player's own DFF chip, latches and all, which can then be opened.
+
+Given a `program` and a chip with the 4004's bus pins, the session puts the test
+runner's MCS-4 memories on the bus, the way a CPU level's `.tst` does: every step
+goes through them, and a reset of the clock reloads the program and holds the CPU's
+`reset` for 64 clocks, so the next step is A1 of address 0.
 """
 
 from __future__ import annotations
@@ -28,6 +33,7 @@ from nandsim.gui.model import ChipView, PartView, build_view, child_path, parent
 from nandsim.hdl import ChipDef, HdlError
 from nandsim.netlist import STAND_INS, ChipLibrary, Netlist, Primitive, elaborate
 from nandsim.sim import Simulator
+from nandsim.testing import BUS_PINS, Mcs4, check_pins
 
 # Returns the top chip's name and the library to find it and its parts in.
 Loader = Callable[[], tuple[str, ChipLibrary]]
@@ -35,6 +41,7 @@ Loader = Callable[[], tuple[str, ChipLibrary]]
 SPEEDS = (1, 2, 5, 10, 20, 50, 100, 200, 500, 1000)  # clock rates offered, in cycles/s
 DEFAULT_SPEED = 5
 FRAME_BUDGET = 0.03  # seconds of clocking per frame at most, so the window stays responsive
+RESET_CLOCKS = 64  # how long a reset of the clock holds a CPU's reset pin: 8 cycles
 
 
 @dataclass
@@ -46,7 +53,9 @@ class Snapshot:
 
 
 class ChipSession:
-    def __init__(self, loader: Loader, style: Style | None = None) -> None:
+    def __init__(
+        self, loader: Loader, style: Style | None = None, program: list[int] | None = None
+    ) -> None:
         self.loader = loader
         self.style = style or Style()
         self.netlist: Netlist | None = None
@@ -63,6 +72,9 @@ class ChipSession:
         self.builtins = True  # DFF parts run as the built-in flip-flop
         # B can switch: a DFF part sits under the chip, and the player's DFF HDL exists.
         self.can_switch = False
+        self.program = program  # ROM bytes for a CPU's memories, from address 0
+        self.memories: Mcs4 | None = None  # attached when the chip has the bus pins
+        self.bus_problem: str | None = None  # the first, as the test runner reports it
 
     # ---- loading -------------------------------------------------------
 
@@ -85,7 +97,7 @@ class ChipSession:
         self.netlist, self.lib, self.error = netlist, lib, None
         self.can_switch = _uses_stand_in(top, lib) and all(lib.has_hdl(s) for s in STAND_INS)
         self.sim = Simulator(netlist)
-        self._carry_clock(old, self.sim)
+        carried = self._carry_clock(old, self.sim)
         kept = {}
         for pin, nets in netlist.inputs.items():
             v = self.inputs.get(pin)
@@ -94,6 +106,7 @@ class ChipSession:
         for pin, v in self.inputs.items():
             self.sim.set(pin, v)
         self.sim.eval()
+        self._attach(top.name, carried)
         self._layouts.clear()
         self.goto(self._nearest_valid(self.path or netlist.top))
         return True
@@ -139,8 +152,14 @@ class ChipSession:
 
     # ---- inputs and values ---------------------------------------------
 
+    def drives(self, pin: str) -> bool:
+        """Whether the memories drive this input, so the player can't set it."""
+        return self.memories is not None and pin == "din"
+
     def set_input(self, pin: str, value: int | None) -> None:
         assert self.sim is not None
+        if self.drives(pin):
+            return
         self.inputs[pin] = value
         self.sim.set(pin, value)
         self.sim.eval()
@@ -201,10 +220,19 @@ class ChipSession:
         return self.sim.cycle if self.sim is not None else 0
 
     def step(self) -> None:
-        """One whole clock cycle: tick, then tock."""
+        """One whole clock cycle: tick, then tock (through the memories, if attached)."""
         assert self.sim is not None
+        m = self.memories
+        if m is not None:
+            self.sim.refresh()
+            period = m.period()
+            problem = m.tick()
+            if problem is not None and self.bus_problem is None:
+                self.bus_problem = f"at {period}: {problem}"
         self.sim.tick()
         self.sim.tock()
+        if m is not None:
+            m.tock()
 
     def reset_clock(self) -> None:
         """DFFs back to undefined and the cycle to 0. The inputs keep their values."""
@@ -215,6 +243,8 @@ class ChipSession:
         self.sim.eval()
         self.running = False
         self._owed = 0.0
+        if self.memories is not None:
+            self._restart()
 
     def toggle_run(self) -> None:
         self.running = not self.running and self.has_clock
@@ -246,7 +276,39 @@ class ChipSession:
                 break
         return done
 
-    def _carry_clock(self, old: Simulator | None, new: Simulator) -> None:
+    # ---- the MCS-4 memories ----------------------------------------------
+
+    def _attach(self, chip: str, carried: bool) -> None:
+        """Put the memories on the bus if there is a program and the chip has the pins."""
+        assert self.sim is not None
+        if self.program is None or not _has_bus(self.sim, chip):
+            self.memories = None
+            return
+        if carried and self.memories is not None:
+            self.memories.sim = self.sim  # same DFFs, same memories: carry on
+            self.memories.drive_bus()
+            return
+        self._restart()
+
+    def _restart(self) -> None:
+        """Fresh memories with the program, then the CPU held in reset for 64 clocks."""
+        sim = self.sim
+        assert sim is not None and self.program is not None
+        m = Mcs4(sim, {name: name for name in BUS_PINS})
+        m.rom[: len(self.program)] = self.program
+        self.memories, self.bus_problem = m, None
+        if self.inputs.get("test") is None:
+            self.set_input("test", 0)
+        self.set_input("reset", 1)
+        m.drive_bus()
+        for _ in range(RESET_CLOCKS):
+            self.step()
+        self.set_input("reset", 0)
+        sim.eval()
+        m.drive_bus()
+        sim.cycle = 0
+
+    def _carry_clock(self, old: Simulator | None, new: Simulator) -> bool:
         """Move the clock's state from `old` into the rebuilt `new`, if it still means the same.
 
         Part paths are numbered by position (`Bit#2`), so a part added or removed
@@ -263,11 +325,21 @@ class ChipSession:
         else:
             self.running = False
             self._owed = 0.0
+        return same
 
     def known_fraction(self, nets: tuple[int, ...] | list[int]) -> float:
         assert self.sim is not None
         idx = np.asarray(nets, dtype=np.int64)
         return float(self.sim.known[idx].mean()) if len(idx) else 1.0
+
+
+def _has_bus(sim: Simulator, chip: str) -> bool:
+    """Whether the chip has every 4004 bus pin, of the right width and direction."""
+    try:
+        check_pins(sim, chip, {name: (name, None) for name in BUS_PINS})  # type: ignore[misc]
+    except HdlError:
+        return False
+    return True
 
 
 def _uses_stand_in(top: ChipDef, lib: ChipLibrary) -> bool:

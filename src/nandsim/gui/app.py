@@ -163,7 +163,28 @@ class ViewerApp:
         """Height of the clock panel with its margin; 0 when the chip has no clock."""
         if not self.session.has_clock:
             return 0
-        return self.fonts.get(13, bold=True).get_linesize() + 6 + 3 * CLOCK_PAD
+        extra = len(self._memory_lines()) * (self.fonts.get(13).get_linesize() + CLOCK_PAD)
+        return self.fonts.get(13, bold=True).get_linesize() + 6 + 3 * CLOCK_PAD + extra
+
+    def _memory_lines(self) -> list[tuple[str, theme.Color]]:
+        """What the clock panel shows of a CPU's memories: RAM, ports and any bus problem."""
+        m = self.session.memories
+        if m is None:
+            return []
+        chars = [m.cells.get((0, "main", k)) for k in range(16)]
+        ram = "".join("·" if c is None else f"{c:X}" for c in reversed(chars))
+
+        def port(v: int | None) -> str:
+            return "·" if v is None else f"{v:X}"
+
+        lines = [(
+            f"{m.period()}   RAM 0 reg 0: {ram}   ROM port 0: {port(m.romport_out.get(0))}"
+            f"   RAM port 0: {port(m.ramport.get((0, 0)))}",
+            theme.TEXT_DIM,
+        )]  # fmt: skip
+        if self.session.bus_problem is not None:
+            lines.append((f"bus {self.session.bus_problem}", theme.ERROR_TEXT))
+        return lines
 
     def fit(self) -> None:
         if self.session.snapshot is not None:
@@ -558,7 +579,11 @@ class ViewerApp:
         bh = bold.get_linesize() + 6
         widths = [t.get_width() + (2 * CLOCK_PAD if a else 0) for a, t in items]
         x0, y0, cw, _ = self.canvas_area
-        panel = pygame.Rect(0, 0, sum(widths) + CLOCK_PAD * (len(items) + 1), bh + 2 * CLOCK_PAD)
+        notes = [plain.render(text, True, color) for text, color in self._memory_lines()]
+        width = sum(widths) + CLOCK_PAD * (len(items) + 1)
+        width = max([width] + [n.get_width() + 2 * CLOCK_PAD for n in notes])
+        height = bh + 2 * CLOCK_PAD + sum(n.get_height() + CLOCK_PAD for n in notes)
+        panel = pygame.Rect(0, 0, width, height)
         panel.topright = (round(x0 + cw) - CLOCK_PAD, round(y0) + CLOCK_PAD)
         panel.left = max(panel.left, round(x0) + CLOCK_PAD)  # a narrow canvas: stay off the sidebar
         pygame.draw.rect(surf, theme.PANEL, panel, border_radius=6)
@@ -575,6 +600,10 @@ class ViewerApp:
                 self._clock_buttons.append((rect, action))
             surf.blit(text, text.get_rect(center=rect.center))
             x += w + CLOCK_PAD
+        y += bh + CLOCK_PAD
+        for note in notes:
+            surf.blit(note, (panel.x + CLOCK_PAD, y))
+            y += note.get_height() + CLOCK_PAD
         self.clock_rect = panel
 
     def _draw_header(self, surf: pygame.Surface) -> None:
@@ -735,10 +764,13 @@ def _same_file(a: str, b: Path) -> bool:
 
 def open_viewer(path: Path, search_dirs: list[Path] | None = None, edit: bool = True) -> int:
     """`nandsim gui FILE`: edit and view one chip file; reloads when any .hdl around it changes."""
+    from nandsim.gui.game import level_program
     from nandsim.gui.session import file_loader
+    from nandsim.testing import find_level
 
     dirs = search_dirs or [path.parent, path.parent.parent]
-    session = ChipSession(file_loader(path, dirs))
+    # A level's chip runs its demo program on the clock panel, as in the game.
+    session = ChipSession(file_loader(path, dirs), program=level_program(find_level(path.stem)))
     session.reload()  # on error the window opens with the message and waits for a fix
     app = ViewerApp(session, watcher=FileWatcher(dirs), edit_path=path if edit else None)
     app.run(title=f"NAND Sim — {path.name}")

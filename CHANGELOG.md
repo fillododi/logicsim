@@ -25,6 +25,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   (what goes on the pins). The CPU then wires them to the 8 clock periods. Its test runs a
   program through all 46 instructions, then Intel's own 16-digit decimal addition routine
   from the MCS-4 manual.
+- **Step your CPU through a program.** On the CPU level the clock panel puts ROM and RAM
+  chips on your CPU's bus, loaded with a small decimal counter. Step it period by period or
+  run it, and watch the counter's RAM register and the ports under the buttons; Reset
+  starts the program over. A bus mistake shows there too.
 - **`cycles <n>` in `.tst` files** runs n clock cycles at once.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
