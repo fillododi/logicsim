@@ -881,3 +881,21 @@ Ambiguous spec points and the option chosen. Newest last.
 - The CPU right after Timing: too big a step, given 46 instructions and a multiplexed bus.
 - A `cmrom` output on CmLines: it would just repeat `on`.
 **Consequences:** InstrReg is the next level, then a Python 4004 model in `tools/` that generates the CPU's tests, then the CPU with the `requires` gate on RAM8. Measured just now on the reference parts, the CPU should run at roughly 500–1,000 clocks/s (60–125 instruction cycles/s). The PC is the slowest part (1.7k cycles/s, 75 levels deep) and the first candidate for a builtin if tests get too slow.
+
+## 2026-11-09 — The InstrReg level
+**Context:** the last level before the CPU in the planned order. The bus brings each instruction one digit per period, and two-word instructions (JCN, FIM, JUN, JMS, ISZ) and FIN's fetch bring a second byte in the next instruction cycle, while the first word must stay.
+**Decision:**
+- **`CHIP InstrReg { IN din[4], period[3], second; OUT opr[4], opa[4], data[8]; }`.** `din` is stored at the tick of M1 (period 3) into `opr`, or into `data[4..7]` when `second` is 1, and at the tick of M2 (period 4) into `opa`, or into `data[0..3]`. Each digit shows from the tock on, like every register. Nothing else loads.
+- **`second` is read at each period on its own,** so a change between M1 and M2 sends each digit where `second` says at that moment. The CPU keeps `second` steady over an instruction cycle, but the rule is simpler to state and test per digit.
+- **`opr` is visible from M2 on,** which is what the CPU needs to raise the CM lines at M2 for an I/O or RAM instruction (OPR = 1110).
+- **Parts:** Nand, Not, And, Mux4, DMux8Way, Register4, Register8. The reference is four Register4s with loads from DMux8Way's M1 and M2 lines, gated by `second`. Register8 and Mux4 are allowed for players who keep the second word in one register.
+- **Test (936 checks):**
+  - seven instruction cycles in period order with `second` at 0 or 1, four cycles where `second` changes between M1 and M2, then 96 random cycles, with seed 4004, from a Python model;
+  - every cycle puts a new digit on `din`, different from what any register holds, so a load at the wrong time always shows;
+  - each cycle is checked after its tick and after its tock.
+  
+  These wrong chips fail it: M1 and M2 swapped, periods off by one, `second` ignored for OPR, the second word's halves swapped, and OPA reloaded during the second word.
+**Alternatives:**
+- Loading `opr` and `opa` together at M2: OPR would arrive a period too late for the CM lines at M2.
+- Leaving the second word to the CPU: InstrReg is where the bus timing lives, and the second word follows the same timing.
+**Consequences:** next comes the Python 4004 model in `tools/`, then the CPU, which feeds InstrReg from `din` and Timing's `period`, and keeps `second` itself.
