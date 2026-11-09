@@ -80,6 +80,11 @@ SEGMENTS = [
         JMS put         ; A after reset
         TCC
         JMS put         ; CY after reset
+        LD R4
+        JMS put         ; an index register after reset
+        FIN P4          ; P0 after reset: fetches the byte at 0x000 into P4
+        LD R9
+        JMS put         ; the odd register of the pair FIN wrote
         {acc_tests(ACC_CASES[:13])}
         JUN acc2
 put:    SRC P7          ; store A at the next result character

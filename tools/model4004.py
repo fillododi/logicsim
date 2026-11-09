@@ -196,13 +196,12 @@ class Mcs4:
         self.stack[self.sp] = value & 0xFFF
 
     def reset(self) -> None:
-        """RESET: A, CY, the stack, DCL and SRC selections cleared; ports to 0; memory kept.
-
-        The index registers are undefined until written: the CPU level can't clear them
-        (docs/decisions.md, "The CPU level"), so the model refuses to read them before.
+        """RESET: A, CY, the index registers, the stack, DCL and SRC selections cleared;
+        ports to 0; memory kept. Before the first reset the registers are undefined, as at
+        power-on in the simulator, and the model refuses to read them.
         """
         self.acc, self.cy, self.sp, self.bank, self.cycles = 0, 0, 0, 0, 0
-        self.regs, self.stack = [None] * 16, [0] * 4
+        self.regs, self.stack = [0] * 16, [0] * 4
         self.src_rom, self.src_ram = None, {}
         self.romport_out = dict.fromkeys(range(16), 0)
         self.ramport = {(b, c): 0 for b in range(8) for c in range(4)}

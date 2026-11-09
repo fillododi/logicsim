@@ -12,7 +12,7 @@ Every instruction cycle is 8 clock periods, counted by your Timing:
 
 `SRC` sends its register pair at X2 (even register) and X3 (odd register). Raise `cmrom` and the CM-RAM lines of the bank `DCL` picked (your CmLines) at A3, at X2 of `SRC`, and at M2 of every I/O or RAM instruction (OPR 1110).
 
-`reset` held for 64 clock periods restarts the CPU at address 0 with A, CY and the DCL bank at 0, and the next period is A1. The index registers keep whatever they held: a program sets them before using them.
+`reset` held for 64 clock periods restarts the CPU at address 0, with A, CY, the 16 index registers and the DCL bank at 0, and the next period is A1.
 
 The test runs one program through every instruction, checking what it stores in RAM, then Intel's own 16-digit decimal addition.
 

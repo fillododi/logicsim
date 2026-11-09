@@ -52,7 +52,7 @@ CHIP CPU {
     Or(a=isfim, b=isfin, out=writespair);
     And(a=x2second, b=writespair, out=pairload);
     IndexRegs(in[0..3]=reglow, in[4..7]=data[4..7], addr=regaddr, load=regload,
-              loadpair=pairload, out=reg, pairout=pair);
+              loadpair=pairload, reset=reset, out=reg, pairout=pair);
 
     // ---- accumulator, carry and the ALU ----------------------------------
     // b is a register (8-B), OPA's data (BBL, LDM) or the bus (I/O reads).
