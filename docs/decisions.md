@@ -899,3 +899,28 @@ Ambiguous spec points and the option chosen. Newest last.
 - Loading `opr` and `opa` together at M2: OPR would arrive a period too late for the CM lines at M2.
 - Leaving the second word to the CPU: InstrReg is where the bus timing lives, and the second word follows the same timing.
 **Consequences:** next comes the Python 4004 model in `tools/`, then the CPU, which feeds InstrReg from `din` and Timing's `period`, and keeps `second` itself.
+
+## 2026-11-09 — An instruction-level 4004 model in tools/, checked against Intel's manual
+**Context:** the CPU level's tests need expected RAM, port and register contents for real programs, computed apart from the HDL. Earlier ALU work relied on the pyntel4004 docs because Intel's manual was unreachable. A scan of the *MCS-4 Micro Computer Set* manual has since been found, and its section VII describes every instruction.
+**Decision:**
+- **`tools/model4004.py`** is a development script, outside the game and its core. `Mcs4` is a 4004 with its memories as `attach mcs4` plays them: sixteen 4001s, eight banks of 4002s, SRC kept per bank, port outputs, and the RAM keys the runner uses. `step()` runs one instruction and returns its instruction cycles (2 for JCN, FIM, JUN, JMS, ISZ and FIN). `run()` goes until a jump to itself, the halt convention for test programs.
+- **Semantics, all from section VII of the manual,** read from the page images:
+  - SUB and SBM are `ACC + ~R + ~CY` (CY = 1 means no borrow).
+  - DAA adds 6 if CY = 1 or ACC > 9, sets CY on overflow and otherwise leaves it.
+  - DAC is `ACC + 15` (CY = 1 means no borrow).
+  - TCS gives 9 or 10 and clears CY. KBP follows the manual's table.
+  - JCN and ISZ jump within the page of the instruction after their second word, and JIN and FIN within the page of the next address. So all four reach the next page when they sit at the end of one.
+  - JMS pushes the address after its second word onto a 4-level stack with a wrapping pointer, so a fourth nested call overwrites the oldest return. This matches the manual's figure and the PC level.
+  - **This confirms, from the manual itself, the ALU semantics that "Four smaller levels before the 4004 ALU" took from pyntel4004.**
+- **The model refuses to guess.** Reading RAM that was never written, RDR with no input set, a RAM instruction with no SRC in the current bank, and the codes the 4004 doesn't define (`0x01`–`0x0F`, `0xFE`, `0xFF`) each raise `ModelError`. So a test program can't depend on a value the hardware wouldn't define.
+- **A small assembler** with labels, `org`, `byte`, `Rn`/`Pn`, and errors for jumps outside their page. Test programs stay readable, and Intel's listings can be retyped from their source. Project 3 builds the real assembler. This one only serves tests.
+- **Checks** (`tests/test_model4004.py`):
+  - every row of the ALU level's test (1,952) run as its instruction;
+  - every row of Cond's (1,024) run as a JCN;
+  - Intel's 16-digit decimal addition routine (manual section IV B), assembled from its source, on five pairs of numbers including one that carries through every digit and overflows, with the cycle count;
+  - the stack overflow, page edges, ISZ, DCL and SRC per bank, ports and KBP, and assembler errors.
+- **Intel's routine is assembled from its source, not its object code.** The listing's octal column doesn't match its own source (the bytes for `JUN NEXT` with NEXT = 0200 are given as 0310). The source lines and comments agree with the instruction descriptions.
+**Alternatives:**
+- Expected values written by hand in each `.tst`: unchecked and slow to extend to 46 instructions.
+- The model inside `src/nandsim`: it is test tooling, and the emulator of project 2 will be its own package, which can start from this file.
+**Consequences:** the CPU level's `.tst` files will be generated from this model, like the RAM levels' from `gen_ram_tst.py`, with a test that the committed files match. The manual's scan is the reference for the CPU from now on.
