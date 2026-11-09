@@ -40,6 +40,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   editor: read it, change it, and Ctrl+S saves it back to its file, so every level that
   uses it builds with the new version. Its circuit shows on the canvas, and the brief
   says which of your chips use it. Click a level to go back.
+- **Scroll the editor sideways.** Long lines no longer run off the editor's edge: a
+  scrollbar appears under the text when a line is wider than the editor. Drag it, swipe
+  sideways on a trackpad, or hold Shift and turn the wheel.
 
 ### Changed
 
