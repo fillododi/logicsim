@@ -51,6 +51,69 @@ expect out 1
 
 A table row only sets, evaluates and checks: it never ticks. Every DFF starts undefined.
 
+## Memories
+
+A CPU reaches its program and its data through its pins. A script can attach a **program
+memory** and a **data memory**, held by the test runner, to those pins. They aren't chips:
+nothing about them is built in HDL, and they exist only while the test runs.
+
+| Command | Meaning |
+|---|---|
+| `attach rom addr=<pin> out=<pin>` | A program memory of 4096 bytes, all 0. It reads its address from a chip output of up to 12 bits and sends the byte there to an 8-bit chip input. |
+| `attach ram in=<pin> addr=<pin> bank=<pin> status=<pin> load=<pin> out=<pin>` | A data memory with DataRAM's pins and layout: 8 banks of 4002s, every character undefined. `in`, `addr` (8 bits), `bank` (3), `status` and `load` are chip outputs; `out` (4 bits) is a chip input. |
+| `rom <addr> <byte> <byte>...` | Writes bytes into the program memory from `addr` on. |
+| `rom <file>` | Loads a `.rom` file into the program memory from address 0. The path is relative to the `.tst` file. |
+| `ram <bank> <addr> <value>` | Sets a main character of the data memory. |
+| `ramstatus <bank> <addr> <value>` | Sets a status character: `addr[4..7]` pick the chip and register and `addr[0..1]` the character, as in DataRAM with `status` at 1. |
+| `expect ram <bank> <addr> <value>` | Checks a main character. `*` is allowed, and an unwritten character is undefined. |
+| `expect ramstatus <bank> <addr> <value>` | Checks a status character. |
+
+Each memory can be attached once, and before any command that uses it. The memory pins
+can be connected to any chip pins of the right direction and width. A pin a memory
+drives can't be `set`.
+
+**How they run.** A memory answers like combinational logic: on every `eval`, and before and
+after every `tick` and `tock`, the runner evaluates the chip, sends each memory's `out` the
+value at its current address, and evaluates again, until nothing changes. So the byte at
+the address a CPU puts out is on its input before the tick stores it. If the address keeps
+changing with the byte it gets back, the run stops after 8 passes with an error. An
+undefined address reads as undefined.
+
+The data memory writes like a DFF: if `load` is 1 at a `tick`, it remembers `in` and the
+character picked, and stores it at the `tock`. Between the two, `out` still shows the old
+value. An undefined `load` writes nothing, since a CPU's control lines are undefined until
+its reset cycle has run. A `load` of 1 with an undefined `addr`, `bank` or `status` is a
+failure, and nothing is written.
+
+An example, with pin names for illustration (the CPU's own come with its level):
+
+```
+// LDM 5, then XCH R0: two instructions from the program memory
+chip CPU
+attach rom addr=romaddr out=instr
+rom 0 0xD5 0xB0
+set reset 1
+tick
+tock
+set reset 0
+tick
+tock
+```
+
+### `.rom` files
+
+One byte per line, written as 8 binary digits. Spaces and `_` may group the digits, and
+`//` starts a comment. Lines with no byte don't count: the first byte is at address 0,
+the next at 1, and so on. A file holds at most 4096 bytes.
+
+```
+// LDM 5, XCH R0
+1101 0101
+1011 0000
+```
+
+A line that isn't 8 binary digits is an error at its line and column.
+
 ## Values
 
 | Written | Meaning |

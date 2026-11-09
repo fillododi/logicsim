@@ -793,3 +793,19 @@ Ambiguous spec points and the option chosen. Newest last.
 - Only reordering the list, with no gate: RAM8 would still open right after Register4.
 **Consequences:** CPU tests don't simulate a DataRAM, the largest chip so far (187k NANDs, about 557 cycles/s), so they run at the CPU's own speed. Milestone 8 checks data memory through the runner, and the player's DataRAM first runs a program in milestone 9. A player who already solved the RAM levels keeps them solved, but will see them locked until the CPU is solved once the gate lands.
 
+
+## 2026-11-09 — Runner-held memories in `.tst`, and the `.rom` format
+**Context:** two earlier entries ("The program ROM comes after the CPU", "Data RAM comes after the CPU") left the syntax of the commands that attach a program memory and a data memory to the CPU, and the `.rom` file format, for when they were built. The CPU's pin names aren't decided yet.
+**Decision:**
+- **`attach rom addr=<pin> out=<pin>` and `attach ram in= addr= bank= status= load= out=`.** The memory's pins are named on the left and the chip's on the right, as in an HDL part. So the commands don't fix the CPU's pin names, and the RAM's are DataRAM's own, which a DataRAM will later plug into. The runner checks direction and width: `out` drives a chip input, the rest read chip outputs. The ROM's `addr` may have up to 12 bits, so a small test chip can use fewer.
+- **Contents:** `rom <addr> <bytes>` writes bytes inline, so CPU tests can keep small programs next to their checks, and `rom <file>` loads a `.rom` file relative to the `.tst`. `ram`/`ramstatus <bank> <addr> <value>` set a character, and `expect ram`/`expect ramstatus` check one. A status character uses DataRAM's addressing: `addr[4..7]` and `addr[0..1]`. The word after `expect` is a cell only with four arguments, so a pin named `ram` still works with two.
+- **Reads are combinational, settled by the runner.** On every `eval`, before and after `tick` (after only if the chip reads `clock`) and after `tock`, the runner evaluates, drives each memory's `out` from its address, and evaluates again until nothing changes, with at most 8 passes, then an error. Settling before the tick is what lets a CPU latch the byte it fetched in the same cycle, as a 4004 does in one instruction cycle. A pin a memory drives can't be `set`.
+- **Writes act like a DFF:** sampled at `tick`, stored at `tock`. An undefined `load` writes nothing, because a CPU's control lines are undefined until its first reset cycle has run. `load` at 1 with an undefined address is a test failure.
+- **Program memory starts as all 0** (NOP on the 4004), so a CPU that runs past its program executes NOPs. Data memory starts undefined, as a DataRAM built from DFFs does.
+- **`.rom`: one byte per line, 8 binary digits,** grouped by spaces or `_`, with `//` comments. One byte per line keeps a line for each address, which suits the ROM editor of milestone 9. The parser is `nandsim.testing.parse_rom`, with errors at line and column.
+- **The 4001 and 4002 output ports are left out.** Which pins carry them depends on the CPU's interface, so they come with the CPU level.
+**Alternatives:**
+- Fixed pin names (`romaddr`, `instr`, ...): this would decide the CPU's interface in a test-format change.
+- Writes stored at the tick: a DataRAM shows a new value only after the tock, and the CPU's tests should pass with either.
+- Several bytes per line, or hex: the earlier entry chose binary, and one byte per line keeps addresses easy to follow.
+**Consequences:** with a memory attached, each cycle costs about three evaluations instead of two. `run_script` takes a `base` folder for `.rom` files, and the game passes the level's folder. The GUI's clock panel doesn't attach memories yet: playing a CPU level by hand needs that, and it comes with the CPU level.
