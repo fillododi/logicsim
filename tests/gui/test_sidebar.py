@@ -20,6 +20,7 @@ from nandsim.gui.game_app import (  # noqa: E402
     GameApp,
     clamp_scroll,
     scroll_into_view,
+    sidebar_width,
 )
 from nandsim.gui.saves import SaveStore  # noqa: E402
 from nandsim.testing import load_levels  # noqa: E402
@@ -319,3 +320,36 @@ def test_the_wheel_over_a_sidebar_heading_does_not_zoom(tmp_path: Path) -> None:
     scale = app.cam.scale
     wheel(app, 1)
     assert app.cam.scale == scale and app.chips_scroll == 0
+
+
+# ---- sizes follow the window ----------------------------------------------------
+
+
+def test_the_sidebar_widens_with_the_window_up_to_a_limit() -> None:
+    assert sidebar_width(1024) == 260  # never narrower than before
+    assert sidebar_width(1440) == 288
+    assert sidebar_width(1920) == 380 == sidebar_width(3840)
+
+
+def test_a_wider_sidebar_wraps_the_brief_into_fewer_lines(tmp_path: Path) -> None:
+    narrow = at_and(tmp_path / "a")
+    wide = at_and(tmp_path / "b")
+    wide.size = (1920, 1080)
+    wide.render(pygame.Surface(wide.size))
+    assert wide.left_width > narrow.left_width and wide.brief_cols > narrow.brief_cols
+    assert len(wide._brief_layout()) < len(narrow._brief_layout())
+    assert wide.editor_rect.x > wide.left_width  # the canvas starts after the sidebar
+
+
+def test_a_long_brief_leaves_the_list_its_share(tmp_path: Path) -> None:
+    levels = {lv.name: lv for lv in load_levels()}
+    store = SaveStore(load_levels(), tmp_path / "save")
+    for lv in load_levels():
+        store.mark_solved(lv)
+    app = GameApp(store, size=(1024, 700))
+    app.tour.skip()
+    app.open_level(levels["CPU"])  # the longest brief
+    app.render(pygame.Surface(app.size))
+    body = app.size[1] - app.footer_height - 36
+    assert app.brief_cut and app.list_rect.height >= int(body * 0.4) // ROW_H * ROW_H
+    assert app.list_rect.height > 5 * ROW_H

@@ -238,7 +238,7 @@ level = "And"
 anchor = "chips"
 until = "next"
 text = """
-Your chips are listed here. Use one like any other part, MyAnd(a=..., b=..., out=...), and the × deletes it.
+Your chips are listed here. Use one like any other part, MyAnd(a=..., b=..., out=...). Click its name to open it in the editor, and the × deletes it.
 
 They are .hdl files in the save-exports folder next to your saves. To use a chip someone shares with you, copy its file there.
 """
