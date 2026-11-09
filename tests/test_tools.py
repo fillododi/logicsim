@@ -39,3 +39,10 @@ def test_cpu_unit_tests_match_their_generator() -> None:
     for name, text in generated.items():
         committed = (ROOT / "chips" / "05_cpu" / f"{name}.tst").read_text()
         assert committed == text, f"{name}.tst is stale: run tools/gen_cpu_units.py chips/05_cpu"
+
+
+def test_cpu_demo_rom_matches_its_generator() -> None:
+    committed = (ROOT / "chips" / "05_cpu" / "CPU.rom").read_text()
+    assert committed == load_tool("gen_cpu_tst").demo_rom(), (
+        "CPU.rom is stale: run tools/gen_cpu_tst.py chips/05_cpu"
+    )

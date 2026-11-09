@@ -1032,3 +1032,26 @@ Ambiguous spec points and the option chosen. Newest last.
 **Decision:** Each chip of the computer gets its own group, labelled with Intel's part number: `06_ram` is *RAM (4002)*, the CPU's group is *CPU (4004)*, and the ROM and bus levels will get their own (`07_rom`, …). The folder rename doesn't touch saves, which are keyed by level name. The tour's welcome names the goal (the 4004, then its computer), and the first level of each group shows one `next` bubble anchored on the level list, on what that group adds. A test fails if a group has no bubble at its first level. Briefs that didn't link their chip to the 4004 get one plain paragraph that does, before the parts line; it isn't bold, so the parts and hint lines stay the ones that stand out.
 **Alternatives:** Group descriptions in `levels.toml` shown under each sidebar header (takes space in a list that is already long, and isn't seen at the right moment); a label such as "In the 4004:" on each new brief paragraph (the sentences already name the 4004, so it read twice).
 **Consequences:** The tour grows from 25 to 31 steps. New groups need a bubble at their first level, and a brief needs a word on where its chip goes.
+
+## 2026-11-09 — The CPU level's clock panel runs a demo program on the MCS-4 memories
+**Context:** in the game, the CPU had nothing on its bus. Stepping it fetched zeros, since `din` was only what the player typed. The test runner already plays the 4001s and 4002s (`attach mcs4`). Open: when the GUI attaches them, what the CPU runs, what Reset does, and what the player sees.
+**Decision:**
+- **The session attaches the runner's `Mcs4`** when it is given a program and the top chip has every 4004 bus pin, of the right width and direction (the runner's own `check_pins`). The core exports `Mcs4`, `BUS_PINS`, `PERIODS` and `check_pins` from `nandsim.testing`, so the GUI uses only its public API.
+  - **Steps:** each one goes through the memories, as in a `.tst`: the memories read the bus at the tick, and after the tock they drive `din` for the next period.
+  - **`din`:** the memories drive it, so clicking or typing a value for it does nothing.
+  - **Rebuilds:** the memories and their RAM carry over when the flip-flop state does. Otherwise they start over with the clock.
+- **The program comes from `<Level>.rom` beside the level's test:** `chips/05_cpu/CPU.rom` for the CPU level. The developer viewer finds it the same way, through the level of the file it opens. Only the CPU level has one, and a missing or unreadable file leaves the clock without memories.
+- **Reset and the first load start the program over:**
+  - fresh memories with the program;
+  - TEST at 0 unless the player set it;
+  - the CPU's `reset` held for 64 clocks and then released;
+  - the cycle count back to 0.
+
+  The next Step is A1 of address 0.
+- **The demo is a 4-digit decimal counter** in RAM register 0 of chip 0, counting with ADM and DAA, with the lowest digit on ROM port 0 and RAM port 0. It is 31 bytes, about 45 instruction cycles per count. It's visible without reading the bus, it uses SRC, the RAM and both ports, and it never stops. `tools/gen_cpu_tst.py` writes it, with its source as comments, and a test keeps the file in step.
+- **The clock panel shows the memories** under its buttons: the period, RAM register 0 of chip 0 (from character 15 down to 0, so the counter reads left to right, with `·` for characters not yet written) and the two ports. The first bus problem, as the runner words it, shows on a second line in the error colour.
+**Alternatives:**
+- Intel's decimal addition as the demo: it needs RAM filled before it starts, and it stops after one run.
+- Letting the player pick a program: that's the ROM editor of milestone 9.
+- Showing all of RAM: too much for the panel. One register is what the demo uses.
+**Consequences:** the CPU can be stepped period by period and run at up to 1000 clocks/s, where the counter advances about 3 times a second. The panel is one line taller on the CPU level. Milestone 9's ROM editor can give the session another program through the same `program` argument.

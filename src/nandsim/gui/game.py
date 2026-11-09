@@ -12,8 +12,9 @@ from typing import Literal
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import Loader
 from nandsim.gui.tips import tip_for
+from nandsim.hdl import HdlError
 from nandsim.netlist import FREE_PRIMITIVES, ChipLibrary
-from nandsim.testing import Level, TstResult, parse_tst, run_script
+from nandsim.testing import Level, TstResult, parse_rom, parse_tst, run_script
 
 Status = Literal["solved", "open", "locked"]
 
@@ -110,6 +111,10 @@ class GameState:
         level = self.current
         return self.store.library(level, text if text is not None else self.store.load(level))
 
+    def program(self) -> list[int] | None:
+        """The current level's demo program, which its clock panel runs, if it has one."""
+        return level_program(self.current)
+
     def loader(self) -> Loader:
         """Loader for the circuit view: the current level as last saved (or its stub)."""
 
@@ -184,3 +189,18 @@ def _report(result: TstResult) -> TestReport:
     if tip:
         lines.append(f"Tip: {tip}")
     return TestReport(False, f"{bad} of {result.checks} checks failed", lines)
+
+
+def level_program(level: Level | None) -> list[int] | None:
+    """`<Name>.rom` next to a level's test: the program the clock panel runs on its CPU.
+
+    None if the level has none, or the file can't be read; the clock then runs without
+    memories, as for any other chip.
+    """
+    if level is None:
+        return None
+    path = level.tst.with_name(f"{level.name}.rom")
+    try:
+        return parse_rom(path.read_text(), str(path))
+    except (OSError, HdlError):
+        return None
