@@ -14,6 +14,8 @@ Every instruction cycle is 8 clock periods, counted by your Timing. The units ea
 
 The test runs one program through all 46 instructions, checking what it stores in RAM, then Intel's own 16-digit decimal addition.
 
+The clock panel runs your CPU on a small program from `CPU.rom`, a decimal counter in RAM, and shows the period, the counter's RAM register and the ports under its buttons. Reset restarts it from address 0.
+
 **Parts you may use:** Nand, Not, And, Or, Mux, Mux4, DMux8Way, Timing, InstrReg, Sequencer, Accumulator, Registers, Jumps, BusOut.
 
 **Hint:** Timing's period through a DMux8Way gives you one line per period. Most of the CPU is a few Ands of those lines.
