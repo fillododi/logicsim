@@ -229,6 +229,18 @@ name = "Timing"
 group = "05_cpu"
 parts = ["Nand", "Not", "And", "Mux", "Mux4", "Inc4", "Bit", "Register4"]
 
+# JCN's condition code C1 C2 C3 C4: invert, accumulator zero, carry, TEST low.
+[[level]]
+name = "Cond"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Xor", "Or4Way"]
+
+# DCL's bank number on the four CM-RAM lines: bank 0 on its own line, 1-7 in binary.
+[[level]]
+name = "CmLines"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or"]
+
 # The computer around the CPU, which reaches its data memory through RAM pins.
 # Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address

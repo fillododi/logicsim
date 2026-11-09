@@ -1,0 +1,19 @@
+// Cond: Does JCN jump? Tests the accumulator, the carry and the TEST pin.
+CHIP Cond {
+    IN cond[4], acc[4], carry, test;
+    OUT jump;
+    PARTS:
+    // C2 = cond[2]: the accumulator is 0.
+    Or4Way(in=acc, out=nonzero);
+    Not(in=nonzero, out=zero);
+    And(a=cond[2], b=zero, out=onzero);
+    // C3 = cond[1]: the carry is 1.
+    And(a=cond[1], b=carry, out=oncarry);
+    // C4 = cond[0]: the TEST pin is 0.
+    Not(in=test, out=notest);
+    And(a=cond[0], b=notest, out=ontest);
+    Or(a=onzero, b=oncarry, out=either);
+    Or(a=either, b=ontest, out=any);
+    // C1 = cond[3] inverts the whole condition.
+    Xor(a=any, b=cond[3], out=jump);
+}

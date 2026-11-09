@@ -1,0 +1,7 @@
+// Cond: Does JCN jump? Tests the accumulator, the carry and the TEST pin.
+// You may use: Nand, Not, And, Or, Xor, Or4Way
+CHIP Cond {
+    IN cond[4], acc[4], carry, test;
+    OUT jump;
+    PARTS:
+}

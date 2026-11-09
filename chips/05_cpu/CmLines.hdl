@@ -1,0 +1,7 @@
+// CmLines: Which CM-RAM lines pick the RAM bank DCL chose.
+// You may use: Nand, Not, And, Or
+CHIP CmLines {
+    IN bank[3], on;
+    OUT cmram[4];
+    PARTS:
+}
