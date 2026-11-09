@@ -85,7 +85,7 @@ def test_value_bases(text: str, width: int, bits: int) -> None:
         ("chip X\ntick 2\n", "X.tst:2:1: error: usage: tick"),
         ("chip X\ntock now\n", "X.tst:2:1: error: usage: tock"),
         ("chip X\nfrob\n", "X.tst:2:1: error: unknown command 'frob' (expected chip, table, set, "
-         "eval, tick, tock, expect)"),
+         "eval, tick, tock, expect, attach, rom, ram, ramstatus)"),
         ("// nothing\n", "X.tst:1:1: error: empty test: it must start with 'chip <Name>'"),
     ],
 )  # fmt: skip
