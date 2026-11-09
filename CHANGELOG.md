@@ -51,7 +51,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   group is now called *CPU (4004)*.
 - **The tour tells the story.** The welcome bubble says what you are building: the Intel
   4004, then the RAM and ROM chips of its computer. The first level of every group opens
-  with a bubble on what that group adds to the CPU.
+  with a bubble on what that group adds to the CPU, and on the CPU level two more introduce
+  the demo program: what the ROM and RAM chips on its bus are, and how to step through it.
+  The CPU brief explains how the demo counts in decimal, one digit per 4-bit character.
 - **Briefs explain where each chip goes.** The gate, bus, adder and latch levels now say
   what their chip does inside the 4004, from the Mux that picks the next address to the
   Xor that turns `SUB` into an addition.

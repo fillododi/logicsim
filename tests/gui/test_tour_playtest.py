@@ -402,3 +402,30 @@ def test_memory_levels_introduce_loops_and_the_clock(tmp_path: Path) -> None:
     assert b is not None and app.anchor_rect("clock") is not None
     app.clock("step")
     assert app.tour.current is None and shown(app) is None
+
+
+def test_the_cpu_level_introduces_its_demo_program(tmp_path: Path) -> None:
+    """CPU asks for a build first; then the clock panel, on the MCS-4 memories, wants a step."""
+    levels = load_levels()
+    by_name = {lv.name: lv for lv in levels}
+    store = SaveStore(levels, tmp_path / "save")
+    for lv in levels[: [x.name for x in levels].index("CPU")]:
+        store.save(lv, lv.reference.read_text())
+        store.mark_solved(lv)
+    app = GameApp(store, size=(1440, 860))
+    demo = {"cpu_build", "cpu_demo"}
+    app.tour.seen.update(s.id for s in app.tour.steps if s.id not in demo)
+
+    app.open_level(by_name["CPU"])
+    assert step_id(app) == "cpu_build" and shown(app) is not None
+    assert app.anchor_rect("clock") is None  # the stub has no clock panel yet
+    assert app.editor is not None
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(by_name["CPU"].reference.read_text())
+    keydown(app, pygame.K_s, CTRL)
+    assert app.session.error is None and app.session.memories is not None
+    assert step_id(app) == "cpu_demo"
+    b = shown(app)
+    assert b is not None and app.anchor_rect("clock") is not None
+    app.clock("step")
+    assert app.tour.current is None and shown(app) is None

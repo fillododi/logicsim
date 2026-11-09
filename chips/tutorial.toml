@@ -330,6 +330,30 @@ The CPU: the Intel 4004. Like the real chip, yours has 16 pins and reaches its p
 First you build the units, each doing one job at its moment. Then the CPU level wires them into the 4004.
 """
 
+# The CPU level's clock panel runs a demo program on the MCS-4 memories, once the
+# player's CPU builds (as for the DFF, the panel only exists then).
+[[step]]
+id = "cpu_build"
+level = "CPU"
+anchor = "brief"
+until = "build_ok"
+text = """
+This is the 4004 itself: your units, wired to the 8 periods of each instruction cycle. Wire them as the brief describes and press Ctrl+S.
+
+Once it builds, the clock panel puts memory chips on its bus, and you can watch your CPU run a program.
+"""
+
+[[step]]
+id = "cpu_demo"
+level = "CPU"
+anchor = "clock"
+until = "clock_step"
+text = """
+Your CPU now sits on a bus with the chips Intel sold beside it: 4001 ROMs holding the program and 4002 RAMs holding data, a small MCS-4 system as in 1971.
+
+The program counts in decimal. Click Step to run one clock period: 8 of them make one instruction cycle. Run plays them by itself; watch the RAM register count up digit by digit.
+"""
+
 [[step]]
 id = "ram"
 level = "RAM8"
