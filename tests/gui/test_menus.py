@@ -16,6 +16,7 @@ import pytest  # noqa: E402
 
 from nandsim.gui.game_app import GameApp  # noqa: E402
 from nandsim.gui.menu import BACK, Menu, MenuItem  # noqa: E402
+from nandsim.gui.music import Music  # noqa: E402
 from nandsim.gui.saves import SaveStore  # noqa: E402
 from nandsim.gui.theme import Fonts  # noqa: E402
 from nandsim.testing import load_levels  # noqa: E402
@@ -56,6 +57,9 @@ def click_item(app: GameApp, label: str) -> None:
     app.render(pygame.Surface(app.size))
 
 
+MUSIC = ["Music: On", "Music volume: 30%"]  # the soundtrack's items, after the sound's
+
+
 def labels(app: GameApp) -> list[str]:
     return [it.label for it in app.menus[-1].items]
 
@@ -84,6 +88,8 @@ def test_title_screen_plays_and_esc_does_not_leave_it(tmp_path: Path) -> None:
         "Play",
         "Sound: On",
         "Volume: 60%",
+        "Music: On",
+        "Music volume: 30%",
         "Quit",
     ]  # nothing to reset
     assert not app.editing
@@ -99,7 +105,7 @@ def test_title_offers_continue_and_reset_once_started(tmp_path: Path) -> None:
     save = tmp_path / "save"
     SaveStore(load_levels(), save).save(LEVELS["Wire"], "CHIP Wire {}")
     app = new_app(save, title=True)
-    assert labels(app) == ["Continue", "Reset game…", "Sound: On", "Volume: 60%", "Quit"]
+    assert labels(app) == ["Continue", "Reset game…", "Sound: On", "Volume: 60%", *MUSIC, "Quit"]
 
 
 def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) -> None:
@@ -115,6 +121,8 @@ def test_esc_pauses_from_the_editor_and_resume_restores_focus(tmp_path: Path) ->
         "Reset game…",
         "Sound: On",
         "Volume: 60%",
+        "Music: On",
+        "Music volume: 30%",
         "Quit",
     ]
     key(app, pygame.K_ESCAPE)  # Esc again resumes
@@ -436,12 +444,41 @@ def test_sound_and_volume_change_in_place_and_are_remembered(tmp_path: Path) -> 
     key(app, pygame.K_UP)
     assert app.sounds.played == before  # muted: nothing more is played
     settings = json.loads((tmp_path / "save-settings.json").read_text())
-    assert settings == {"version": 1, "muted": True, "volume": 0.2}
+    assert settings == {
+        "version": 1,
+        "muted": True,
+        "volume": 0.2,
+        "music": True,
+        "music_volume": 0.3,
+    }
 
     again = new_app(save, title=True)  # read back on the next start, on the title screen too
     assert "Sound: Off" in labels(again) and "Volume: 20%" in labels(again)
     click_item(again, "Sound: Off")
     assert again.sounds.played == ["select"]  # unmuting plays the preview
+
+
+def test_music_items_turn_the_soundtrack_off_and_down_and_are_remembered(
+    tmp_path: Path,
+) -> None:
+    from test_music import TRACKS, FakePlayer  # tests/gui is on the path, as for conftest
+
+    save = tmp_path / "save"
+    app = new_app(save)
+    player = FakePlayer()
+    app.music = Music(app.settings, tracks=TRACKS, player=player, start=0)
+    app.music.start(True)
+    assert player.busy and player.volume == 0.3
+    key(app, pygame.K_ESCAPE)
+    click_item(app, "Music volume: 30%")
+    assert labels(app)[app.menus[-1].selected] == "Music volume: 50%"
+    assert player.volume == 0.5  # heard at once, though the menu pauses the game
+    click_item(app, "Music: On")
+    assert "Music: Off" in labels(app) and not player.busy
+    settings = json.loads((tmp_path / "save-settings.json").read_text())
+    assert (settings["music"], settings["music_volume"]) == (False, 0.5)
+    again = new_app(save, title=True)
+    assert "Music: Off" in labels(again) and "Music volume: 50%" in labels(again)
 
 
 # ---- the clock behind menus ----------------------------------------------------
