@@ -8,6 +8,11 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ### Added
 
+- **A soundtrack.** Four retro game tracks play softly in the background, one after
+  another, starting from a random one. The menus have *Music: On/Off* and *Music volume*
+  (30% to start), remembered with the other sound settings, and *Sound: Off* silences the
+  music too. Without an audio device the game stays silent, as before.
+
 - **A new *CPU* group, starting with Timing.** The 4004 splits every instruction cycle into
   8 clock periods: it sends an address, receives an instruction, then executes it. Timing
   counts those periods from reset and raises `sync` on the last one, so the memory chips

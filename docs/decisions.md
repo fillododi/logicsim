@@ -1063,3 +1063,13 @@ Ambiguous spec points and the option chosen. Newest last.
 - **Sizes:** the sidebar is a fifth of the window's width, from 260 to 380 px. The level list keeps the larger of 5 rows and 40% of the sidebar's height, when it has that many rows; the brief still gets the rest and scrolls.
 **Alternatives:** Running the export dialog's checks on every save of a chip (a chip that uses a DFF before the DFF level would then be unsavable; copying a file into the exports folder already skips those checks, so they don't hold anyway). A draggable splitter between list and brief (more to learn and to save; the share covers the case that was broken).
 **Consequences:** The player can fix a chip that broke after a level changed, without leaving the game. A chip saved this way may use a primitive that the export dialog would refuse, as a copied file already can.
+
+## 2026-11-09 — The soundtrack plays shipped MP3 files, streamed
+**Context:** The owner asked for a background soundtrack made from four MP3 files they supplied. The sound effects are synthesized with numpy and the project had no audio files.
+**Decision:**
+- **Where the files live:** the tracks live in `src/nandsim/gui/music/`, beside the fonts the GUI already ships, so the wheel carries them (hatch packages everything under `src/nandsim`) and only the GUI package touches them. `CREDITS.md` there lists artist and title.
+- **Playback:** `gui.music.Music` streams them with `pygame.mixer.music`, which decodes only the track playing, so startup stays fast and memory small. It starts at a random track and goes round in order; `GameApp.tick` moves on when one ends, menus or not.
+- **Settings:** `music` (on) and `music_volume` (0.3, in steps of 0.1 to 0.7) join the settings file. Files without them are still version 1 and get the defaults, so 0.7.0 settings load unchanged. *Sound: Off* silences the music as well; *Volume* stays the sound effects' own.
+- **Failure:** like the effects, it never raises. With no mixer, no tracks, or a file that won't play, it goes quiet. A track that fails to load is skipped.
+**Alternatives:** Synthesizing the music with numpy, like the effects (the owner chose these tracks). Decoding them into `pygame.mixer.Sound` at startup (seconds of decoding and tens of megabytes of memory for four tracks).
+**Consequences:** The repository and the wheel grow by about 16 MB. The tracks' licenses must allow shipping them in the wheel; that is checked before the next release and recorded in `CREDITS.md`. Milestone 4's "no asset files" still holds for the sound effects.

@@ -20,7 +20,13 @@ def test_defaults_without_a_file(tmp_path: Path) -> None:
 def test_round_trip_and_clamping(tmp_path: Path) -> None:
     path = tmp_path / "settings.json"
     Settings(muted=True, volume=0.8).save(path)
-    assert json.loads(path.read_text()) == {"version": 1, "muted": True, "volume": 0.8}
+    assert json.loads(path.read_text()) == {
+        "version": 1,
+        "muted": True,
+        "volume": 0.8,
+        "music": True,
+        "music_volume": 0.3,
+    }
     s = Settings.load(path)
     assert (s.muted, s.volume, s.warning) == (True, 0.8, None)
     path.write_text('{"version": 1, "muted": false, "volume": 7}')

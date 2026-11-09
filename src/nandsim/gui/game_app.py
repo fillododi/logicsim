@@ -25,6 +25,7 @@ from nandsim.gui.game import GameState, TestReport, group_label
 from nandsim.gui.guide import Bubble, draw_bubble
 from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
+from nandsim.gui.music import Music
 from nandsim.gui.saves import SaveStore
 from nandsim.gui.session import ChipSession
 from nandsim.gui.settings import Settings
@@ -43,7 +44,8 @@ ROW_H = 26
 CHIP_ROW_H = 22  # a row of the "Your chips" list
 BUTTON_W = 210
 
-SILENT_ACTIONS = {"mute", "volume"}  # these play their own preview, if any
+SOUND_ACTIONS = ("mute", "volume", "music", "music_volume")  # the sound items of the menus
+SILENT_ACTIONS = set(SOUND_ACTIONS)  # these play their own preview, if any
 
 GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 CHEVRON = {True: "▾", False: "▸"}  # a group header, open or closed
@@ -98,6 +100,8 @@ class GameApp(ViewerApp):
         self.settings = Settings.load(store.settings_path)
         self.sounds = Sounds(self.settings)
         self.sounds.load()  # synthesized once, at startup; silent without an audio device
+        self.music = Music(self.settings)  # the soundtrack, streamed from gui/music/
+        self.music.start(self.sounds.enabled)
         warnings = [w for w in (store.warning, self.tour.warning, self.settings.warning) if w]
         self.notice: str | None = "; ".join(warnings) or None
         self._attempted = store.has_save(self.game.current)
@@ -234,6 +238,10 @@ class GameApp(ViewerApp):
         self._load_current()
         self.notice = f"New game. Your old chips are in {_home_short(backup)}" if backup else None
 
+    def tick(self, now: float | None = None) -> None:
+        super().tick(now)
+        self.music.update()  # the next track when one ends, menus or not
+
     def before_quit(self) -> None:
         """Never lose typing: unsaved editor text goes to the level's save file."""
         if self.editor is not None and self.editor.buffer.dirty:
@@ -274,21 +282,29 @@ class GameApp(ViewerApp):
         return [MenuItem(*pair) for pair in self._sound_labels()]
 
     def _sound_labels(self) -> list[tuple[str, str]]:
-        on = "Off" if self.settings.muted else "On"
+        s = self.settings
         return [
-            (f"Sound: {on}", "mute"),
-            (f"Volume: {round(self.settings.volume * 100)}%", "volume"),
+            (f"Sound: {'Off' if s.muted else 'On'}", "mute"),
+            (f"Volume: {round(s.volume * 100)}%", "volume"),
+            (f"Music: {'On' if s.music else 'Off'}", "music"),
+            (f"Music volume: {round(s.music_volume * 100)}%", "music_volume"),
         ]
 
     def change_sound(self, action: str) -> None:
-        """Mute or unmute, or step the volume; save it and let the player hear it.
+        """Mute or unmute, turn the music on or off, or step a volume; save it and let
+        the player hear it.
 
         The labels of the open menu change in place, so the selection stays put.
         """
         if action == "mute":
             self.settings.muted = not self.settings.muted
+        elif action == "music":
+            self.settings.music = not self.settings.music
+        elif action == "music_volume":
+            self.settings.music_volume = self.settings.next_music_volume()
         else:
             self.settings.volume = self.settings.next_volume()
+        self.music.update()  # heard at once, even while a menu pauses the clock
         try:
             self.settings.save(self.game.store.settings_path)
         except OSError as e:
@@ -385,7 +401,7 @@ class GameApp(ViewerApp):
             self.export_chip(self.menus[-1])
         elif action == "confirm_export" and self._pending_export is not None:
             self._write_export(*self._pending_export)
-        elif action in ("mute", "volume"):
+        elif action in SOUND_ACTIONS:
             self.change_sound(action)
         elif action.startswith("confirm_delete:"):
             self.delete_chip(action.split(":", 1)[1])
