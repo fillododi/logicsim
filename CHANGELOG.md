@@ -36,8 +36,16 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   binary). Tests can check the data memory and the ports (`expect ram`, `expect romport`,
   `expect ramport`). A CPU that breaks the bus protocol gets a failure naming the clock
   period. The CPU's tests will run programs this way. See `docs/tst.md`.
+- **Open your own chips.** Click a chip's name under *Your chips* to open it in the
+  editor: read it, change it, and Ctrl+S saves it back to its file, so every level that
+  uses it builds with the new version. Its circuit shows on the canvas, and the brief
+  says which of your chips use it. Click a level to go back.
 
 ### Changed
+
+- **The sidebar grows with the window,** from 260 to 380 pixels, so briefs wrap less on a
+  large screen. A long brief no longer squeezes the level list to a few rows: the list
+  keeps at least 40% of the sidebar's height, and the brief scrolls.
 
 - **IndexRegs has a `reset` pin.** Reset sets all 16 registers to 0, ahead of `load` and
   `loadpair`, as the 4004's RESET does, and the CPU relies on it. An IndexRegs you solved

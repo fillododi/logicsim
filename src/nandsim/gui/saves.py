@@ -108,6 +108,18 @@ class SaveStore:
     def export_path(self, name: str) -> Path:
         return self.exports / f"{name}.hdl"
 
+    def load_export(self, name: str) -> str:
+        """An exported chip's text, or "" if its file is gone or unreadable."""
+        try:
+            return self.export_path(name).read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            return ""
+
+    def export_library(self, name: str, text: str | None = None) -> ChipLibrary:
+        """The library with exported chip `name` as the editor has it (`text`, if unsaved)."""
+        sources = {name: (text, str(self.export_path(name)))} if text is not None else {}
+        return ChipLibrary([self.root, self.exports], sources)
+
     def name_problem(self, name: str) -> str | None:
         """Why `name` can't be an exported chip's name, or None if it can."""
         if not name:

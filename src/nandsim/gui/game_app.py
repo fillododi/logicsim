@@ -21,7 +21,7 @@ from nandsim.gui.app import HEADER, ViewerApp
 from nandsim.gui.brief import brief_lines
 from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
-from nandsim.gui.game import GameState, group_label
+from nandsim.gui.game import GameState, TestReport, group_label
 from nandsim.gui.guide import Bubble, draw_bubble
 from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
@@ -110,6 +110,7 @@ class GameApp(ViewerApp):
         self._scrolled_to: str | Level | None = None  # the row last scrolled into view
         self._exported = store.exported()  # the player's exported chips, for the sidebar
         self._chip_rows: list[tuple[pygame.Rect, str]] = []  # × buttons, as last drawn
+        self._chip_open_rows: list[tuple[pygame.Rect, str]] = []  # the rest of each row
         self._export_names: dict[str, str] = {}  # level -> name it was last exported as
         self._pending_export: tuple[str, str] | None = None  # waiting for "Replace it"
         self._sync_error()
@@ -170,6 +171,21 @@ class GameApp(ViewerApp):
         self.tour.catch_up(level.name)  # its next step may be something already done here
         self._load_current()
 
+    def open_chip(self, name: str) -> None:
+        """Open one of the player's exported chips in the editor, to read or change it.
+
+        The level stays current: clicking it in the list goes back to it.
+        """
+        if name == self.game.chip:
+            return
+        self.notice = None
+        assert self.editor is not None
+        if self.editor.buffer.dirty:  # never lose work, as when changing level
+            self.game.save(self.editor.buffer.text)
+        self.game.open_chip(name)
+        self._load_current()
+        self.sounds.play("select")
+
     def toggle_group(self, group: str) -> None:
         """Open or close a level group in the sidebar."""
         self._sync_expanded()
@@ -195,7 +211,7 @@ class GameApp(ViewerApp):
         assert self.editor is not None
         self.editor.buffer.set_text(self.game.text())
         self.editor.focused = True
-        self._attempted = self.game.store.has_save(self.game.current)
+        self._attempted = self.game.has_save()
         self.edit_path = Path(self.game.path)
         builtins = self.session.builtins  # the player's choice holds from level to level
         self.session = ChipSession(self.game.loader(), program=self.game.program())
@@ -413,7 +429,11 @@ class GameApp(ViewerApp):
             self._export_names = {k: v for k, v in self._export_names.items() if v != name}
         self._exported = self.game.store.exported()
         self._close_menus()
-        self._rebuild()  # the circuit on screen may have used it
+        if self.game.chip == name and name not in self._exported:
+            self.game.close_chip()  # its file is gone: back to the level
+            self._load_current()
+        else:
+            self._rebuild()  # the circuit on screen may have used it
 
     def _write_export(self, name: str, text: str) -> None:
         self._pending_export = None
@@ -422,7 +442,7 @@ class GameApp(ViewerApp):
         except OSError as e:
             self.notice = f"Couldn't export {name}: {e.strerror or e}"
         else:
-            self._export_names[self.game.current.name] = name
+            self._export_names[self.game.title] = name
             self._show_chip = name
             self.notice = f"Exported {name}. Every level can now use it as a part: {name}(...)"
             self.tour_event("export")
@@ -443,6 +463,15 @@ class GameApp(ViewerApp):
 
     def run_tests(self) -> None:
         assert self.editor is not None
+        if self.game.chip is not None:  # the player's own chips have no tests: build it
+            self.save()
+            self.game.report = TestReport(
+                False,
+                f"{self.game.chip} has no tests",
+                ["Your chips have no tests of their own. Use it as a part in a level and "
+                 "run that level's tests."],
+            )  # fmt: skip
+            return
         report = self.game.run_tests(self.editor.buffer.text)
         self.editor.buffer.mark_saved()
         self._attempted = True
@@ -455,6 +484,8 @@ class GameApp(ViewerApp):
             self.tour_event("solved")
 
     def tour_event(self, name: str, detail: str | None = None) -> None:
+        if self.game.chip is not None and name != "open_level":
+            return  # the tour is about levels: what happens in one of your chips doesn't count
         self.tour.event(self.game.current.name, name, detail)
 
     def on_action(self, name: str) -> None:
@@ -523,9 +554,13 @@ class GameApp(ViewerApp):
                     self._open_menu(self._confirm_delete_menu(name))
                     self.sounds.play("select")
                     return
+            for rect, name in self._chip_open_rows:  # after the ×, which sits on the row
+                if rect.collidepoint(ev.pos):
+                    self.open_chip(name)
+                    return
             for rect, level in self._rows:
                 if rect.collidepoint(ev.pos):
-                    if level is not self.game.current:
+                    if level is not self.game.current or self.game.chip:
                         self.open_level(level)
                     return
             for rect, group in self._group_rows:
@@ -705,7 +740,7 @@ class GameApp(ViewerApp):
         """The game shows its notice in the sidebar instead (see `_draw_sidebar`)."""
 
     def _draw_tour(self, surf: pygame.Surface) -> None:
-        step = self.tour.visible(self.game.current.name)
+        step = None if self.game.chip else self.tour.visible(self.game.current.name)
         if step is None:
             self.bubble = None
             return
@@ -738,7 +773,7 @@ class GameApp(ViewerApp):
                 surf.blit(t, (14, y))
                 y += font.get_linesize()
             y += 8
-        self._chip_rows = []
+        self._chip_rows, self._chip_open_rows = [], []
         self._chips_rect = None
         self.chips_view = pygame.Rect(0, 0, 0, 0)  # no list, nothing for the wheel to catch
         if self._exported:
@@ -778,8 +813,14 @@ class GameApp(ViewerApp):
             if top + CHIP_ROW_H <= y or top >= y + view:
                 continue  # scrolled out of sight: not drawn, not clickable
             row = pygame.Rect(6, top, self.left_width - 12, CHIP_ROW_H)
-            surf.blit(font.render(name, True, theme.ACCENT), (14, top + 2))
             x_btn = pygame.Rect(row.right - CHIP_ROW_H - 2, top, CHIP_ROW_H, CHIP_ROW_H)
+            opener = pygame.Rect(row.x, top, x_btn.x - row.x, CHIP_ROW_H).clip(self.chips_view)
+            is_open = name == self.game.chip
+            if is_open or (opener.collidepoint(self.mouse) and not self.menus):
+                pygame.draw.rect(surf, theme.BG, row, border_radius=5)  # open, or a click opens it
+            color = theme.TEXT if is_open else theme.ACCENT
+            surf.blit(font.render(name, True, color), (14, top + 2))
+            self._chip_open_rows.append((opener, name))
             hit = x_btn.clip(self.chips_view)  # only the visible part takes clicks
             hot = hit.collidepoint(self.mouse) and not self.menus
             if hot:
@@ -884,7 +925,7 @@ class GameApp(ViewerApp):
         self, surf: pygame.Surface, level: Level, rect: pygame.Rect, font: pygame.font.Font
     ) -> None:
         status = self.game.status(level)
-        if level is self.game.current:
+        if level is self.game.current and self.game.chip is None:
             pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
         color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[status]
         glyph = font.render(GLYPH[status], True, color)
@@ -917,7 +958,7 @@ class GameApp(ViewerApp):
         """The brief's lines as (text, kind, font, height it takes)."""
         text_font = self.fonts.get(13)
         out = []
-        for line, kind in brief_lines(self.game.current.brief.read_text(), self.brief_cols):
+        for line, kind in brief_lines(self.game.brief(), self.brief_cols):
             font = {
                 "title": self.fonts.get(16, bold=True),
                 "bold": self.fonts.get(13, bold=True),
@@ -931,8 +972,8 @@ class GameApp(ViewerApp):
 
         The scroll goes back to the top when another level opens.
         """
-        if self._brief_for != self.game.current.name:
-            self._brief_for = self.game.current.name
+        if self._brief_for != self.game.title:
+            self._brief_for = self.game.title
             self.brief_scroll = 0
         layout = self._brief_layout()
         content = sum(step for *_, step in layout)
