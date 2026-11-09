@@ -2,7 +2,7 @@
 
 A development script, not part of the game. Run it after changing the RAM levels' rules:
 
-    uv run python tools/gen_ram_tst.py chips/04_seq
+    uv run python tools/gen_ram_tst.py chips/06_computer
 
 The output is deterministic (seed 4004), and `tests/test_tools.py` checks that the committed
 files match it. Every test up to RAMBank has the same shape:

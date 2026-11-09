@@ -6,6 +6,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ## [Unreleased]
 
+### Changed
+
+- **The RAM levels move to a new *Computer* group.** RAM8, RAM64, RAM4002, RAMBank and
+  DataRAM are the memory the CPU will be wired to, so they now come after it in the level
+  list instead of in Memory. Your solutions and progress are kept.
+
 ## [0.7.0] — 2026-11-08
 
 Milestone 7: sequential logic. Your chips learn to remember. A new *Memory* group of 14

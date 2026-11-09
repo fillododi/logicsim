@@ -222,30 +222,32 @@ name = "PC"
 group = "04_seq"
 parts = ["Nand", "Not", "And", "Or", "Xor", "Mux", "Mux12", "DMux4Way", "Mux4Way12", "Inc12", "Register12", "Bit"]
 
-# Data memory, in 4-bit characters, up to a bank of four 4002 chips. A 4002 has
-# 4 registers of 16 main and 4 status characters; SRC's 8-bit address picks the
-# chip, the register and the main character.
+# The computer around the CPU, which reaches its data memory through RAM pins.
+# Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
+# 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address
+# picks the chip, the register and the main character, and DCL picks the bank.
+# The CPU level goes between PC and RAM8, and the program ROM after DataRAM.
 [[level]]
 name = "RAM8"
-group = "04_seq"
+group = "06_computer"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "Register4"]
 
 [[level]]
 name = "RAM64"
-group = "04_seq"
+group = "06_computer"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "RAM8"]
 
 [[level]]
 name = "RAM4002"
-group = "04_seq"
+group = "06_computer"
 parts = ["Nand", "DMux", "Mux4", "RAM8", "RAM64"]
 
 [[level]]
 name = "RAMBank"
-group = "04_seq"
+group = "06_computer"
 parts = ["Nand", "DMux4Way", "Mux4Way4", "RAM4002"]
 
 [[level]]
 name = "DataRAM"
-group = "04_seq"
+group = "06_computer"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "RAMBank"]
