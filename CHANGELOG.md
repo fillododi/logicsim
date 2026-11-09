@@ -6,41 +6,38 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-11-09
+
+Milestone 8: the Intel 4004. Build the first microprocessor sold on a single chip, on the
+real chip's 16 pins and its 4-bit bus, from the parts you made in the earlier groups. Then
+watch it run a program on the ROM and RAM chips Intel sold beside it.
+
 ### Added
 
-- **A soundtrack.** Four retro game tracks play softly in the background, one after
-  another, starting from a random one. The menus have *Music: On/Off* and *Music volume*
-  (30% to start), remembered with the other sound settings, and *Sound: Off* silences the
-  music too. Without an audio device the game stays silent, as before.
-
-- **A new *CPU* group, starting with Timing.** The 4004 splits every instruction cycle into
-  8 clock periods: it sends an address, receives an instruction, then executes it. Timing
-  counts those periods from reset and raises `sync` on the last one, so the memory chips
-  know a new cycle starts.
-- **Cond and CmLines,** two more CPU levels. Cond answers whether the 4004's conditional
-  jump `JCN` jumps, from its condition code, the accumulator, the carry and the TEST pin.
-  CmLines turns the RAM bank chosen by `DCL` into the four CM-RAM lines that select it.
-- **InstrReg,** the CPU's instruction register. It takes each instruction from the bus one
-  digit at a time and keeps it for the whole instruction cycle, along with the second
-  byte of the 4004's two-word instructions.
-- **The CPU: the Intel 4004.** Build the whole 4004 on the real chip's 16 pins and its
-  4-bit bus. Five levels lead up to it, each one job of the chip: Sequencer (two-cycle
-  instructions), Accumulator (A, the carry and the RAM bank), Registers (the index
-  registers as the instructions use them), Jumps (the PC, calls and returns) and BusOut
-  (what goes on the pins). The CPU then wires them to the 8 clock periods. Its test runs a
-  program through all 46 instructions, then Intel's own 16-digit decimal addition routine
-  from the MCS-4 manual.
+- **The *CPU (4004)* group: ten levels, ending with the Intel 4004 itself.**
+  - **Timing** counts the 8 clock periods of every instruction cycle: the 4004 sends an
+    address, receives an instruction, then executes it. `sync` marks the last period, so
+    the memory chips know a new cycle starts.
+  - **Cond** answers whether the conditional jump `JCN` jumps. **CmLines** turns the RAM
+    bank chosen by `DCL` into the four CM-RAM lines. **InstrReg** takes each instruction
+    from the bus one digit at a time, along with the second byte of two-word instructions.
+  - **Five units**, each one job of the chip: **Sequencer** (two-cycle instructions),
+    **Accumulator** (A, the carry and the RAM bank), **Registers** (the index registers as
+    the instructions use them), **Jumps** (the PC, calls and returns) and **BusOut** (what
+    goes on the pins).
+  - **The CPU** wires them to the 8 clock periods. Its test runs one program through all
+    46 instructions, then Intel's own 16-digit decimal addition routine from the MCS-4
+    manual, and checks the RAM and the output ports.
 - **Step your CPU through a program.** On the CPU level the clock panel puts ROM and RAM
   chips on your CPU's bus, loaded with a small decimal counter. Step it period by period or
   run it, and watch the counter's RAM register and the ports under the buttons; Reset
   starts the program over. A bus mistake shows there too.
-- **`cycles <n>` in `.tst` files** runs n clock cycles at once.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
   their I/O ports. Programs go in inline or from a `.rom` file (one byte per line, in
-  binary). Tests can check the data memory and the ports (`expect ram`, `expect romport`,
-  `expect ramport`). A CPU that breaks the bus protocol gets a failure naming the clock
-  period. The CPU's tests will run programs this way. See `docs/tst.md`.
+  binary). Tests can check the data memory and the ports (`expect ram`, `expect ramstatus`,
+  `expect romport`, `expect ramport`), and `cycles <n>` runs n clock cycles at once. A CPU
+  that breaks the bus protocol gets a failure naming the clock period. See `docs/tst.md`.
 - **Open your own chips.** Click a chip's name under *Your chips* to open it in the
   editor: read it, change it, and Ctrl+S saves it back to its file, so every level that
   uses it builds with the new version. Its circuit shows on the canvas, and the brief
@@ -48,37 +45,33 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 - **Scroll the editor sideways.** Long lines no longer run off the editor's edge: a
   scrollbar appears under the text when a line is wider than the editor. Drag it, swipe
   sideways on a trackpad, or hold Shift and turn the wheel.
+- **A soundtrack.** Four retro game tracks play softly in the background, one after
+  another, starting from a random one. The menus have *Music: On/Off* and *Music volume*
+  (30% to start), remembered with the other sound settings, and *Sound: Off* silences the
+  music too. Without an audio device the game stays silent, as before.
 
 ### Changed
-
-- **The sidebar grows with the window,** from 260 to 380 pixels, so briefs wrap less on a
-  large screen. A long brief no longer squeezes the level list to a few rows: the list
-  keeps at least 40% of the sidebar's height, and the brief scrolls.
 
 - **IndexRegs has a `reset` pin.** Reset sets all 16 registers to 0, ahead of `load` and
   `loadpair`, as the 4004's RESET does, and the CPU relies on it. An IndexRegs you solved
   in 0.7.0 no longer fits the level: add `reset` to its pins and make it clear every
   register, then run its tests again.
-- **The RAM levels move to a new *RAM (4002)* group.** RAM8, RAM64, RAM4002, RAMBank and
-  DataRAM are the memory the CPU will be wired to, so they now come after it in the level
+- **The RAM levels move to their own *RAM (4002)* group.** RAM8, RAM64, RAM4002, RAMBank
+  and DataRAM are the memory the CPU is wired to, so they now come after it in the level
   list instead of in Memory, and open once the CPU is solved. Your solutions and progress
   are kept, but RAM levels you already solved stay locked until you solve the CPU. Each
-  chip of the computer around the 4004 gets its own group like this one, and the CPU
-  group is now called *CPU (4004)*.
+  chip of the computer around the 4004 will get its own group like this one.
 - **The tour tells the story.** The welcome bubble says what you are building: the Intel
   4004, then the RAM and ROM chips of its computer. The first level of every group opens
   with a bubble on what that group adds to the CPU, and on the CPU level two more introduce
   the demo program: what the ROM and RAM chips on its bus are, and how to step through it.
-  The CPU brief explains how the demo counts in decimal, one digit per 4-bit character.
 - **Briefs explain where each chip goes.** The gate, bus, adder and latch levels now say
   what their chip does inside the 4004, from the Mux that picks the next address to the
-  Xor that turns `SUB` into an addition.
-
-### Fixed
-
-- **The CPU's test now runs all 46 instructions.** It never ran `RD1` or `RD2`, and the
-  value `RD3` read was never checked, so a CPU that read the wrong status character
-  could pass. The test now reads back status characters 1, 2 and 3 and checks them.
+  Xor that turns `SUB` into an addition. The CPU brief explains how the demo counts in
+  decimal, one digit per 4-bit character.
+- **The sidebar grows with the window,** from 260 to 380 pixels, so briefs wrap less on a
+  large screen. A long brief no longer squeezes the level list to a few rows: the list
+  keeps at least 40% of the sidebar's height, and the brief scrolls.
 
 ## [0.7.0] — 2026-11-08
 
@@ -323,7 +316,8 @@ Milestone 1: the core. There is no GUI yet; chips are tested from the command li
 - Workflow skills for Claude Code: `/analyze`, `/make-change`, `/verify`, `/pr`, `/review` and
   `/milestone`.
 
-[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/fillododi/logicsim/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/fillododi/logicsim/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/fillododi/logicsim/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/fillododi/logicsim/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/fillododi/logicsim/compare/v0.4.0...v0.5.0
