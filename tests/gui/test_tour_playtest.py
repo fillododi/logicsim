@@ -188,7 +188,9 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     assert step_id(app) == "unlocked"
     shown(app)
     click_level(app, "Not")
-    assert app.game.current.name == "Not" and step_id(app) == "on_your_own"
+    assert app.game.current.name == "Not" and step_id(app) == "gates"
+    press_next(app)
+    assert step_id(app) == "on_your_own"
     press_next(app)
     assert step_id(app) == "replay"
     press_next(app)
@@ -243,14 +245,14 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     press_next(app)
     assert step_id(app) == "done"
     press_next(app)
-    # The tour's last steps wait for SRLatch, the first level with memory.
-    assert step_id(app) == "memory" and shown(app) is None
+    # The tour's later steps wait for the first level of each group, starting with Not4.
+    assert step_id(app) == "buses" and shown(app) is None
     for p in shots.iterdir():
         assert p.stat().st_size > 0
 
     # Restarting remembers how far the tour got; F1 replays it from the first tutorial level.
     again = new_app(save)
-    assert step_id(again) == "memory"
+    assert step_id(again) == "buses"
     keydown(again, pygame.K_F1)
     assert again.game.current.name == "Wire" and step_id(again) == "welcome"
 
@@ -298,7 +300,7 @@ def test_leaving_the_tutorial_early_keeps_the_tour_going(tmp_path: Path) -> None
     # Review finding: opening Not mid-tutorial used to hide every later bubble.
     app = new_app(tmp_path / "save")
     click_level(app, "Not")
-    assert bubble_id(app) == "on_your_own" and shown(app) is not None
+    assert bubble_id(app) == "gates" and shown(app) is not None
     click_level(app, "Wire")
     assert bubble_id(app) == "welcome"  # the tutorial picks up where it was left
 
