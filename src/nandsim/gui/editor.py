@@ -18,6 +18,10 @@ from nandsim.gui.textbuffer import Pos, TextBuffer
 FONT_SIZE = 14
 GUTTER_PAD = 10
 DOUBLE_CLICK_S = 0.4
+WHEEL_LINES = 3  # lines one wheel notch scrolls
+WHEEL_COLS = 6  # columns one sideways notch (or Shift + wheel) scrolls
+HBAR_H = 8  # the horizontal scrollbar, along the bottom when a line is wider than the view
+HBAR_MIN_W = 24  # its thumb never gets narrower than this
 
 SYNTAX_COLORS: dict[str, theme.Color] = {
     "plain": (216, 219, 226),
@@ -77,6 +81,7 @@ class EditorWidget:
         self.scroll_x = 0
         self.clipboard = _Clipboard()
         self._dragging = False
+        self._bar_grab: int | None = None  # dragging the scrollbar: mouse x minus thumb x
         self._last_click: tuple[float, Pos] | None = None
         self._blink_start = time.monotonic()
 
@@ -100,7 +105,40 @@ class EditorWidget:
 
     @property
     def visible_lines(self) -> int:
-        return max(1, self.rect.height // self.line_h)
+        return max(1, (self.rect.height - self._hbar_h) // self.line_h)
+
+    @property
+    def text_w(self) -> int:
+        """Width of the text area, right of the gutter."""
+        return max(1, self.rect.width - self.gutter_w)
+
+    @property
+    def content_w(self) -> int:
+        """Width of the longest line, plus room for the cursor after it."""
+        return (max(len(line) for line in self.buffer.lines) + 2) * self.char_w
+
+    @property
+    def max_scroll_x(self) -> int:
+        return max(0, self.content_w - self.text_w)
+
+    @property
+    def _hbar_h(self) -> int:
+        return HBAR_H if self.max_scroll_x > 0 else 0
+
+    def hbar(self) -> tuple[pygame.Rect, pygame.Rect] | None:
+        """The horizontal scrollbar's track and thumb, or None when every line fits."""
+        if self.max_scroll_x <= 0:
+            return None
+        r = self.rect
+        track = pygame.Rect(r.x + self.gutter_w, r.bottom - HBAR_H, self.text_w, HBAR_H)
+        w = max(HBAR_MIN_W, track.width * self.text_w // self.content_w)
+        x = track.x + (track.width - w) * self.scroll_x // self.max_scroll_x
+        return track, pygame.Rect(x, track.y + 1, w, HBAR_H - 2)
+
+    @property
+    def dragging(self) -> bool:
+        """A drag started in the editor (selecting text, or the scrollbar) is under way."""
+        return self._dragging or self._bar_grab is not None
 
     def pos_at(self, screen: tuple[int, int]) -> Pos:
         x, y = screen
@@ -137,6 +175,16 @@ class EditorWidget:
             self.focused = self.rect.collidepoint(ev.pos)
             if not self.focused:
                 return None
+            bar = self.hbar()
+            if bar is not None and bar[0].collidepoint(ev.pos):
+                track, thumb = bar
+                if not thumb.collidepoint(ev.pos):  # on the track: the thumb jumps there
+                    self._drag_bar_to(ev.pos[0] - thumb.width // 2)
+                    moved = self.hbar()
+                    assert moved is not None  # the lines didn't change
+                    thumb = moved[1]
+                self._bar_grab = ev.pos[0] - thumb.x
+                return None
             p = self.pos_at(ev.pos)
             now = time.monotonic()
             if (
@@ -154,13 +202,16 @@ class EditorWidget:
                 self._dragging = True
                 self._last_click = (now, p)
             self._touch()
+        elif ev.type == pygame.MOUSEMOTION and self._bar_grab is not None:
+            self._drag_bar_to(ev.pos[0] - self._bar_grab)
         elif ev.type == pygame.MOUSEMOTION and self._dragging:
             self.buffer.cursor = self.pos_at(ev.pos)
             self.ensure_cursor_visible()
         elif ev.type == pygame.MOUSEBUTTONUP and ev.button == 1:
             self._dragging = False
+            self._bar_grab = None
         elif ev.type == pygame.MOUSEWHEEL and self.rect.collidepoint(pygame.mouse.get_pos()):
-            self.scroll(-ev.y * 3)
+            self.wheel(ev.x, ev.y)
         elif not self.focused:
             return None
         elif ev.type == pygame.TEXTINPUT:
@@ -174,6 +225,32 @@ class EditorWidget:
     def scroll(self, lines: int) -> None:
         last = max(0, len(self.buffer.lines) - self.visible_lines // 2)
         self.scroll_line = max(0, min(last, self.scroll_line + lines))
+
+    def scroll_cols(self, cols: int) -> None:
+        """Scroll sideways by `cols` characters (positive: right), within the longest line."""
+        self.scroll_x = max(0, min(self.max_scroll_x, self.scroll_x + cols * self.char_w))
+
+    def wheel(self, x: int, y: int) -> None:
+        """A wheel or trackpad move: sideways moves scroll sideways, and so does the wheel
+        with Shift held, as in most editors."""
+        if pygame.key.get_mods() & pygame.KMOD_SHIFT and y and not x:
+            x, y = -y, 0  # wheel down (y < 0) goes right
+        if x:
+            self.scroll_cols(x * WHEEL_COLS)
+        if y:
+            self.scroll(-y * WHEEL_LINES)
+
+    def _drag_bar_to(self, thumb_x: int) -> None:
+        """Move the scrollbar's thumb so its left edge is at `thumb_x`."""
+        bar = self.hbar()
+        if bar is None:
+            return
+        track, thumb = bar
+        room = track.width - thumb.width
+        if room <= 0:
+            return
+        at = max(0, min(room, thumb_x - track.x))
+        self.scroll_x = at * self.max_scroll_x // room
 
     def _key(self, ev: pygame.event.Event) -> str | None:
         ctrl = bool(ev.mod & (pygame.KMOD_CTRL | pygame.KMOD_META))
@@ -257,6 +334,7 @@ class EditorWidget:
         b = self.buffer
         first, last = self.scroll_line, min(len(b.lines), self.scroll_line + self.visible_lines + 1)
         spans = highlight(b.lines)  # needs lines above the view for block comments
+        self.scroll_x = min(self.scroll_x, self.max_scroll_x)  # the long line may be gone
         sel = b.selection()
         text_x = r.x + gw - self.scroll_x
         for i in range(first, last):
@@ -283,6 +361,14 @@ class EditorWidget:
         if self.focused and (time.monotonic() - self._blink_start) % 1.0 < 0.6:
             cx, cy = self.screen_of(b.cursor)
             pygame.draw.line(surf, CURSOR, (cx, cy + 1), (cx, cy + lh - 2), 2)
+        surf.set_clip(r)
+        bar = self.hbar()
+        if bar is not None:
+            track, thumb = bar
+            pygame.draw.rect(surf, theme.PANEL, track)
+            hot = self._bar_grab is not None or track.collidepoint(pygame.mouse.get_pos())
+            color = theme.ACCENT if hot else theme.PART_BORDER
+            pygame.draw.rect(surf, color, thumb, border_radius=3)
         surf.set_clip(old_clip)
 
     @staticmethod

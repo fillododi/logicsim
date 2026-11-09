@@ -172,3 +172,85 @@ def test_external_change_reloads_clean_buffer_only(work: Path) -> None:
     os.utime(work / "Mux.hdl", ns=(2, 2))
     app.tick(now=1001.0)
     assert app.editor.buffer.text.startswith("X") or "X" in app.editor.buffer.text
+
+
+# ---- horizontal scrolling --------------------------------------------------------
+
+LONG = "short\n" + "x" * 200 + "\nend" + "\n" * 60
+
+
+def press(ed: EditorWidget, pos: tuple[int, int]) -> None:
+    ed.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=pos))
+
+
+def test_no_scrollbar_when_every_line_fits() -> None:
+    ed = widget("CHIP A { }")
+    assert ed.hbar() is None and ed.max_scroll_x == 0
+    ed.scroll_cols(10)
+    assert ed.scroll_x == 0
+
+
+def test_sideways_wheel_and_shift_wheel_scroll_within_the_longest_line() -> None:
+    ed = widget(LONG)
+    ed.wheel(1, 0)  # a trackpad's sideways swipe
+    assert ed.scroll_x == 6 * ed.char_w
+    pygame.key.set_mods(pygame.KMOD_SHIFT)
+    try:
+        ed.wheel(0, -1)  # Shift + wheel down: further right
+        assert ed.scroll_x == 12 * ed.char_w
+        ed.wheel(0, 1)
+        assert ed.scroll_x == 6 * ed.char_w and ed.scroll_line == 0
+    finally:
+        pygame.key.set_mods(0)
+    ed.scroll_cols(10_000)
+    assert ed.scroll_x == ed.max_scroll_x  # the end of the longest line, not beyond
+    ed.wheel(0, -1)  # without Shift the wheel still scrolls lines
+    assert ed.scroll_x == ed.max_scroll_x and ed.scroll_line == 3
+
+
+def test_the_scrollbar_drags_and_jumps() -> None:
+    ed = widget(LONG)
+    bar = ed.hbar()
+    assert bar is not None
+    track, thumb = bar
+    assert track.bottom == ed.rect.bottom and thumb.x == track.x
+    assert ed.visible_lines == (300 - 8) // ed.line_h  # the bar takes its strip
+    press(ed, thumb.center)
+    ed.handle(pygame.event.Event(pygame.MOUSEMOTION, pos=(track.right + 50, thumb.centery)))
+    assert ed.scroll_x == ed.max_scroll_x  # dragged past the end: clamped
+    ed.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(track.right, 0)))
+    assert not ed.dragging
+    cursor = ed.buffer.cursor
+    press(ed, (track.x + 2, track.centery))  # on the track, at its left end
+    assert ed.scroll_x == 0 and ed.buffer.cursor == cursor  # not a click in the text
+    ed.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(track.x, 0)))
+
+
+def test_the_view_comes_back_when_the_long_line_goes() -> None:
+    ed = widget(LONG)
+    ed.scroll_cols(10_000)
+    ed.buffer.set_text("short")
+    ed.render(pygame.Surface((500, 300)))
+    assert ed.scroll_x == 0 and ed.hbar() is None
+
+
+def test_the_app_routes_the_wheel_and_the_bar_drag(tmp_path: Path) -> None:
+    hdl = tmp_path / "Wide.hdl"
+    hdl.write_text("// " + "wide " * 80 + "\n" + (REF / "Not.hdl").read_text().split("\n", 1)[1])
+    s = ChipSession(file_loader(hdl))
+    s.reload()
+    app = ViewerApp(s, size=(1000, 700), edit_path=hdl)
+    assert app.editor is not None
+    ed = app.editor
+    app.mouse = ed.rect.center
+    app.handle(pygame.event.Event(pygame.MOUSEWHEEL, x=2, y=0))
+    assert ed.scroll_x == 12 * ed.char_w
+    bar = ed.hbar()
+    assert bar is not None
+    track, thumb = bar
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONDOWN, button=1, pos=thumb.center))
+    drag = {"pos": (track.right, thumb.centery), "rel": (1, 0), "buttons": (1, 0, 0)}
+    app.handle(pygame.event.Event(pygame.MOUSEMOTION, drag))
+    assert ed.scroll_x == ed.max_scroll_x  # the drag stayed with the editor, not the canvas
+    app.handle(pygame.event.Event(pygame.MOUSEBUTTONUP, button=1, pos=(track.right, thumb.centery)))
+    assert not ed.dragging

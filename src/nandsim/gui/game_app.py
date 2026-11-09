@@ -21,7 +21,7 @@ from nandsim.gui.app import HEADER, ViewerApp
 from nandsim.gui.brief import brief_lines
 from nandsim.gui.canvas import Hover
 from nandsim.gui.editor import EditorWidget
-from nandsim.gui.game import GameState, group_label
+from nandsim.gui.game import GameState, TestReport, group_label
 from nandsim.gui.guide import Bubble, draw_bubble
 from nandsim.gui.menu import BACK, Menu, MenuItem, dim
 from nandsim.gui.model import child_path
@@ -33,7 +33,11 @@ from nandsim.gui.textbuffer import Pos, TextBuffer
 from nandsim.gui.tutorial import Tour, load_steps
 from nandsim.testing import Level, load_levels
 
-SIDEBAR = 260
+# The sidebar takes this share of the window's width, between these bounds: wide windows
+# give the brief longer lines instead of a narrow column beside an empty canvas.
+SIDEBAR_SHARE = 0.2
+SIDEBAR_MIN = 260
+SIDEBAR_MAX = 380
 RESULTS_H = 190
 ROW_H = 26
 CHIP_ROW_H = 22  # a row of the "Your chips" list
@@ -45,6 +49,7 @@ GLYPH = {"solved": "✓", "open": "○", "locked": "–"}
 CHEVRON = {True: "▾", False: "▸"}  # a group header, open or closed
 BRIEF_BOTTOM = 6  # gap between the brief and the footer
 LIST_MIN_ROWS = 5  # the level list leaves the brief its room, but shows at least this many rows
+LIST_MIN_SHARE = 0.4  # ...and this share of the sidebar's height, when its levels need it
 CHIPS_MAX_ROWS = 4  # "Your chips" shows this many rows at most, and scrolls past that
 BRIEF_WHEEL_LINES = 3  # lines of brief text one wheel notch scrolls
 BRIEF_KEEP_LINES = 3  # in a short window, "Your chips" shrinks to leave the brief this many
@@ -105,6 +110,7 @@ class GameApp(ViewerApp):
         self._scrolled_to: str | Level | None = None  # the row last scrolled into view
         self._exported = store.exported()  # the player's exported chips, for the sidebar
         self._chip_rows: list[tuple[pygame.Rect, str]] = []  # × buttons, as last drawn
+        self._chip_open_rows: list[tuple[pygame.Rect, str]] = []  # the rest of each row
         self._export_names: dict[str, str] = {}  # level -> name it was last exported as
         self._pending_export: tuple[str, str] | None = None  # waiting for "Replace it"
         self._sync_error()
@@ -119,7 +125,7 @@ class GameApp(ViewerApp):
 
     @property
     def left_width(self) -> int:
-        return SIDEBAR
+        return sidebar_width(self.size[0])
 
     @property
     def editor_rect(self) -> pygame.Rect:
@@ -165,6 +171,21 @@ class GameApp(ViewerApp):
         self.tour.catch_up(level.name)  # its next step may be something already done here
         self._load_current()
 
+    def open_chip(self, name: str) -> None:
+        """Open one of the player's exported chips in the editor, to read or change it.
+
+        The level stays current: clicking it in the list goes back to it.
+        """
+        if name == self.game.chip:
+            return
+        self.notice = None
+        assert self.editor is not None
+        if self.editor.buffer.dirty:  # never lose work, as when changing level
+            self.game.save(self.editor.buffer.text)
+        self.game.open_chip(name)
+        self._load_current()
+        self.sounds.play("select")
+
     def toggle_group(self, group: str) -> None:
         """Open or close a level group in the sidebar."""
         self._sync_expanded()
@@ -190,7 +211,7 @@ class GameApp(ViewerApp):
         assert self.editor is not None
         self.editor.buffer.set_text(self.game.text())
         self.editor.focused = True
-        self._attempted = self.game.store.has_save(self.game.current)
+        self._attempted = self.game.has_save()
         self.edit_path = Path(self.game.path)
         builtins = self.session.builtins  # the player's choice holds from level to level
         self.session = ChipSession(self.game.loader(), program=self.game.program())
@@ -408,7 +429,11 @@ class GameApp(ViewerApp):
             self._export_names = {k: v for k, v in self._export_names.items() if v != name}
         self._exported = self.game.store.exported()
         self._close_menus()
-        self._rebuild()  # the circuit on screen may have used it
+        if self.game.chip == name and name not in self._exported:
+            self.game.close_chip()  # its file is gone: back to the level
+            self._load_current()
+        else:
+            self._rebuild()  # the circuit on screen may have used it
 
     def _write_export(self, name: str, text: str) -> None:
         self._pending_export = None
@@ -417,7 +442,7 @@ class GameApp(ViewerApp):
         except OSError as e:
             self.notice = f"Couldn't export {name}: {e.strerror or e}"
         else:
-            self._export_names[self.game.current.name] = name
+            self._export_names[self.game.title] = name
             self._show_chip = name
             self.notice = f"Exported {name}. Every level can now use it as a part: {name}(...)"
             self.tour_event("export")
@@ -438,6 +463,15 @@ class GameApp(ViewerApp):
 
     def run_tests(self) -> None:
         assert self.editor is not None
+        if self.game.chip is not None:  # the player's own chips have no tests: build it
+            self.save()
+            self.game.report = TestReport(
+                False,
+                f"{self.game.chip} has no tests",
+                ["Your chips have no tests of their own. Use it as a part in a level and "
+                 "run that level's tests."],
+            )  # fmt: skip
+            return
         report = self.game.run_tests(self.editor.buffer.text)
         self.editor.buffer.mark_saved()
         self._attempted = True
@@ -450,6 +484,8 @@ class GameApp(ViewerApp):
             self.tour_event("solved")
 
     def tour_event(self, name: str, detail: str | None = None) -> None:
+        if self.game.chip is not None and name != "open_level":
+            return  # the tour is about levels: what happens in one of your chips doesn't count
         self.tour.event(self.game.current.name, name, detail)
 
     def on_action(self, name: str) -> None:
@@ -507,7 +543,7 @@ class GameApp(ViewerApp):
             step = BRIEF_WHEEL_LINES * self.fonts.get(13).get_linesize()
             self.brief_scroll = max(0, self.brief_scroll - ev.y * step)  # clamped when drawn
             return
-        if ev.type == pygame.MOUSEWHEEL and self.mouse[0] < SIDEBAR:
+        if ev.type == pygame.MOUSEWHEEL and self.mouse[0] < self.left_width:
             return  # over a sidebar heading or gap: nothing to scroll, and not the canvas
         if ev.type == pygame.MOUSEBUTTONDOWN and ev.button == 1:
             if self.button_rect.collidepoint(ev.pos):
@@ -518,16 +554,20 @@ class GameApp(ViewerApp):
                     self._open_menu(self._confirm_delete_menu(name))
                     self.sounds.play("select")
                     return
+            for rect, name in self._chip_open_rows:  # after the ×, which sits on the row
+                if rect.collidepoint(ev.pos):
+                    self.open_chip(name)
+                    return
             for rect, level in self._rows:
                 if rect.collidepoint(ev.pos):
-                    if level is not self.game.current:
+                    if level is not self.game.current or self.game.chip:
                         self.open_level(level)
                     return
             for rect, group in self._group_rows:
                 if rect.collidepoint(ev.pos):
                     self.toggle_group(group)
                     return
-            if ev.pos[0] < SIDEBAR or self.results_rect.collidepoint(ev.pos):
+            if ev.pos[0] < self.left_width or self.results_rect.collidepoint(ev.pos):
                 return
         super().handle(ev)
 
@@ -700,7 +740,7 @@ class GameApp(ViewerApp):
         """The game shows its notice in the sidebar instead (see `_draw_sidebar`)."""
 
     def _draw_tour(self, surf: pygame.Surface) -> None:
-        step = self.tour.visible(self.game.current.name)
+        step = None if self.game.chip else self.tour.visible(self.game.current.name)
         if step is None:
             self.bubble = None
             return
@@ -719,21 +759,21 @@ class GameApp(ViewerApp):
 
     def _draw_sidebar(self, surf: pygame.Surface) -> None:
         h = self.size[1]
-        pygame.draw.rect(surf, theme.PANEL, (0, 0, SIDEBAR, h - self.footer_height))
+        pygame.draw.rect(surf, theme.PANEL, (0, 0, self.left_width, h - self.footer_height))
         title = self.fonts.get(16, bold=True).render("NAND Sim", True, theme.TEXT)
         surf.blit(title, (14, (HEADER - title.get_height()) // 2))
         font = self.fonts.get(14)
         y = self._draw_levels(surf, HEADER + 6)
         y += 8
-        pygame.draw.line(surf, theme.PART_BORDER, (12, y), (SIDEBAR - 12, y))
+        pygame.draw.line(surf, theme.PART_BORDER, (12, y), (self.left_width - 12, y))
         y += 10
         if self.notice:
-            for line in _wrap(self.notice, (SIDEBAR - 28) // font.size("M")[0]):
+            for line in _wrap(self.notice, (self.left_width - 28) // font.size("M")[0]):
                 t = font.render(line, True, theme.WIRE_X)
                 surf.blit(t, (14, y))
                 y += font.get_linesize()
             y += 8
-        self._chip_rows = []
+        self._chip_rows, self._chip_open_rows = [], []
         self._chips_rect = None
         self.chips_view = pygame.Rect(0, 0, 0, 0)  # no list, nothing for the wheel to catch
         if self._exported:
@@ -741,10 +781,10 @@ class GameApp(ViewerApp):
             bold = self.fonts.get(13, bold=True)
             surf.blit(bold.render("Your chips", True, theme.TEXT), (14, y))
             hint = self.fonts.get(12).render("usable in every level", True, theme.TEXT_DIM)
-            surf.blit(hint, (SIDEBAR - 14 - hint.get_width(), y + 1))
+            surf.blit(hint, (self.left_width - 14 - hint.get_width(), y + 1))
             y += font.get_linesize() + 2
             y = self._draw_chip_rows(surf, y, font)
-            self._chips_rect = pygame.Rect(6, top - 4, SIDEBAR - 12, y - top + 6)
+            self._chips_rect = pygame.Rect(6, top - 4, self.left_width - 12, y - top + 6)
             y += 8
         self._draw_brief(surf, y)
 
@@ -765,16 +805,22 @@ class GameApp(ViewerApp):
             self.chips_scroll = scroll_into_view(self.chips_scroll, at, CHIP_ROW_H, view)
         self._show_chip = None
         self.chips_scroll = clamp_scroll(self.chips_scroll, content, view)
-        self.chips_view = pygame.Rect(0, y, SIDEBAR, view)
+        self.chips_view = pygame.Rect(0, y, self.left_width, view)
         clip = surf.get_clip()
         surf.set_clip(self.chips_view.clip(clip) if clip else self.chips_view)
         for i, name in enumerate(self._exported):
             top = y + i * CHIP_ROW_H - self.chips_scroll
             if top + CHIP_ROW_H <= y or top >= y + view:
                 continue  # scrolled out of sight: not drawn, not clickable
-            row = pygame.Rect(6, top, SIDEBAR - 12, CHIP_ROW_H)
-            surf.blit(font.render(name, True, theme.ACCENT), (14, top + 2))
+            row = pygame.Rect(6, top, self.left_width - 12, CHIP_ROW_H)
             x_btn = pygame.Rect(row.right - CHIP_ROW_H - 2, top, CHIP_ROW_H, CHIP_ROW_H)
+            opener = pygame.Rect(row.x, top, x_btn.x - row.x, CHIP_ROW_H).clip(self.chips_view)
+            is_open = name == self.game.chip
+            if is_open or (opener.collidepoint(self.mouse) and not self.menus):
+                pygame.draw.rect(surf, theme.BG, row, border_radius=5)  # open, or a click opens it
+            color = theme.TEXT if is_open else theme.ACCENT
+            surf.blit(font.render(name, True, color), (14, top + 2))
+            self._chip_open_rows.append((opener, name))
             hit = x_btn.clip(self.chips_view)  # only the visible part takes clicks
             hot = hit.collidepoint(self.mouse) and not self.menus
             if hot:
@@ -783,7 +829,7 @@ class GameApp(ViewerApp):
             surf.blit(cross, cross.get_rect(center=x_btn.center))
             self._chip_rows.append((hit, name))
         surf.set_clip(clip)
-        _draw_scrollbar(surf, y, view, content, self.chips_scroll, CHIP_ROW_H)
+        _draw_scrollbar(surf, self.left_width, y, view, content, self.chips_scroll, CHIP_ROW_H)
         return y + view
 
     def _draw_levels(self, surf: pygame.Surface, y: int) -> int:
@@ -791,10 +837,11 @@ class GameApp(ViewerApp):
         y below it.
 
         The list gets the room that the notice, "Your chips" and the brief below it don't
-        need, in whole rows (at least `LIST_MIN_ROWS`), and scrolls past that, so the brief
-        is shown whole whenever the window allows. When the row to show changes
-        (the current level, or a level a tour bubble points at), the list scrolls to it;
-        otherwise the player's own scrolling stays.
+        need, in whole rows (at least `LIST_MIN_ROWS`, and `LIST_MIN_SHARE` of the
+        sidebar's height), and scrolls past that, so the brief is shown whole whenever the
+        window allows, and a long brief can't squeeze the list down to a few rows. When
+        the row to show changes (the current level, or a level a tour bubble points at),
+        the list scrolls to it; otherwise the player's own scrolling stays.
         """
         self._sync_expanded()
         font = self.fonts.get(14)
@@ -809,7 +856,9 @@ class GameApp(ViewerApp):
                     entries.append((level, content))
                     content += ROW_H
         room = self.size[1] - self.footer_height - y - self._below_list_height()
-        view = min(content, max(LIST_MIN_ROWS, room // ROW_H) * ROW_H)
+        body = self.size[1] - self.footer_height - HEADER
+        min_rows = max(LIST_MIN_ROWS, int(body * LIST_MIN_SHARE) // ROW_H)
+        view = min(content, max(min_rows, room // ROW_H) * ROW_H)
         target = self._scroll_target()
         if target != self._scrolled_to:
             self._scrolled_to = target
@@ -817,7 +866,7 @@ class GameApp(ViewerApp):
             if at is not None:
                 self.list_scroll = scroll_into_view(self.list_scroll, at, ROW_H, view)
         self.list_scroll = clamp_scroll(self.list_scroll, content, view)
-        self.list_rect = pygame.Rect(0, y, SIDEBAR, view)
+        self.list_rect = pygame.Rect(0, y, self.left_width, view)
         self._rows, self._group_rows = [], []
         clip = surf.get_clip()
         surf.set_clip(self.list_rect.clip(clip) if clip else self.list_rect)
@@ -825,7 +874,7 @@ class GameApp(ViewerApp):
             top = y + cy - self.list_scroll
             if top + ROW_H <= y or top >= y + view:
                 continue  # scrolled out of sight: not drawn, not clickable
-            rect = pygame.Rect(6, top, SIDEBAR - 12, ROW_H - 2)
+            rect = pygame.Rect(6, top, self.left_width - 12, ROW_H - 2)
             if isinstance(entry, str):
                 self._draw_group_row(surf, entry, rect, small)
                 self._group_rows.append((rect, entry))
@@ -833,7 +882,7 @@ class GameApp(ViewerApp):
                 self._draw_level_row(surf, entry, rect, font)
                 self._rows.append((rect, entry))
         surf.set_clip(clip)
-        _draw_scrollbar(surf, y, view, content, self.list_scroll, ROW_H)
+        _draw_scrollbar(surf, self.left_width, y, view, content, self.list_scroll, ROW_H)
         return y + view
 
     def _scroll_target(self) -> str | Level:
@@ -876,7 +925,7 @@ class GameApp(ViewerApp):
         self, surf: pygame.Surface, level: Level, rect: pygame.Rect, font: pygame.font.Font
     ) -> None:
         status = self.game.status(level)
-        if level is self.game.current:
+        if level is self.game.current and self.game.chip is None:
             pygame.draw.rect(surf, theme.BG, rect, border_radius=5)
         color = {"solved": theme.WIRE_1, "open": theme.TEXT, "locked": theme.TEXT_DIM}[status]
         glyph = font.render(GLYPH[status], True, color)
@@ -893,7 +942,7 @@ class GameApp(ViewerApp):
         font = self.fonts.get(14)
         h = 8 + 10  # the separator line and its gaps
         if self.notice:
-            lines = _wrap(self.notice, (SIDEBAR - 28) // font.size("M")[0])
+            lines = _wrap(self.notice, (self.left_width - 28) // font.size("M")[0])
             h += len(lines) * font.get_linesize() + 8
         if self._exported:
             rows = min(len(self._exported), CHIPS_MAX_ROWS)
@@ -903,13 +952,13 @@ class GameApp(ViewerApp):
     @property
     def brief_cols(self) -> int:
         """How many characters of brief text fit across the sidebar."""
-        return (SIDEBAR - 28) // self.fonts.get(13).size("M")[0]
+        return (self.left_width - 28) // self.fonts.get(13).size("M")[0]
 
     def _brief_layout(self) -> list[tuple[str, str, pygame.font.Font, int]]:
         """The brief's lines as (text, kind, font, height it takes)."""
         text_font = self.fonts.get(13)
         out = []
-        for line, kind in brief_lines(self.game.current.brief.read_text(), self.brief_cols):
+        for line, kind in brief_lines(self.game.brief(), self.brief_cols):
             font = {
                 "title": self.fonts.get(16, bold=True),
                 "bold": self.fonts.get(13, bold=True),
@@ -923,8 +972,8 @@ class GameApp(ViewerApp):
 
         The scroll goes back to the top when another level opens.
         """
-        if self._brief_for != self.game.current.name:
-            self._brief_for = self.game.current.name
+        if self._brief_for != self.game.title:
+            self._brief_for = self.game.title
             self.brief_scroll = 0
         layout = self._brief_layout()
         content = sum(step for *_, step in layout)
@@ -932,7 +981,7 @@ class GameApp(ViewerApp):
         view = max(0, min(content, bottom - y))
         self.brief_cut = content > view
         self.brief_scroll = clamp_scroll(self.brief_scroll, content, view)
-        self.brief_view = pygame.Rect(0, y, SIDEBAR, view)
+        self.brief_view = pygame.Rect(0, y, self.left_width, view)
         clip = surf.get_clip()
         surf.set_clip(self.brief_view.clip(clip) if clip else self.brief_view)
         line_y = y - self.brief_scroll
@@ -943,8 +992,8 @@ class GameApp(ViewerApp):
             line_y += step
         surf.set_clip(clip)
         line_h = self.fonts.get(13).get_linesize()
-        _draw_scrollbar(surf, y, view, content, self.brief_scroll, line_h)
-        self._brief_rect = pygame.Rect(6, y - 4, SIDEBAR - 12, view + 8)
+        _draw_scrollbar(surf, self.left_width, y, view, content, self.brief_scroll, line_h)
+        self._brief_rect = pygame.Rect(6, y - 4, self.left_width - 12, view + 8)
 
     def _draw_results(self, surf: pygame.Surface) -> None:
         r = self.results_rect
@@ -983,16 +1032,21 @@ class GameApp(ViewerApp):
                 y += font.get_linesize()
 
 
+def sidebar_width(window_w: int) -> int:
+    """The sidebar's width in a window `window_w` pixels wide."""
+    return max(SIDEBAR_MIN, min(SIDEBAR_MAX, round(window_w * SIDEBAR_SHARE)))
+
+
 def _draw_scrollbar(
-    surf: pygame.Surface, y: int, view: int, content: int, scroll: int, min_h: int
+    surf: pygame.Surface, right: int, y: int, view: int, content: int, scroll: int, min_h: int
 ) -> None:
-    """A thin bar at the sidebar's right edge showing where a scrolled view sits in its
+    """A thin bar at the sidebar's right edge (`right`) showing where a scrolled view sits in its
     content; nothing when the content fits."""
     if content <= view or view <= 0:
         return
     bar_h = min(view, max(min_h, view * view // content))
     bar_y = y + (view - bar_h) * scroll // (content - view)
-    pygame.draw.rect(surf, theme.PART_BORDER, (SIDEBAR - 5, bar_y, 3, bar_h), border_radius=2)
+    pygame.draw.rect(surf, theme.PART_BORDER, (right - 5, bar_y, 3, bar_h), border_radius=2)
 
 
 def _home_short(path: Path) -> str:

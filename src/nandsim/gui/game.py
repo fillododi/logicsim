@@ -35,6 +35,8 @@ class GameState:
         self.levels = store.levels
         self.current: Level = self._first_level()
         self.report: TestReport | None = None
+        self.chip: str | None = None  # an exported chip open in the editor, over the level
+        self._chip_brief: tuple[str, str] | None = None  # (chip, its brief), once worked out
 
     def _first_level(self) -> Level:
         """The first open level past the furthest solved one; else any open level; else the first.
@@ -92,34 +94,88 @@ class GameState:
         if self.status(level) == "locked":
             return False
         self.current = level
+        self.chip = None
         self.report = None
         return True
 
+    # ---- what the editor shows: the current level, or one of the player's chips -----
+
+    def open_chip(self, name: str) -> None:
+        """Edit an exported chip instead of the current level, which stays current."""
+        self.chip = name
+        self._chip_brief = None
+        self.report = None
+
+    def close_chip(self) -> None:
+        self.chip = None
+        self.report = None
+
+    @property
+    def title(self) -> str:
+        """The name of the chip in the editor: an exported chip's, or the level's."""
+        return self.chip or self.current.name
+
     def text(self) -> str:
+        if self.chip is not None:
+            return self.store.load_export(self.chip)
         return self.store.load(self.current)
 
     def save(self, text: str) -> None:
-        self.store.save(self.current, text)
+        if self.chip is not None:
+            self.store.export(self.chip, text)
+        else:
+            self.store.save(self.current, text)
+
+    def has_save(self) -> bool:
+        """Whether the editor's chip is on disk: an exported chip always is."""
+        return self.chip is not None or self.store.has_save(self.current)
 
     @property
     def path(self) -> str:
+        if self.chip is not None:
+            return str(self.store.export_path(self.chip))
         return str(self.store.path(self.current))
+
+    def brief(self) -> str:
+        """The brief to show: the level's, or a few lines on the exported chip."""
+        if self.chip is None:
+            return self.current.brief.read_text()
+        if self._chip_brief is None or self._chip_brief[0] != self.chip:
+            self._chip_brief = (self.chip, self._describe_chip(self.chip))
+        return self._chip_brief[1]
+
+    def _describe_chip(self, name: str) -> str:
+        # Only the other chips' files change who uses this one, and they can't change
+        # while it is open, so this is worked out once per opening (it parses them all).
+        users = self.store.users_of(name)
+        used = f"Used by {', '.join(users)}." if users else "No chip uses it yet."
+        return (
+            f"# {name}\n\n"
+            f"One of your chips. Every level may use it as a part: `{name}(...)`.\n\n"
+            f"Ctrl+S saves it to {name}.hdl in your exports folder, and the levels that "
+            "use it build with the new version.\n\n"
+            f"**{used}**\n\n"
+            "**Tests:** your chips have none of their own. Use it in a level and run "
+            "that level's tests."
+        )
 
     # ---- building and testing ----------------------------------------------
 
     def library(self, text: str | None = None) -> ChipLibrary:
+        if self.chip is not None:
+            return self.store.export_library(self.chip, text)
         level = self.current
         return self.store.library(level, text if text is not None else self.store.load(level))
 
     def program(self) -> list[int] | None:
         """The current level's demo program, which its clock panel runs, if it has one."""
-        return level_program(self.current)
+        return None if self.chip is not None else level_program(self.current)
 
     def loader(self) -> Loader:
-        """Loader for the circuit view: the current level as last saved (or its stub)."""
+        """Loader for the circuit view: the editor's chip as last saved (or the level's stub)."""
 
         def load() -> tuple[str, ChipLibrary]:
-            return self.current.name, self.library()
+            return self.title, self.library()
 
         return load
 

@@ -293,11 +293,11 @@ class ViewerApp:
                 ed.handle(ev)
                 return True
             return False
-        if ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONUP) and ed._dragging:
+        if ev.type in (pygame.MOUSEMOTION, pygame.MOUSEBUTTONUP) and ed.dragging:
             ed.handle(ev)
             return True
         if ev.type == pygame.MOUSEWHEEL and ed.rect.collidepoint(self.mouse):
-            ed.scroll(-ev.y * 3)
+            ed.wheel(ev.x, ev.y)
             return True
         if ev.type == pygame.MOUSEMOTION and pos is not None and ed.rect.collidepoint(pos):
             self.mouse = pos
