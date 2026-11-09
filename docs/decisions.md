@@ -852,3 +852,17 @@ Ambiguous spec points and the option chosen. Newest last.
 - Reporting every bus problem: one off-by-one in the timing generator would produce thousands of lines.
 - Leaving `din` undefined when nobody sends: a CPU that reads the bus at the wrong period would see `x` instead of a wrong value. That is more honest, but it doesn't match the OR convention a Computer level will use.
 **Consequences:** with memories attached, a cycle costs one more evaluation (the runner evaluates before the memories read the bus). The CPU level's tests are written in clock periods, 8 per instruction, and need the 64-clock reset. The developer tests use a pass-through `Bus` chip to drive the protocol by hand.
+
+## 2026-11-09 — The Timing level, and CM-RAM at A3 corrected
+**Context:** this is the first CPU level. "The CPU has the 4004's own pins" left two timing details to be checked against Intel's diagrams: SYNC during X3, and the CM-RAM lines at A3. The text of the MCS-4 manual didn't settle them, but its figures do. Figure 2 (Basic Instruction Cycle) and Figure 4 (Operation of the Command Control Lines) are images in the scanned manual, read here from the page images.
+**Decision:**
+- **SYNC is active during X3, the period before A1** (Figure 2), as decided.
+- **Correction: the CM-RAM line DCL selected is active at A3 too, together with CM-ROM** (Figure 4: CM-ROM and the selected CM-RAM line pulse at every A3, at X2 of SRC and at M2 of an I/O or RAM instruction). The earlier entry said the CM-RAM lines are 0 at A3. The CPU level follows the figure. The runner's 4002s don't read A3, so neither the test memories nor their tests change.
+- **`CHIP Timing { IN reset; OUT period[3], sync; }`** in a new group `05_cpu`, shown as "CPU", between Memory and Computer. `period` is 0 (A1) to 7 (X3) and steps once per clock cycle. A `reset` of 1 at a tick makes the next period A1. `sync` is `period == 7`.
+- **`period` is a 3-bit number, not 8 one-hot lines.** The CPU decodes it with DMux8Way where it needs single periods. Most of the CPU needs only a few periods, and a number is easier to read on the canvas.
+- **Parts:** Nand, Not, And, Mux, Mux4, Inc4, Bit, Register4. The reference is a Register4 that loads itself plus one (Inc4), a Mux4 that picks 0 on reset, and two Ands for `sync`. Bits with half adders also work.
+- **Test (352 checks):** one cycle before any reset (`*`), a reset and 20 cycles (two and a half wraps), a reset at X2, a reset held for three cycles, a reset at X3, then 48 random cycles with seed 4004, from a Python model. Each cycle is checked after its tick (still the old period) and after its tock. These wrong chips fail it: `sync` at A1, `sync` at X2, a reset that lands on A2, and a reset that is ignored. A 4-bit count that never drops bit 3 passes, rightly: its pins can't be told apart from the 3-bit one.
+**Alternatives:**
+- One-hot periods (`a1`, …, `x3`): eight more pins, and more wiring on a chip the player first meets alone.
+- The memories following `sync` instead of reset: rejected in the bus memories entry.
+**Consequences:** the CPU will use Timing as a part. RAM8 still opens with Register4. The `requires = ["CPU"]` gate comes with the CPU level, as the Data RAM entry says.

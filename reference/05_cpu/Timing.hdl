@@ -1,0 +1,13 @@
+// Timing: Counts the 8 clock periods of a 4004 instruction cycle, A1 to X3, from reset.
+CHIP Timing {
+    IN reset;
+    OUT period[3], sync;
+    PARTS:
+    // The count steps every cycle and wraps from 7 to 0: bit 3 of the sum is dropped.
+    Register4(in[0..2]=next[0..2], in[3]=false, load=true, out=count, out[0..2]=period);
+    Inc4(in=count, out=up);
+    Mux4(a=up, b=false, sel=reset, out=next);
+    // sync marks X3, the last period, so the chips on the bus know A1 comes next.
+    And(a=count[0], b=count[1], out=low);
+    And(a=low, b=count[2], out=sync);
+}

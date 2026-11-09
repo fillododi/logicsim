@@ -222,6 +222,13 @@ name = "PC"
 group = "04_seq"
 parts = ["Nand", "Not", "And", "Or", "Xor", "Mux", "Mux12", "DMux4Way", "Mux4Way12", "Inc12", "Register12", "Bit"]
 
+# The CPU: the Intel 4004 with its own pins. Each instruction cycle is 8 clock periods,
+# A1 A2 A3 (address out), M1 M2 (instruction in), X1 X2 X3 (execute).
+[[level]]
+name = "Timing"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Mux", "Mux4", "Inc4", "Bit", "Register4"]
+
 # The computer around the CPU, which reaches its data memory through RAM pins.
 # Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address

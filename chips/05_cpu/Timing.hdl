@@ -1,0 +1,7 @@
+// Timing: Counts the 8 clock periods of a 4004 instruction cycle, A1 to X3, from reset.
+// You may use: Nand, Not, And, Mux, Mux4, Inc4, Bit, Register4
+CHIP Timing {
+    IN reset;
+    OUT period[3], sync;
+    PARTS:
+}

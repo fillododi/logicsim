@@ -381,13 +381,14 @@ def test_game_events_play_their_sounds(tmp_path: Path) -> None:
     app.tour.skip()  # its bubble would sit over the canvas
     app.save()  # BUF builds: no error sound
     assert "error" not in app.sounds.played
+    app.render(pygame.Surface(app.size))  # the skipped tour's bubble goes with this frame
+    assert app.bubble is None
     snap = app.session.snapshot
     assert snap is not None
     b = snap.layout.boxes[("in", "in")]
     pos = app.screen_of((b.x + b.w / 2, b.y + b.h / 2))
-    click(app, pos)  # the first click on the circuit only leaves the editor
     assert "toggle" not in app.sounds.played
-    click(app, pos)
+    click(app, pos)  # toggles the input, even with the editor focused
     assert app.sounds.played[-1] == "toggle"
     app.run_tests()  # BUF is a buffer, not a Not
     assert app.sounds.played[-1] == "fail"
