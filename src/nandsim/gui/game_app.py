@@ -839,9 +839,9 @@ class GameApp(ViewerApp):
         The list gets the room that the notice, "Your chips" and the brief below it don't
         need, in whole rows (at least `LIST_MIN_ROWS`, and `LIST_MIN_SHARE` of the
         sidebar's height), and scrolls past that, so the brief is shown whole whenever the
-        window allows, and a long brief can't squeeze the list down to a few rows. When the row to show changes
-        (the current level, or a level a tour bubble points at), the list scrolls to it;
-        otherwise the player's own scrolling stays.
+        window allows, and a long brief can't squeeze the list down to a few rows. When
+        the row to show changes (the current level, or a level a tour bubble points at),
+        the list scrolls to it; otherwise the player's own scrolling stays.
         """
         self._sync_expanded()
         font = self.fonts.get(14)
