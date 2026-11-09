@@ -314,3 +314,66 @@ Almost all of this milestone is level data rather than code: 10 stubs, briefs, r
 The real 4004 runs about 92.5k instruction cycles per second. The CPU will be several times DataRAM's size in its datapath alone, so DataRAM's 557 cycles/s is the number to watch. The builtins planned for RAMBank and the ALU, each with its equivalence test, are the likely next step for speed.
 
 **Next:** milestone 8, the Intel 4004. It starts with the `.tst` command that attaches a program memory, held by the runner, to the CPU's ROM pins, since the ROM levels now come in milestone 9. Then the instruction decoder and the two-cycle instructions (`JCN FIM JUN JMS ISZ`, and `FIN`), from the parts already built: ALU, IndexRegs, PC and DataRAM. The goal is a hand-assembled BCD addition checked in RAM. The journal must report the CPU's simulated clock against 92.5k cycles/s.
+
+## Milestone 8 — CPU: the Intel 4004 (2026-11-09)
+
+**Built:** the Intel 4004, on its own 16 pins, in a new *CPU (4004)* group of 10 levels, and the memories around it in `.tst` files.
+- **The CPU on the 4004's pins:** `IN din[4], test, reset; OUT dout[4], drive, sync, cmrom, cmram[4]`. It is the multiplexed bus split by direction, with 8 clock periods per instruction cycle (A1 A2 A3 M1 M2 X1 X2 X3), and 16 for `JCN FIM JUN JMS ISZ` and `FIN`. All 46 instructions run with the 4004's encodings (#56, #62).
+- **Ten levels up to it:**
+  - **First, Timing, Cond, CmLines and InstrReg:** the 8 periods, JCN's condition, DCL's CM-RAM lines, and the instruction from the bus (#58–#60).
+  - **Then five units:** Sequencer, Accumulator, Registers, Jumps, BusOut. Each decodes OPR and OPA itself.
+  - **Last, the CPU:** 16 parts that give each unit its moment (#62).
+- **Memories in tests:** `attach mcs4` puts sixteen 4001 ROMs and eight banks of 4002 RAMs, with their I/O ports, on a chip's bus pins, played by the runner (#55, #57). `.tst` gained `rom`, `set romport`, `expect ram`, `expect ramstatus`, `expect romport`, `expect ramport` and `cycles <n>`. A CPU that breaks the bus protocol fails at the period where it happens.
+- **An instruction-level 4004 model and assembler** in `tools/`, checked against Intel's *MCS-4* manual. It generates the CPU's tests, and those of the five units (#61).
+- **The CPU test:** one program that runs all 46 instructions, then Intel's own 16-digit decimal addition from the manual (section IV B), checked in RAM and on the ports. A test now fails if the program stops using any of the 46 (#66).
+- **Playing it:** the CPU level's clock panel runs the player's CPU on the MCS-4 memories with a demo, a decimal counter in RAM, and shows the period, the counter and the ports (#63).
+- **The computer's chips get their own groups,** starting with *RAM (4002)*. It holds the five RAM levels, which moved after the CPU and open once it is solved (#54, #65).
+- **Around the game:**
+  - The tour now tells the 4004's story, with one bubble opening each group, and the briefs say where each chip goes in the CPU (#65).
+  - The sidebar sizes itself to the window, exported chips open in the editor, and the editor scrolls sideways (#64).
+  - A background soundtrack plays from four supplied tracks (#67).
+
+**Problems and how they were solved:**
+- *What "compatible at the pins" means in a logic simulator.* The real 4004 has a two-way bus and two-phase clocks. The CPU splits the bus into `din`, `dout` and `drive` in positive logic, with one simulated clock cycle per 4004 clock period (#56). Intel's figures, read from the scanned manual's page images, settled what the text didn't: SYNC during X3, and the CM-RAM line active at A3 with CM-ROM. The latter corrected an earlier decision (#58).
+- *Tests that need a 4004 to write.* Hand-written expected values wouldn't scale to 46 instructions. A Python model, kept outside the game, computes them, and refuses to guess where the hardware wouldn't define a value: RAM never written, missing SRC, undefined opcodes.
+  - Intel's decimal routine is assembled from its source. The manual's octal column disagrees with its own source (`JUN NEXT` printed as 0310).
+  - The model also confirmed, from the manual itself, the ALU semantics that milestone 6 had taken from pyntel4004.
+- *Reset and the index registers.* The 4004 clears its registers over 8 instruction cycles of RESET, sweeping them with its refresh counter. In a simulator where every DFF powers up undefined, no logic can derive a defined sweep from all-undefined state and a constant input. The CPU first shipped with undefined registers after reset. The user then chose to change the milestone 7 level: IndexRegs got a `reset` pin. Players with 0.7.0 saves were told how to update theirs.
+- *One CPU level was too big.* The first reference was about 110 parts. The user chose a split into functional units over a single Decoder level or a Datapath/Control pair. Each unit decodes the instruction itself, so its brief is about the 4004's instructions, not about control lines invented for one design. The CPU itself is now 16 parts, mostly timing.
+- *A test that claimed more than it checked.* The CPU test said "all 46 instructions", but never ran `RD1` or `RD2`, and cleared what `RD3` read before checking it. This was found while checking this milestone. The program now reads all three status characters back into RAM, and a guard test fails if it ever drops a mnemonic again. Run against the old generator, the guard reports exactly `RD1` and `RD2` (#66).
+- *Wrong CPUs that pass.* As in earlier milestones, each test was run against wrong chips. For the CPU there were ten, including:
+  - the PC stepping at A2;
+  - SRC's halves swapped;
+  - FIN fetching from the PC;
+  - no CM lines at M2;
+  - `sync` at X2;
+  - ISZ jumping on zero.
+
+  Each unit's test has its own list in `docs/decisions.md`.
+
+**Learned:**
+- The manual is the spec, and its figures carry facts that its prose leaves out. Read the page images, not a summary.
+- A model that refuses to guess is worth more than one that always answers. Every refusal marks a value a test must not depend on.
+- Check a "covers everything" claim mechanically. A count of mnemonics would have caught `RD1`/`RD2` on day one.
+- Split a big level where the domain splits it. Units named after what the 4004 does gave briefs a player can follow, at the cost of a few repeated DMux8Ways.
+- Some hardware behaviour can't be modelled as the chip does it: a power-on sweep from unknown state is one. Say so, and let the user choose the trade-off.
+
+**Numbers:**
+
+| Measure | Value | How measured |
+|---|---|---|
+| Tests | 823 (+159 since 0.7.0) | `uv run pytest --co -q` |
+| Levels | 55/55 pass against their references (10 new in CPU (4004); the CPU group's `.tst` files hold 13,013 checks, 131 of them the CPU's own over 7,776 clocks) | `uv run nandsim test --impl reference chips/` |
+| Reference size (primitives + DFFs, levels deep) | Timing 92 + 4 (15); Cond 27 (14); CmLines 15 (7); InstrReg 172 + 16 (14); Sequencer 110 + 1 (27); Accumulator 1,672 + 9 (61); Registers 1,431 + 64 (51); Jumps 1,900 + 50 (75); BusOut 482 (28); **CPU 5,908 + 144 DFFs, 84 levels** | `elaborate()` on each reference: `gate_count` less DFFs, DFF count, `len(Netlist.levels)` |
+| CPU build | 69 ms | `elaborate()` of the reference CPU in a fresh process, timed once |
+| **CPU clock speed, in the game** | **2,236 clocks/s = 279 instruction cycles/s, 1/331 of the real 4004's 92.5k** (740 kHz, 8 clocks per instruction cycle) | `ChipSession.step()` with the MCS-4 memories attached, running the demo program, as the clock panel does: 3 s loop after 64 reset clocks |
+| CPU clock speed, raw | 1,473 cycles/s with every input random each cycle; units: Timing 9,330, InstrReg 9,408, Registers 2,506, Accumulator 2,196, Jumps 1,678 | `Simulator.tick()` + `tock()` for 1.5 s, inputs set each cycle, seed 4004, as in milestone 7 |
+| CPU test run | 7,776 clocks in 3.8 s, including Python startup and elaboration (about 2,070 clocks/s) | `nandsim test --impl reference chips/05_cpu/CPU.tst`, wall time |
+| Source LOC | 7,929 (gui 5,250, netlist 1,027, testing 949, hdl 372, sim 227, top level 104), +955 since 0.7.0 (testing +525 for the memories, gui +426) | non-blank lines of `src/**/*.py` at HEAD and at v0.7.0, same script |
+| Test LOC | 5,503 (+1,017) | non-blank lines of `tests/**/*.py`, same script |
+| Tools LOC | 1,361: model4004 348, gen_cpu_tst 418, gen_cpu_units 375, gen_ram_tst 220 (only the last existed at 0.7.0) | non-blank lines of `tools/*.py` |
+| Work since 0.7.0 | 14 merged PRs (#54–#67), 41 commits | `gh pr list --state merged` and `git log --no-merges v0.7.0..HEAD` |
+
+At 279 instruction cycles per second, the simulated 4004 runs about 331 times slower than the real one. Intel's 16-digit addition, 167 instruction cycles, takes 0.6 s here and 1.8 ms on the chip. The slowest unit is Jumps, which holds the PC, 75 levels deep. The milestone 7 plan still stands: a builtin PC and ALU, each with its equivalence test, are the first candidates if milestone 9's programs need more speed.
+
+**Next:** milestone 9, the Busicom 141-PF. It starts with the decision CLAUDE.md asks for: keyboard, printer, which program, and how many 4003s. The ROM levels follow in their own *ROM (4001)* group (a 4096 × 8 program ROM in the 4001 layout, with a write port), then the 4001's and 4002's bus logic, so the player's own memories plug into the CPU's pins, then the in-game ROM editor.
