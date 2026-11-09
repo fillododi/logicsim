@@ -10,5 +10,5 @@ the project owner; artist and title are taken from the file names.
 | `atlasaudio-video-game-617620.mp3` | AtlasAudio | Video Game |
 | `mondamusic-retro-arcade-game-music-512837.mp3` | MondaMusic | Retro Arcade Game Music |
 
-Before a release, confirm that each track's license allows shipping it inside the
-game's wheel, and record its source and license in this table.
+The project owner confirmed on 2026-11-09 that each track's license allows shipping it
+inside the game's wheel. Before adding a track, confirm the same for it.
