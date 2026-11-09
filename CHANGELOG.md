@@ -18,10 +18,13 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 - **InstrReg,** the CPU's instruction register. It takes each instruction from the bus one
   digit at a time and keeps it for the whole instruction cycle, along with the second
   byte of the 4004's two-word instructions.
-- **The CPU: the Intel 4004.** Build the whole 4004 from your Timing, InstrReg, Cond,
-  CmLines, PC, index registers and ALU, on the real chip's 16 pins and its 4-bit bus. Its
-  test runs a program through all 46 instructions, then Intel's own 16-digit decimal
-  addition routine from the MCS-4 manual.
+- **The CPU: the Intel 4004.** Build the whole 4004 on the real chip's 16 pins and its
+  4-bit bus. Five levels lead up to it, each one job of the chip: Sequencer (two-cycle
+  instructions), Accumulator (A, the carry and the RAM bank), Registers (the index
+  registers as the instructions use them), Jumps (the PC, calls and returns) and BusOut
+  (what goes on the pins). The CPU then wires them to the 8 clock periods. Its test runs a
+  program through all 46 instructions, then Intel's own 16-digit decimal addition routine
+  from the MCS-4 manual.
 - **`cycles <n>` in `.tst` files** runs n clock cycles at once.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and

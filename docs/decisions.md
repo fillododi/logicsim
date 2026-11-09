@@ -991,3 +991,38 @@ Ambiguous spec points and the option chosen. Newest last.
 **Consequences:**
 - **Saves:** an IndexRegs solved in v0.7.0 no longer has the level's pins. Its tests fail with "must keep the level's pins", and the CPU can't use it until the player adds `reset`. The level stays marked solved, since solved is sticky, and the changelog says what to do.
 - **Earlier entries:** the IndexRegs entry of 2026-11-07 still holds, apart from the pins and the priority.
+
+## 2026-11-09 — The CPU is split into five unit levels
+**Context:** the CPU level's reference was about 110 parts. The user found that too much for one level. Of three splits, they chose functional units over a single Decoder level (leaving the CPU around 75 parts) and over Datapath + Control (two levels of about 50 parts each).
+**Decision:**
+- **Five new levels between InstrReg and the CPU,** each one job of the chip, carved from the reference so nothing about the CPU's behaviour changes:
+  - **`Sequencer { IN opr[4], opa[4], period[3], reset; OUT second, finfetch; }`:** `second` changes at X3 and marks the second cycle of JCN FIM FIN JUN JMS ISZ. `finfetch` is `second` and FIN.
+  - **`Accumulator { IN opr[4], opa[4], reg[4], din[4], write, reset; OUT acc[4], carry, bank[3]; }`:** with `write`, the instruction's effect on A and CY (OPR 8–D, the I/O reads, the accumulator group through the ALU) and DCL's bank.
+  - **`Registers { IN opr[4], opa[4], acc[4], data[8], second, write, readp0, reset; OUT reg[4], pair[8]; }`:**
+    - **Reads:** register OPA and its pair, or pair 0 while `readp0` is 1.
+    - **Writes, with `write`:** XCH, INC and ISZ in a first cycle, FIM and FIN to a pair in a second cycle.
+    - **Contract:** `readp0` and `write` are never 1 together.
+  - **`Jumps { IN opr[4], opa[4], data[8], pair[8], reg[4], acc[4], carry, test, second, step, exec, reset; OUT pc[12]; }`:**
+    - **`step`:** steps the PC.
+    - **`exec`, in a second cycle:** JUN, JMS, and JCN and ISZ when they jump.
+    - **`exec`, in a first cycle:** JIN and BBL.
+    - **Contract:** `step` and `exec` are never 1 together.
+  - **`BusOut { IN period[3], pc[12], pair[8], acc[4], opr[4], opa[4], second, finfetch, bank[3]; OUT dout[4], drive, cmrom, cmram[4]; }`:** everything on the pins, combinational.
+- **The units take OPR and OPA and decode what they need themselves,** rather than taking control lines from a shared decoder. Each brief is then about the instructions, which players know from the 4004, not about wires invented for this design. The cost is some repeated decoding: a few DMux8Ways.
+- **The CPU is 16 parts:** Timing, a DMux8Way of the periods, InstrReg, the five units, and a few gates that give each unit its moment:
+  - **Registers:** write at X2, and `readp0` at A1–A3 of FIN's fetch;
+  - **Accumulator:** write at X2 of a first cycle;
+  - **Jumps:** step after A3 outside FIN's fetch, and exec at X3.
+
+  Its parts are Nand, Not, And, Or, Mux, Mux4, DMux8Way, Timing, InstrReg and the five units.
+- **Each unit's test is generated** by `tools/gen_cpu_units.py` from a small model of the unit (`tests/test_tools.py` keeps the files in step):
+  - Sequencer, Accumulator, Registers and Jumps are sequential: before any reset, then a reset, then targeted and random cycles, checked after each tick and tock.
+  - BusOut is a table: every period against ten kinds of instruction, then 400 random rows.
+  - The Accumulator's arithmetic comes from the 4004 model.
+
+  The checks: Sequencer 2,440, Accumulator 3,354, Registers 2,004, Jumps 836, BusOut 1,924. Nineteen wrong units each fail their test, among them `second` changing at X2, DCL ignored, ADM as SUB, FIM writing in its first cycle, `readp0` ignored, JIN into page 0, JMS loading instead of pushing, SRC's halves swapped and `dout` not 0 when idle.
+- **The CPU's test is unchanged** (128 checks), and the CPU built from the units passes it.
+**Alternatives:**
+- A shared Decoder level feeding control lines to the units: one place for decoding, but the units' pins would be invented control lines, and Decoder would have around 20 outputs.
+- Splitting further, for example the ALU's operand choice out of Accumulator: the units are 20–30 parts, about the size of the larger earlier levels.
+**Consequences:** the CPU group has 10 levels. A player's CPU is now mostly timing: which period each unit acts in. The size and speed figures in the CPU level entry still hold for the whole chip: the units add no gates, only boundaries.
