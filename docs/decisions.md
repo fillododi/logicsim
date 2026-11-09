@@ -866,3 +866,18 @@ Ambiguous spec points and the option chosen. Newest last.
 - One-hot periods (`a1`, …, `x3`): eight more pins, and more wiring on a chip the player first meets alone.
 - The memories following `sync` instead of reset: rejected in the bus memories entry.
 **Consequences:** the CPU will use Timing as a part. RAM8 still opens with Register4. The `requires = ["CPU"]` gate comes with the CPU level, as the Data RAM entry says.
+
+## 2026-11-09 — The CPU levels before the CPU, and the Cond and CmLines levels
+**Context:** the analysis of how to split the 4004 into levels proposed three small levels before the CPU (Cond, CmLines, InstrReg). A Decoder level waits until a reference CPU shows which control lines a natural design uses, since a Decoder's pins would fix the player's datapath before any CPU exists. This entry records that plan and the first two of those levels.
+**Decision:**
+- **The CPU group, in order:** Timing, Cond, CmLines, InstrReg, then the CPU. Each level before the CPU follows one of the 4004's own fields or signals rather than control lines of my choosing. A Decoder level is added only if the reference CPU turns out too large for one step, with pins taken from its control lines.
+- **`CHIP Cond { IN cond[4], acc[4], carry, test; OUT jump; }`:** JCN's condition code as encoded, C1 C2 C3 C4 from the high bit (`cond[3]` is C1). `jump = C1 XOR ((C2 and acc = 0) or (C3 and carry = 1) or (C4 and test = 0))`, the equation in Intel's MCS-4 manual. So `JCN 0` never jumps and `JCN 8` always does. `test` is the TEST pin in positive logic. Parts: Nand, Not, And, Or, Xor, Or4Way. The test is exhaustive (1,024 rows).
+- **`CHIP CmLines { IN bank[3], on; OUT cmram[4]; }`:** DCL's bank on the CM-RAM lines, from the manual's DCL table. Bank 0 raises `cmram[0]` alone, and banks 1–7 put their number on `cmram[1..3]`. `on` gates every line, because the CPU raises them only at A3, at M2 of I/O instructions and at X2 of SRC. Parts: Nand, Not, And, Or. The test is exhaustive (16 rows).
+- **Wrong chips that fail the tests:**
+  - Cond: the condition bits reversed, TEST active high, a jump on a nonzero accumulator, the tests combined with And, C1 ignored.
+  - CmLines: CM-RAM0 ignoring `on`, one-hot bank lines, lines shifted by one.
+**Alternatives:**
+- Decoder and datapath levels now: more guidance, but they freeze an interface before the CPU exists.
+- The CPU right after Timing: too big a step, given 46 instructions and a multiplexed bus.
+- A `cmrom` output on CmLines: it would just repeat `on`.
+**Consequences:** InstrReg is the next level, then a Python 4004 model in `tools/` that generates the CPU's tests, then the CPU with the `requires` gate on RAM8. Measured just now on the reference parts, the CPU should run at roughly 500–1,000 clocks/s (60–125 instruction cycles/s). The PC is the slowest part (1.7k cycles/s, 75 levels deep) and the first candidate for a builtin if tests get too slow.
