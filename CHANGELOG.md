@@ -12,6 +12,9 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   8 clock periods: it sends an address, receives an instruction, then executes it. Timing
   counts those periods from reset and raises `sync` on the last one, so the memory chips
   know a new cycle starts.
+- **Cond and CmLines,** two more CPU levels. Cond answers whether the 4004's conditional
+  jump `JCN` jumps, from its condition code, the accumulator, the carry and the TEST pin.
+  CmLines turns the RAM bank chosen by `DCL` into the four CM-RAM lines that select it.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
   their I/O ports. Programs go in inline or from a `.rom` file (one byte per line, in

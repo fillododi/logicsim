@@ -1,0 +1,15 @@
+// CmLines: Which CM-RAM lines pick the RAM bank DCL chose.
+CHIP CmLines {
+    IN bank[3], on;
+    OUT cmram[4];
+    PARTS:
+    // Bank 0 has a line of its own.
+    Or(a=bank[0], b=bank[1], out=low);
+    Or(a=low, b=bank[2], out=any);
+    Not(in=any, out=zero);
+    And(a=on, b=zero, out=cmram[0]);
+    // Banks 1-7 are a number on CM-RAM1..3.
+    And(a=on, b=bank[0], out=cmram[1]);
+    And(a=on, b=bank[1], out=cmram[2]);
+    And(a=on, b=bank[2], out=cmram[3]);
+}
