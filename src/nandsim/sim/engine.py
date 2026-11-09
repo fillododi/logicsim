@@ -122,6 +122,11 @@ class Simulator:
         self.unsettled = np.concatenate(unsettled) if unsettled else np.zeros(0, np.int64)
         self._stale = False
 
+    def refresh(self) -> None:
+        """Evaluate only if an input was set since the last evaluation."""
+        if self._stale:
+            self.eval()
+
     def tick(self) -> None:
         """First half of a clock cycle: evaluate, every DFF latches its input, clock rises."""
         if self._stale:

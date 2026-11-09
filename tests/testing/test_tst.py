@@ -85,7 +85,9 @@ def test_value_bases(text: str, width: int, bits: int) -> None:
         ("chip X\ntick 2\n", "X.tst:2:1: error: usage: tick"),
         ("chip X\ntock now\n", "X.tst:2:1: error: usage: tock"),
         ("chip X\nfrob\n", "X.tst:2:1: error: unknown command 'frob' (expected chip, table, set, "
-         "eval, tick, tock, expect, attach, rom, ram, ramstatus)"),
+         "eval, tick, tock, cycles, expect, attach, rom, ram, ramstatus)"),
+        ("chip X\ncycles\n", "X.tst:2:1: error: usage: cycles <n>"),
+        ("chip X\ncycles 0\n", "X.tst:2:8: error: cycles needs a count of 1 or more"),
         ("// nothing\n", "X.tst:1:1: error: empty test: it must start with 'chip <Name>'"),
     ],
 )  # fmt: skip
@@ -310,3 +312,8 @@ end
         "Bit.tst:7:1: out: expected 0, got 1 (cycle 1)",
         "Bit.tst:9:11: out: expected 0, got 1 (inputs in=0 load=1, cycle 1)",
     ]
+
+
+def test_cycles_is_ticks_and_tocks() -> None:
+    s = parse_tst("chip X\ncycles 3\n", "X.tst")
+    assert [type(st) for st in s.steps] == [TickStep, TockStep] * 3

@@ -248,15 +248,54 @@ name = "InstrReg"
 group = "05_cpu"
 parts = ["Nand", "Not", "And", "Mux4", "DMux8Way", "Register4", "Register8"]
 
-# The computer around the CPU, which reaches its data memory through RAM pins.
+# `second` is 1 in the second cycle of JCN FIM FIN JUN JMS ISZ; `finfetch` in FIN's.
+[[level]]
+name = "Sequencer"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux", "DMux8Way", "Bit"]
+
+# A, CY and DCL's bank: what each instruction does to them when `write` is 1.
+[[level]]
+name = "Accumulator"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux", "Mux4", "DMux8Way", "Bit", "Register4", "ALU"]
+
+# The index registers as the instructions use them: XCH, INC, ISZ, FIM, FIN.
+[[level]]
+name = "Registers"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux4", "DMux8Way", "Inc4", "IndexRegs"]
+
+# The PC as the jumps use it: JCN, ISZ, JIN, JUN, JMS and BBL.
+[[level]]
+name = "Jumps"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux12", "DMux8Way", "Or4Way", "Cond", "PC"]
+
+# Everything the 4004 sends: the address, SRC's pair, A for writes, and CM lines.
+[[level]]
+name = "BusOut"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux4", "Mux12", "Mux4Way4", "DMux8Way", "CmLines"]
+
+# The 4004 itself, on its 16 pins.
+[[level]]
+name = "CPU"
+group = "05_cpu"
+parts = [
+    "Nand", "Not", "And", "Or", "Mux", "Mux4", "DMux8Way", "Timing", "InstrReg", "Sequencer", "Accumulator", "Registers", "Jumps", "BusOut",
+]
+
+# The computer around the CPU, which opens once the CPU is solved (`requires`).
 # Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address
 # picks the chip, the register and the main character, and DCL picks the bank.
-# The CPU level goes between PC and RAM8, and the program ROM after DataRAM.
+# The program ROM comes after DataRAM.
 [[level]]
 name = "RAM8"
 group = "06_computer"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "Register4"]
+requires = ["CPU"]
 
 [[level]]
 name = "RAM64"

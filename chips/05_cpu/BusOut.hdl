@@ -1,0 +1,7 @@
+// BusOut: What the 4004 puts on the bus and the command lines, period by period.
+// You may use: Nand, Not, And, Or, Mux4, Mux12, Mux4Way4, DMux8Way, CmLines
+CHIP BusOut {
+    IN period[3], pc[12], pair[8], acc[4], opr[4], opa[4], second, finfetch, bank[3];
+    OUT dout[4], drive, cmrom, cmram[4];
+    PARTS:
+}

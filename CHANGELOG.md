@@ -18,6 +18,14 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 - **InstrReg,** the CPU's instruction register. It takes each instruction from the bus one
   digit at a time and keeps it for the whole instruction cycle, along with the second
   byte of the 4004's two-word instructions.
+- **The CPU: the Intel 4004.** Build the whole 4004 on the real chip's 16 pins and its
+  4-bit bus. Five levels lead up to it, each one job of the chip: Sequencer (two-cycle
+  instructions), Accumulator (A, the carry and the RAM bank), Registers (the index
+  registers as the instructions use them), Jumps (the PC, calls and returns) and BusOut
+  (what goes on the pins). The CPU then wires them to the 8 clock periods. Its test runs a
+  program through all 46 instructions, then Intel's own 16-digit decimal addition routine
+  from the MCS-4 manual.
+- **`cycles <n>` in `.tst` files** runs n clock cycles at once.
 - **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
   4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
   their I/O ports. Programs go in inline or from a `.rom` file (one byte per line, in
@@ -27,9 +35,14 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ### Changed
 
+- **IndexRegs has a `reset` pin.** Reset sets all 16 registers to 0, ahead of `load` and
+  `loadpair`, as the 4004's RESET does, and the CPU relies on it. An IndexRegs you solved
+  in 0.7.0 no longer fits the level: add `reset` to its pins and make it clear every
+  register, then run its tests again.
 - **The RAM levels move to a new *Computer* group.** RAM8, RAM64, RAM4002, RAMBank and
   DataRAM are the memory the CPU will be wired to, so they now come after it in the level
-  list instead of in Memory. Your solutions and progress are kept.
+  list instead of in Memory, and open once the CPU is solved. Your solutions and progress
+  are kept, but RAM levels you already solved stay locked until you solve the CPU.
 
 ## [0.7.0] — 2026-11-08
 

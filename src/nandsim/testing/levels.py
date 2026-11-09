@@ -25,6 +25,8 @@ class Level:
     group: str
     parts: tuple[str, ...]
     root: Path
+    # Levels that must be solved first besides the parts, to open a group in story order.
+    requires: tuple[str, ...] = ()
 
     def _file(self, folder: str, ext: str) -> Path:
         return self.root / folder / self.group / f"{self.name}{ext}"
@@ -52,7 +54,8 @@ def load_levels(root: Path | None = None) -> list[Level]:
     with open(root / "chips" / "levels.toml", "rb") as f:
         data = tomllib.load(f)
     return [
-        Level(e["name"], e["group"], tuple(e.get("parts", [])), root) for e in data.get("level", [])
+        Level(e["name"], e["group"], tuple(e.get("parts", [])), root, tuple(e.get("requires", [])))
+        for e in data.get("level", [])
     ]
 
 

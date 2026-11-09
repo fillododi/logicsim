@@ -151,3 +151,9 @@ def test_default_groups_are_the_current_one_and_the_next_with_work(tmp_path: Pat
     game.store.mark_solved(lv["Not4"])
     # Buses has nothing left to do, so Arithmetic takes its place: never more than two groups.
     assert game.default_expanded() == {"01_gates", "03_arith"}
+
+
+def test_missing_names_a_required_level(game: GameState) -> None:
+    for name in ("DMux8Way", "Mux8Way4", "Register4"):
+        game.store.mark_solved(LEVELS[name])
+    assert game.missing(LEVELS["RAM8"]) == ["CPU"]

@@ -21,6 +21,7 @@ def test_level_files_and_parts(level: Level) -> None:
         assert path.is_file(), f"missing {path}"
     unlocked = set(FREE_PRIMITIVES) | {lv.name for lv in LEVELS[: LEVELS.index(level)]}
     assert set(level.parts) <= unlocked, f"{level.name} allows parts not unlocked yet"
+    assert set(level.requires) <= unlocked, f"{level.name} requires a level that comes later"
 
 
 @pytest.mark.parametrize("level", LEVELS, ids=lambda lv: lv.name)

@@ -212,3 +212,28 @@ def test_export_needs_a_chip_that_builds(store: SaveStore) -> None:
     loop = NOT_AS_BUF.replace("Not(in=n", "Buf(in=n")  # Buf would contain itself
     with pytest.raises(ValueError, match="^It doesn't build yet: .*Buf"):
         store.prepare_export("Buf", loop)
+
+
+def test_the_computer_group_waits_for_the_cpu(store: SaveStore) -> None:
+    # RAM8's parts are solved early, but `requires` keeps it closed until the CPU is solved.
+    for name in (
+        "Not",
+        "And",
+        "Or",
+        "Mux",
+        "DMux",
+        "DMux4Way",
+        "DMux8Way",
+        "Mux4",
+        "Mux4Way4",
+        "Mux8Way4",
+        "Bit",
+        "Register4",
+        "DFF",
+        "DLatch",
+        "SRLatch",
+    ):
+        store.mark_solved(LEVELS[name])
+    assert not store.is_unlocked(LEVELS["RAM8"])
+    store.mark_solved(LEVELS["CPU"])
+    assert store.is_unlocked(LEVELS["RAM8"])

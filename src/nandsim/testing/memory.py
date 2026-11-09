@@ -195,10 +195,18 @@ class Mcs4:
         return cell_key(self.io_bank, high << 4 | char, False)
 
     def drive_bus(self) -> None:
-        """Put the sender's value on `din`, or 0 when no memory sends, and evaluate."""
+        """Put the sender's value on `din`, or 0 when no memory sends, and evaluate.
+
+        Most periods leave `din` as it was, and then nothing needs evaluating again.
+        """
         s = self.sender()
-        self.sim.set(self.pins["din"], 0 if s is None else s[1])
-        self.sim.eval()
+        value = 0 if s is None else s[1]
+        din = self.pins["din"]
+        bits = self.sim.get_bits(din)
+        same = all(b is None for b in bits) if value is None else self.sim.get(din) == value
+        if not same:
+            self.sim.set(din, value)
+        self.sim.refresh()
 
     # ---- the clock ------------------------------------------------------
 

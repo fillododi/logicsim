@@ -1,0 +1,7 @@
+// Registers: The 16 index registers, read and written as the instruction says.
+// You may use: Nand, Not, And, Or, Mux4, DMux8Way, Inc4, IndexRegs
+CHIP Registers {
+    IN opr[4], opa[4], acc[4], data[8], second, write, readp0, reset;
+    OUT reg[4], pair[8];
+    PARTS:
+}

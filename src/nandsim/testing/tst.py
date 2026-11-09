@@ -321,10 +321,16 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
         elif cmd == "tock":
             _arity(head, args, 0, "tock")
             steps.append(TockStep(head.pos))
+        elif cmd == "cycles":
+            _arity(head, args, 1, "cycles <n>")
+            n = parse_value(args[0], False).number
+            if n is None or n < 1:
+                raise HdlError("cycles needs a count of 1 or more", args[0].pos)
+            steps.extend([TickStep(head.pos), TockStep(head.pos)] * n)
         else:
             raise HdlError(
                 f"unknown command '{cmd}' (expected chip, table, set, eval, tick, tock, "
-                "expect, attach, rom, ram, ramstatus)",
+                "cycles, expect, attach, rom, ram, ramstatus)",
                 head.pos,
             )
 

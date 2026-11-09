@@ -1,0 +1,28 @@
+// Registers: The 16 index registers, read and written as the instruction says.
+CHIP Registers {
+    IN opr[4], opa[4], acc[4], data[8], second, write, readp0, reset;
+    OUT reg[4], pair[8];
+    PARTS:
+    Not(in=opr[3], out=lowopr);
+    DMux8Way(in=lowopr, sel=opr[0..2], c=is2, d=is3, g=isinc, h=isisz);
+    DMux8Way(in=opr[3], sel=opr[0..2], d=isxch);
+    Not(in=opa[0], out=opaeven);
+    And(a=is2, b=opaeven, out=isfim);
+    And(a=is3, b=opaeven, out=isfin);
+    // OPA names the register or pair, except when FIN's second cycle reads P0.
+    Mux4(a=opa, b=false, sel=readp0, out=addr);
+    // XCH writes A, INC and ISZ the register plus one; FIM and FIN write a pair from data.
+    Inc4(in=r, out=plus);
+    Mux4(a=plus, b=acc, sel=isxch, out=new);
+    Mux4(a=new, b=data[0..3], sel=second, out=lowin);
+    Or(a=isxch, b=isinc, out=w1);
+    Or(a=w1, b=isisz, out=writesreg);
+    Not(in=second, out=first);
+    And(a=write, b=first, out=writefirst);
+    And(a=writefirst, b=writesreg, out=regload);
+    Or(a=isfim, b=isfin, out=writespair);
+    And(a=write, b=second, out=writesecond);
+    And(a=writesecond, b=writespair, out=pairload);
+    IndexRegs(in[0..3]=lowin, in[4..7]=data[4..7], addr=addr, load=regload, loadpair=pairload,
+              reset=reset, out=r, out=reg, pairout=pair);
+}

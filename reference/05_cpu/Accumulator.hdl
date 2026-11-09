@@ -1,0 +1,44 @@
+// Accumulator: A, CY and the DCL bank, changed by the instruction when write is 1.
+CHIP Accumulator {
+    IN opr[4], opa[4], reg[4], din[4], write, reset;
+    OUT acc[4], carry, bank[3];
+    PARTS:
+    DMux8Way(in=opr[3], sel=opr[0..2], a=isadd, b=issub, g=isio, h=isacc);
+    DMux8Way(in=opa[3], sel=opa[0..2], a=opa8, d=opa11, f=opa13, g=opa14, h=opa15);
+    // b is a register (OPR 8-B), OPA's data (BBL, LDM) or the bus (I/O reads).
+    Mux4(a=opa, b=din, sel=opr[1], out=bhigh);
+    Mux4(a=reg, b=bhigh, sel=opr[2], out=alub);
+    // op: OPA for 1111 xxxx; else ADD (14) for ADD and ADM, SUB (15) for SUB and SBM, LD (13).
+    And(a=isio, b=opa11, out=isadm);
+    And(a=isio, b=opa8, out=issbm);
+    Or(a=isadd, b=isadm, out=addlike);
+    Or(a=issub, b=issbm, out=sublike);
+    Not(in=addlike, out=op0);
+    Or(a=addlike, b=sublike, out=op1);
+    Mux4(a[0]=op0, a[1]=op1, a[2]=true, a[3]=true, b=opa, sel=isacc, out=aluop);
+    ALU(a=a, b=alub, cin=cy, op=aluop, out=aluout, cout=alucarry);
+    // A and CY change for OPR 8-D, the I/O reads (OPA 8-F), and 1111 0000 to 1111 1100.
+    And(a=opr[2], b=opr[1], out=opr67);
+    Not(in=opr67, out=notef);
+    And(a=opr[3], b=notef, out=group8d);
+    And(a=isio, b=opa[3], out=ioread);
+    Or(a=opa13, b=opa14, out=o1314);
+    Or(a=o1314, b=opa15, out=notalu);
+    Not(in=notalu, out=aluopa);
+    And(a=isacc, b=aluopa, out=accgroup);
+    Or(a=group8d, b=ioread, out=wa1);
+    Or(a=wa1, b=accgroup, out=writesacc);
+    And(a=write, b=writesacc, out=accwrite);
+    Or(a=accwrite, b=reset, out=accload);
+    Mux4(a=aluout, b=false, sel=reset, out=accin);
+    Register4(in=accin, load=accload, out=a, out=acc);
+    Not(in=reset, out=nreset);
+    And(a=alucarry, b=nreset, out=carryin);
+    Bit(in=carryin, load=accload, out=cy, out=carry);
+    // DCL (1111 1101): the bank from A's low three bits, 0 after a reset.
+    And(a=isacc, b=opa13, out=isdcl);
+    And(a=write, b=isdcl, out=dclwrite);
+    Or(a=dclwrite, b=reset, out=bankload);
+    Mux4(a=a, b=false, sel=reset, out=bankin);
+    Register4(in[0..2]=bankin[0..2], in[3]=false, load=bankload, out[0..2]=bank);
+}

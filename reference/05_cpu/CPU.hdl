@@ -1,0 +1,32 @@
+// CPU: The Intel 4004, on its own pins: 8 clock periods per instruction cycle.
+CHIP CPU {
+    IN din[4], test, reset;
+    OUT dout[4], drive, sync, cmrom, cmram[4];
+    PARTS:
+    Timing(reset=reset, period=period, sync=sync);
+    DMux8Way(in=true, sel=period, a=a1, b=a2, c=a3, g=x2, h=x3);
+    InstrReg(din=din, period=period, second=second, opr=opr, opa=opa, data=data);
+    Sequencer(opr=opr, opa=opa, period=period, reset=reset, second=second, finfetch=finfetch);
+    Not(in=second, out=first);
+
+    // FIN's second cycle sends register pair 0 as the address, at A1-A3.
+    Or(a=a1, b=a2, out=a12);
+    Or(a=a12, b=a3, out=early);
+    And(a=finfetch, b=early, out=readp0);
+    Registers(opr=opr, opa=opa, acc=acc, data=data, second=second, write=x2, readp0=readp0,
+              reset=reset, reg=reg, pair=pair);
+
+    // A, CY and DCL change at X2 of a one-cycle instruction.
+    And(a=x2, b=first, out=accwrite);
+    Accumulator(opr=opr, opa=opa, reg=reg, din=din, write=accwrite, reset=reset, acc=acc,
+                carry=carry, bank=bank);
+
+    // The PC steps after A3, except in FIN's second cycle; jumps act at X3.
+    Not(in=finfetch, out=fetchpc);
+    And(a=a3, b=fetchpc, out=step);
+    Jumps(opr=opr, opa=opa, data=data, pair=pair, reg=reg, acc=acc, carry=carry, test=test,
+          second=second, step=step, exec=x3, reset=reset, pc=pc);
+
+    BusOut(period=period, pc=pc, pair=pair, acc=acc, opr=opr, opa=opa, second=second,
+           finfetch=finfetch, bank=bank, dout=dout, drive=drive, cmrom=cmrom, cmram=cmram);
+}

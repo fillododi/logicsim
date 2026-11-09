@@ -1,0 +1,32 @@
+// Jumps: The PC and its stack: steps, jumps, calls and returns.
+CHIP Jumps {
+    IN opr[4], opa[4], data[8], pair[8], reg[4], acc[4], carry, test, second, step, exec, reset;
+    OUT pc[12];
+    PARTS:
+    Not(in=opr[3], out=lowopr);
+    DMux8Way(in=lowopr, sel=opr[0..2], b=isjcn, d=is3, e=isjun, f=isjms, h=isisz);
+    DMux8Way(in=opr[3], sel=opr[0..2], e=isbbl);
+    And(a=is3, b=opa[0], out=isjin);
+    // Targets: JCN and ISZ in the page of the next instruction, JIN there with a pair,
+    // JUN and JMS anywhere.
+    Mux12(a[0..7]=data, a[8..11]=p[8..11], b[0..7]=pair, b[8..11]=p[8..11], sel=isjin,
+          out=near);
+    Or(a=isjun, b=isjms, out=far);
+    Mux12(a=near, b[0..7]=data, b[8..11]=opa, sel=far, out=target);
+    Cond(cond=opa, acc=acc, carry=carry, test=test, jump=condok);
+    Or4Way(in=reg, out=regnonzero);
+    And(a=isjcn, b=condok, out=j1);
+    And(a=isisz, b=regnonzero, out=j2);
+    Or(a=j1, b=j2, out=j12);
+    Or(a=j12, b=isjun, out=jumps2);
+    // Two-cycle jumps act at the end of their second cycle, JIN and BBL in their only one.
+    Not(in=second, out=first);
+    And(a=exec, b=second, out=exec2);
+    And(a=exec, b=first, out=exec1);
+    And(a=exec2, b=jumps2, out=load2);
+    And(a=exec1, b=isjin, out=load1);
+    Or(a=load2, b=load1, out=load);
+    And(a=exec2, b=isjms, out=push);
+    And(a=exec1, b=isbbl, out=pop);
+    PC(in=target, inc=step, load=load, push=push, pop=pop, reset=reset, out=p, out=pc);
+}
