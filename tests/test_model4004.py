@@ -220,3 +220,19 @@ def test_assembler_encodings() -> None:
 def test_assembler_errors(src: str, message: str) -> None:
     with pytest.raises(m4.AsmError, match=message):
         m4.assemble(src)
+
+
+def test_index_registers_are_undefined_after_reset() -> None:
+    m = machine("INC R3\nend: JUN end")
+    with pytest.raises(m4.ModelError, match="R3 is read at 0x001 before anything was written"):
+        m.run()
+    m = machine("XCH R3\nXCH R3\nCLC\nend: JUN end")  # moving an undefined value is fine
+    m.run()
+    m = machine("XCH R3\nIAC\nend: JUN end")  # using it isn't
+    with pytest.raises(m4.ModelError, match="A is used"):
+        m.run()
+
+
+def test_assembler_refuses_overlapping_code() -> None:
+    with pytest.raises(m4.AsmError, match="line 3: 0x001 already holds line 1's code"):
+        m4.assemble("JUN 0x123\norg 1\nNOP")

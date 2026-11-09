@@ -73,6 +73,11 @@ def _size(mnemonic: str, args: list[str]) -> int:
 
 def assemble(text: str) -> list[int]:
     """Assemble 4004 source into a 4 KB ROM image (unused bytes are 0, NOP)."""
+    return assemble_labels(text)[0]
+
+
+def assemble_labels(text: str) -> tuple[list[int], dict[str, int]]:
+    """Assemble 4004 source: the ROM image and the address of each label."""
     lines: list[tuple[int, int, str, list[str]]] = []  # (line number, address, mnemonic, args)
     labels: dict[str, int] = {}
     addr = 0
@@ -94,6 +99,7 @@ def assemble(text: str) -> list[int]:
         lines.append((lineno, addr, mnemonic, args))
         addr += _size(mnemonic, args)
     rom = [0] * ROM_SIZE
+    written: dict[int, int] = {}  # address -> the line that put a byte there
     for lineno, at, mnemonic, args in lines:
         try:
             code = _encode(at, mnemonic, args, labels)
@@ -101,8 +107,12 @@ def assemble(text: str) -> list[int]:
             raise AsmError(f"line {lineno}: {e}") from None
         if at + len(code) > ROM_SIZE:
             raise AsmError(f"line {lineno}: past the end of program memory")
+        for a in range(at, at + len(code)):
+            if a in written:
+                raise AsmError(f"line {lineno}: 0x{a:03X} already holds line {written[a]}'s code")
+            written[a] = lineno
         rom[at : at + len(code)] = code
-    return rom
+    return rom, labels
 
 
 def _page_target(at: int, size: int, target: int) -> int:
@@ -167,9 +177,9 @@ class Mcs4:
     ramport: dict[tuple[int, int], int] = field(default_factory=dict)  # (bank, 4002) WMP
     test: int = 0  # the TEST pin
     # The CPU.
-    acc: int = 0
+    acc: int | None = 0  # None: undefined, as after XCH with an unwritten register
     cy: int = 0
-    regs: list[int] = field(default_factory=lambda: [0] * 16)
+    regs: list[int | None] = field(default_factory=lambda: [None] * 16)
     stack: list[int] = field(default_factory=lambda: [0] * 4)  # the PC is stack[sp]
     sp: int = 0
     bank: int = 0  # DCL's command register
@@ -186,15 +196,32 @@ class Mcs4:
         self.stack[self.sp] = value & 0xFFF
 
     def reset(self) -> None:
-        """RESET: CPU registers, stack, DCL and SRC selections cleared; ports to 0; memory kept."""
+        """RESET: A, CY, the stack, DCL and SRC selections cleared; ports to 0; memory kept.
+
+        The index registers are undefined until written: the CPU level can't clear them
+        (docs/decisions.md, "The CPU level"), so the model refuses to read them before.
+        """
         self.acc, self.cy, self.sp, self.bank, self.cycles = 0, 0, 0, 0, 0
-        self.regs, self.stack = [0] * 16, [0] * 4
+        self.regs, self.stack = [None] * 16, [0] * 4
         self.src_rom, self.src_ram = None, {}
         self.romport_out = dict.fromkeys(range(16), 0)
         self.ramport = {(b, c): 0 for b in range(8) for c in range(4)}
 
+    def _r(self, n: int) -> int:
+        value = self.regs[n]
+        if value is None:
+            raise ModelError(f"R{n} is read at 0x{self.pc:03X} before anything was written to it")
+        return value
+
+    def _acc(self) -> int:
+        if self.acc is None:
+            raise ModelError(
+                f"A is used at 0x{self.pc:03X} while undefined (XCH of an unwritten register)"
+            )
+        return self.acc
+
     def pair(self, p: int) -> int:
-        return self.regs[2 * p] << 4 | self.regs[2 * p + 1]
+        return self._r(2 * p) << 4 | self._r(2 * p + 1)
 
     def set_pair(self, p: int, value: int) -> None:
         self.regs[2 * p], self.regs[2 * p + 1] = value >> 4 & 15, value & 15
@@ -226,7 +253,7 @@ class Mcs4:
             took = 2
             second = self._fetch()
             if opr == 0x1:  # JCN
-                zero, carry, notest = self.acc == 0, self.cy == 1, self.test == 0
+                zero, carry, notest = self._acc() == 0, self.cy == 1, self.test == 0
                 hit = (opa & 4 and zero) or (opa & 2 and carry) or (opa & 1 and notest)
                 if bool(hit) != bool(opa & 8):
                     self.pc = (self.pc & 0xF00) | second
@@ -238,7 +265,7 @@ class Mcs4:
                 self.sp = (self.sp + 1) % 4
                 self.pc = opa << 8 | second
             else:  # ISZ
-                self.regs[opa] = (self.regs[opa] + 1) & 15
+                self.regs[opa] = (self._r(opa) + 1) & 15
                 if self.regs[opa]:
                     self.pc = (self.pc & 0xF00) | second
         elif opr == 0x2:  # SRC
@@ -252,14 +279,14 @@ class Mcs4:
                 took = 2
                 self.set_pair(opa >> 1, self.rom[(self.pc & 0xF00) | self.pair(0)])
         elif opr == 0x6:  # INC
-            self.regs[opa] = (self.regs[opa] + 1) & 15
+            self.regs[opa] = (self._r(opa) + 1) & 15
         elif opr == 0x8:  # ADD
-            self._add(self.acc, self.regs[opa], self.cy)
+            self._add(self._acc(), self._r(opa), self.cy)
         elif opr == 0x9:  # SUB
-            self._add(self.acc, ~self.regs[opa] & 15, 1 - self.cy)
+            self._add(self._acc(), ~self._r(opa) & 15, 1 - self.cy)
         elif opr == 0xA:  # LD
-            self.acc = self.regs[opa]
-        elif opr == 0xB:  # XCH
+            self.acc = self._r(opa)
+        elif opr == 0xB:  # XCH: undefined values may move, as the hardware moves them
             self.acc, self.regs[opa] = self.regs[opa], self.acc
         elif opr == 0xC:  # BBL
             self.sp = (self.sp - 1) % 4
@@ -283,7 +310,7 @@ class Mcs4:
             if self.src_rom is None:
                 raise ModelError(f"ROM port instruction at 0x{at:03X} before any SRC")
             if opa == 2:
-                self.romport_out[self.src_rom] = self.acc
+                self.romport_out[self.src_rom] = self._acc()
             elif self.src_rom not in self.romport_in:
                 raise ModelError(f"RDR at 0x{at:03X}: 4001 #{self.src_rom}'s input isn't set")
             else:
@@ -293,27 +320,29 @@ class Mcs4:
             return
         address = self._ram_address(at)
         if opa == 1:  # WMP
-            self.ramport[(self.bank, address >> 6)] = self.acc
+            self.ramport[(self.bank, address >> 6)] = self._acc()
             return
         if 4 <= opa < 8 or opa >= 12:
             store, key = self.status, (self.bank, address >> 4, opa & 3)
         else:
             store, key = self.main, (self.bank, address)  # type: ignore[assignment]
         if opa < 8:  # WRM, WR0-3
-            store[key] = self.acc  # type: ignore[index]
+            store[key] = self._acc()  # type: ignore[index]
             return
         if key not in store:
             raise ModelError(f"read at 0x{at:03X} of RAM bank {self.bank} {key[1:]}, never written")
         value = store[key]  # type: ignore[index]
         if opa == 8:  # SBM
-            self._add(self.acc, ~value & 15, 1 - self.cy)
+            self._add(self._acc(), ~value & 15, 1 - self.cy)
         elif opa == 11:  # ADM
-            self._add(self.acc, value, self.cy)
+            self._add(self._acc(), value, self.cy)
         else:  # RDM, RD0-3
             self.acc = value
 
     def _accumulator(self, opa: int, at: int) -> None:
-        a, cy = self.acc, self.cy
+        cy = self.cy
+        # CLB, CLC, CMC, TCC, TCS and STC don't read A, so they may follow an undefined one.
+        a = self._acc() if opa in (2, 4, 5, 6, 8, 11, 12, 13) else 0
         if opa == 0:  # CLB
             self.acc, self.cy = 0, 0
         elif opa == 1:  # CLC
