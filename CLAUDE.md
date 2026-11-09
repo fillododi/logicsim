@@ -59,7 +59,7 @@ src/nandsim/
   gui/        pygame viewer and HDL editor (the only package that imports pygame)
   __main__.py CLI: `gui` and `test` subcommands
 chips/        level definitions: interface stub .hdl, brief .md, .tst
-  01_gates/  02_buses/  03_arith/  04_seq/  05_cpu/  06_computer/
+  01_gates/  02_buses/  03_arith/  04_seq/  05_cpu/  06_ram/
   levels.toml unlock order and the parts each level may use
 reference/    hidden reference solutions, same layout as chips/
 docs/
@@ -138,7 +138,7 @@ Complete them in order. Each one ends with green tests, updated docs, a journal 
 6. **Arithmetic:** HalfAdder, FullAdder, Add4 (carry in and out), Inc4, Inc12 (for the PC), and the 4004 ALU: add and subtract with carry/borrow, increment and decrement, complement, rotate through carry, decimal adjust (DAA), KBP, TCS, with the zero and carry flags that JCN tests.
 7. **Sequential logic:** latches and the DFF, built from NAND and the clock (a built-in DFF stands in once it passes), Bit, Register4, Register8, Register12, the index register file (16 × 4 bits, also read and written as 8 pairs), the PC with its 3-level address stack. Clock controls in the GUI. Data RAM and program ROM are part of the computer around the CPU, so they come after it, in milestone 9.
 8. **CPU: the Intel 4004.** All 46 instructions, with the 4004's encodings: `NOP JCN FIM SRC FIN JIN JUN JMS INC ISZ ADD SUB LD XCH BBL LDM`, `WRM WMP WRR WPM WR0 WR1 WR2 WR3 SBM RDM RDR ADM RD0 RD1 RD2 RD3`, `CLB CLC IAC CMC CMA RAL RAR TCC DAC TCS STC DAA KBP DCL`. The CPU has the 4004's pins: `IN din[4], test, reset; OUT dout[4], drive, sync, cmrom, cmram[4];`. That is the data bus D0–D3 split by direction, SYNC, RESET, TEST, CM-ROM and CM-RAM0–3. Each instruction cycle takes 8 clock cycles (A1 A2 A3 M1 M2 X1 X2 X3), so two-word instructions (`JCN FIM JUN JMS ISZ`) and `FIN` take 16. The CPU reaches its memories only through the bus, as in the real MCS-4 system, and its `.tst` files supply them: a test command attaches runner-held 4001 ROMs and 4002 RAMs, with their I/O ports, to the CPU's bus pins. Goal: run a hand-assembled 4004 program, such as multi-digit BCD addition, and check the data memory and the output ports with a `.tst` file.
-9. **The Busicom 141-PF, the end of the game.** The calculator the 4004 was designed for, built from the player's chips: the 4004, 4001 ROMs, 4002 RAMs and a 4003 shift register. It starts with the memories, in a Computer group that opens once the CPU is solved:
+9. **The Busicom 141-PF, the end of the game.** The calculator the 4004 was designed for, built from the player's chips: the 4004, 4001 ROMs, 4002 RAMs and a 4003 shift register. It starts with the memories, which open once the CPU is solved. Each chip of the computer gets its own level group, separate from the CPU's (RAM, then ROM, then the bus logic):
    - **RAM levels** (built in milestone 7, moved here): RAM at increasing sizes up to the 4002 layout (registers of 16 main and 4 status characters, selected by bank, chip and register), RAM8, RAM64, RAM4002, RAMBank and DataRAM.
    - **ROM levels:** a 4096 × 8 program ROM in the 4001 layout (sixteen 256 × 8 chips, picked by `addr[8..11]`), with a write port.
    - **Bus levels:** the 4001's and 4002's bus logic (following SYNC, latching the address nibbles and the SRC address, answering CM-ROM and CM-RAM), wrapped around the player's ROM and RAM, so they plug into the CPU's pins.

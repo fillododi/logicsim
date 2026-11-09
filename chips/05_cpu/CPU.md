@@ -16,6 +16,8 @@ The test runs one program through all 46 instructions, checking what it stores i
 
 The clock panel runs your CPU on a small program from `CPU.rom`, a decimal counter in RAM, and shows the period, the counter's RAM register and the ports under its buttons. Reset restarts it from address 0.
 
+The counter keeps one decimal digit in each RAM character, as the Busicom calculator kept its numbers. To add 1, it adds each digit to the carry with `ADM`, then `DAA` turns a result above 9 back into a decimal digit and carries 1 into the next one. A 4-bit CPU suits a calculator for exactly this reason: one digit fits in 4 bits.
+
 **Parts you may use:** Nand, Not, And, Or, Mux, Mux4, DMux8Way, Timing, InstrReg, Sequencer, Accumulator, Registers, Jumps, BusOut.
 
 **Hint:** Timing's period through a DMux8Way gives you one line per period. Most of the CPU is a few Ands of those lines.

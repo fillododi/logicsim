@@ -210,12 +210,13 @@ class GameState:
         return report
 
 
-# Groups whose folder name is shortened: `03_arith` reads better as "Arithmetic".
+# Groups whose folder name is shortened: `03_arith` reads better as "Arithmetic". From
+# the CPU on, each group is one chip of Intel's MCS-4 family, labelled with its number.
 _GROUP_LABELS = {
     "03_arith": "Arithmetic",
     "04_seq": "Memory",
-    "05_cpu": "CPU",
-    "06_computer": "Computer",
+    "05_cpu": "CPU (4004)",
+    "06_ram": "RAM (4002)",
 }
 
 

@@ -22,8 +22,8 @@ def test_ram_tests_match_their_generator() -> None:
     generated = load_tool("gen_ram_tst").generate()
     assert sorted(generated) == ["DataRAM", "RAM4002", "RAM64", "RAM8", "RAMBank"]
     for name, text in generated.items():
-        committed = (ROOT / "chips" / "06_computer" / f"{name}.tst").read_text()
-        assert committed == text, f"{name}.tst is stale: run tools/gen_ram_tst.py chips/06_computer"
+        committed = (ROOT / "chips" / "06_ram" / f"{name}.tst").read_text()
+        assert committed == text, f"{name}.tst is stale: run tools/gen_ram_tst.py chips/06_ram"
 
 
 def test_cpu_test_matches_its_generator() -> None:

@@ -4,6 +4,8 @@ Your first chip with memory, and the first whose wires feed back into themselves
 
 A wire may now be read by the very parts that drive it. The circuit settles step by step, one gate delay at a time, until nothing changes. A loop that never comes to rest, like a Not wired to its own input, shows as undefined.
 
+The 4004 remembers its accumulator, its registers and its stack. The real chip stored many of those bits as charge on tiny capacitors, but logically every remembered bit is a loop like this one.
+
 **Parts you may use:** Nand, Not.
 
 **Hint:** A NAND with a 0 on either input outputs 1, whatever the other input is. Two NANDs that each read the other's output can hold either of two states. Which input of each should pull it out of the other state?

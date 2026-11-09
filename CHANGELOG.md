@@ -54,10 +54,20 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
   `loadpair`, as the 4004's RESET does, and the CPU relies on it. An IndexRegs you solved
   in 0.7.0 no longer fits the level: add `reset` to its pins and make it clear every
   register, then run its tests again.
-- **The RAM levels move to a new *Computer* group.** RAM8, RAM64, RAM4002, RAMBank and
+- **The RAM levels move to a new *RAM (4002)* group.** RAM8, RAM64, RAM4002, RAMBank and
   DataRAM are the memory the CPU will be wired to, so they now come after it in the level
   list instead of in Memory, and open once the CPU is solved. Your solutions and progress
-  are kept, but RAM levels you already solved stay locked until you solve the CPU.
+  are kept, but RAM levels you already solved stay locked until you solve the CPU. Each
+  chip of the computer around the 4004 gets its own group like this one, and the CPU
+  group is now called *CPU (4004)*.
+- **The tour tells the story.** The welcome bubble says what you are building: the Intel
+  4004, then the RAM and ROM chips of its computer. The first level of every group opens
+  with a bubble on what that group adds to the CPU, and on the CPU level two more introduce
+  the demo program: what the ROM and RAM chips on its bus are, and how to step through it.
+  The CPU brief explains how the demo counts in decimal, one digit per 4-bit character.
+- **Briefs explain where each chip goes.** The gate, bus, adder and latch levels now say
+  what their chip does inside the 4004, from the Mux that picks the next address to the
+  Xor that turns `SUB` into an addition.
 
 ## [0.7.0] — 2026-11-08
 

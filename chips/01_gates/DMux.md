@@ -9,6 +9,8 @@ The opposite of Mux: sends `in` to output `a` when `sel` is 0, to `b` when `sel`
 | 1 | 0 | 1 | 0 |
 | 1 | 1 | 0 | 1 |
 
+Where a Mux reads one of many, a DMux writes one of many. Memories use it to send a write to the one cell being addressed.
+
 **Parts you may use:** Nand, Not, And, Or, Xor, Mux.
 
 **Hint:** Each output is `in` gated by a condition on sel.

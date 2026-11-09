@@ -24,9 +24,9 @@ level = "Wire"
 anchor = "levels"
 until = "next"
 text = """
-Welcome to NAND Sim! You will build a computer from a single kind of gate, the Nand.
+Welcome to NAND Sim! Starting from a single kind of gate, the Nand, you will build the Intel 4004: the first microprocessor sold on a single chip, made in 1971 for the Busicom 141-PF calculator. Then you will build the chips of the computer around it, its RAM and ROM, until the 4004 runs real programs.
 
-Each entry in this list is a chip to build. Solving one unlocks the chips that use it. The levels come in groups: click a group's name to fold it away or open it again.
+Each entry in this list is a chip to build. Solving one unlocks the chips that use it. The groups follow the climb: gates, buses, arithmetic, memory, the 4004, then one group per chip of its computer. Click a group's name to fold it away or open it again.
 """
 
 [[step]]
@@ -96,6 +96,8 @@ anchor = "brief"
 until = "next"
 text = """
 To compute, a chip needs parts: other chips used inside it. The only one you start with is the Nand. Its output is 0 only when both its inputs are 1.
+
+The Nand is universal: every logic function, and so every computer, can be built from Nands alone. That is the whole game.
 """
 
 [[step]]
@@ -147,6 +149,17 @@ anchor = "level:Not"
 until = "open_level:Not"
 text = """
 Solved! Now open Not, the first real gate.
+"""
+
+[[step]]
+id = "gates"
+level = "Not"
+anchor = "levels"
+until = "next"
+text = """
+Gates. A gate computes one bit from one or two bits: Not, And, Or, Xor, and the selectors Mux and DMux. They are the vocabulary of every digital circuit.
+
+The 4004 packs about 2,300 transistors, and logically all of them come down to gates like these. Every "if" in the CPU is a Mux, every "when this and that" an And.
 """
 
 [[step]]
@@ -236,11 +249,46 @@ level = "And"
 anchor = "levels"
 until = "next"
 text = """
-That's the tour for now: the clock gets its own bubbles when you reach Memory. Every chip from here to the CPU is built the same way. Good luck!
+That's the tour for now. Each new group opens with a bubble on what it adds to the 4004, and the clock gets its own when you reach Memory. Good luck!
+"""
+
+# One bubble at the first level of each group: what the group builds and where it
+# goes in the 4004 or its computer.
+[[step]]
+id = "buses"
+level = "Not4"
+anchor = "levels"
+until = "next"
+text = """
+Buses. The 4004 is a 4-bit CPU: it computes on 4-bit numbers, enough for one decimal digit, which suited a calculator. Its instructions are 8 bits, and its program addresses are 12 bits, enough for 4096 bytes of ROM.
+
+A bus carries such a number as one wire per bit under one name. This group widens your gates to 4, 8 and 12 bits.
+"""
+
+[[step]]
+id = "arith"
+level = "HalfAdder"
+anchor = "levels"
+until = "next"
+text = """
+Arithmetic. Computers add as you learned on paper, column by column, with a carry passed to the next column. In binary each column holds 0 or 1, so a column is a few gates.
+
+This group climbs from one column to the 4004's ALU, the unit that adds, subtracts, rotates and corrects decimal digits, and sets the carry flag that conditional jumps test.
 """
 
 # Memory: SRLatch is the first chip whose wires feed back, and DFF the first that
 # reads the clock, so it introduces the clock panel.
+[[step]]
+id = "seq"
+level = "SRLatch"
+anchor = "levels"
+until = "next"
+text = """
+Memory. So far every output depends only on the inputs right now. A computer must also remember: the number it is adding, its registers, where it is in the program.
+
+Here you make memory from Nands and a clock, up to the 4004's own: its 16 index registers of 4 bits, and its program counter with a stack of 3 return addresses.
+"""
+
 [[step]]
 id = "memory"
 level = "SRLatch"
@@ -268,4 +316,51 @@ text = """
 A chip that reads the clock gets a clock panel. Set in, then click Step: one cycle runs, a tick and a tock, and out shows what in was at the tick. Space steps too, once you have clicked the circuit.
 
 Run plays cycles by itself at the speed beside it, and Reset forgets every stored bit.
+"""
+
+# The 4004 and its computer: one group per chip of the MCS-4 family.
+[[step]]
+id = "cpu"
+level = "Timing"
+anchor = "levels"
+until = "next"
+text = """
+The CPU: the Intel 4004. Like the real chip, yours has 16 pins and reaches its program and data only through a 4-bit bus. Every instruction takes 8 clock periods: 3 to send the address, 2 to read the instruction, 3 to execute it.
+
+First you build the units, each doing one job at its moment. Then the CPU level wires them into the 4004.
+"""
+
+# The CPU level's clock panel runs a demo program on the MCS-4 memories, once the
+# player's CPU builds (as for the DFF, the panel only exists then).
+[[step]]
+id = "cpu_build"
+level = "CPU"
+anchor = "brief"
+until = "build_ok"
+text = """
+This is the 4004 itself: your units, wired to the 8 periods of each instruction cycle. Wire them as the brief describes and press Ctrl+S.
+
+Once it builds, the clock panel puts memory chips on its bus, and you can watch your CPU run a program.
+"""
+
+[[step]]
+id = "cpu_demo"
+level = "CPU"
+anchor = "clock"
+until = "clock_step"
+text = """
+Your CPU now sits on a bus with the chips Intel sold beside it: 4001 ROMs holding the program and 4002 RAMs holding data, a small MCS-4 system as in 1971.
+
+The program counts in decimal. Click Step to run one clock period: 8 of them make one instruction cycle. Run plays them by itself; watch the RAM register count up digit by digit.
+"""
+
+[[step]]
+id = "ram"
+level = "RAM8"
+anchor = "levels"
+until = "next"
+text = """
+The 4004 is solved! Now the computer around it, one group per chip of Intel's MCS-4 family: the 4002 RAM here, then the 4001 program ROM.
+
+A 4002 holds 80 characters of 4 bits: 4 registers of 16 main and 4 status characters. You build it up from eight cells, then group up to 32 chips into the 4004's data memory.
 """

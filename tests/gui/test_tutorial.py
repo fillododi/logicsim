@@ -233,3 +233,13 @@ def test_the_tour_teaches_typed_values_and_your_chips() -> None:
     assert by_id["export"].until == "export" and by_id["your_chips"].anchor == "chips"
     ids = [s.id for s in STEPS]
     assert ids.index("export") < ids.index("your_chips") < ids.index("done")
+
+
+def test_every_group_opens_with_a_bubble() -> None:
+    """The first level of each group shows a bubble on what the group adds to the 4004."""
+    first: dict[str, str] = {}
+    for lv in load_levels():
+        first.setdefault(lv.group, lv.name)
+    levels_with_steps = {s.level for s in STEPS}
+    missing = [g for g, name in first.items() if name not in levels_with_steps]
+    assert missing == []

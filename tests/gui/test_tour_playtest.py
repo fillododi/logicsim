@@ -188,7 +188,9 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     assert step_id(app) == "unlocked"
     shown(app)
     click_level(app, "Not")
-    assert app.game.current.name == "Not" and step_id(app) == "on_your_own"
+    assert app.game.current.name == "Not" and step_id(app) == "gates"
+    press_next(app)
+    assert step_id(app) == "on_your_own"
     press_next(app)
     assert step_id(app) == "replay"
     press_next(app)
@@ -243,14 +245,14 @@ def test_new_player_follows_the_tour(tmp_path: Path) -> None:
     press_next(app)
     assert step_id(app) == "done"
     press_next(app)
-    # The tour's last steps wait for SRLatch, the first level with memory.
-    assert step_id(app) == "memory" and shown(app) is None
+    # The tour's later steps wait for the first level of each group, starting with Not4.
+    assert step_id(app) == "buses" and shown(app) is None
     for p in shots.iterdir():
         assert p.stat().st_size > 0
 
     # Restarting remembers how far the tour got; F1 replays it from the first tutorial level.
     again = new_app(save)
-    assert step_id(again) == "memory"
+    assert step_id(again) == "buses"
     keydown(again, pygame.K_F1)
     assert again.game.current.name == "Wire" and step_id(again) == "welcome"
 
@@ -298,7 +300,7 @@ def test_leaving_the_tutorial_early_keeps_the_tour_going(tmp_path: Path) -> None
     # Review finding: opening Not mid-tutorial used to hide every later bubble.
     app = new_app(tmp_path / "save")
     click_level(app, "Not")
-    assert bubble_id(app) == "on_your_own" and shown(app) is not None
+    assert bubble_id(app) == "gates" and shown(app) is not None
     click_level(app, "Wire")
     assert bubble_id(app) == "welcome"  # the tutorial picks up where it was left
 
@@ -397,6 +399,33 @@ def test_memory_levels_introduce_loops_and_the_clock(tmp_path: Path) -> None:
     build("DFF")
     assert step_id(app) == "clock"
     b = shown(app)  # beside the clock panel, not over it
+    assert b is not None and app.anchor_rect("clock") is not None
+    app.clock("step")
+    assert app.tour.current is None and shown(app) is None
+
+
+def test_the_cpu_level_introduces_its_demo_program(tmp_path: Path) -> None:
+    """CPU asks for a build first; then the clock panel, on the MCS-4 memories, wants a step."""
+    levels = load_levels()
+    by_name = {lv.name: lv for lv in levels}
+    store = SaveStore(levels, tmp_path / "save")
+    for lv in levels[: [x.name for x in levels].index("CPU")]:
+        store.save(lv, lv.reference.read_text())
+        store.mark_solved(lv)
+    app = GameApp(store, size=(1440, 860))
+    demo = {"cpu_build", "cpu_demo"}
+    app.tour.seen.update(s.id for s in app.tour.steps if s.id not in demo)
+
+    app.open_level(by_name["CPU"])
+    assert step_id(app) == "cpu_build" and shown(app) is not None
+    assert app.anchor_rect("clock") is None  # the stub has no clock panel yet
+    assert app.editor is not None
+    app.editor.buffer.select_all()
+    app.editor.buffer.insert(by_name["CPU"].reference.read_text())
+    keydown(app, pygame.K_s, CTRL)
+    assert app.session.error is None and app.session.memories is not None
+    assert step_id(app) == "cpu_demo"
+    b = shown(app)
     assert b is not None and app.anchor_rect("clock") is not None
     app.clock("step")
     assert app.tour.current is None and shown(app) is None
