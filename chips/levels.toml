@@ -286,33 +286,33 @@ parts = [
     "Nand", "Not", "And", "Or", "Mux", "Mux4", "DMux8Way", "Timing", "InstrReg", "Sequencer", "Accumulator", "Registers", "Jumps", "BusOut",
 ]
 
-# The computer around the CPU, which opens once the CPU is solved (`requires`).
-# Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
+# The computer around the CPU, which opens once the CPU is solved (`requires`). Each
+# MCS-4 chip gets its own group: the 4002 data RAM here, then the 4001 ROM. Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address
 # picks the chip, the register and the main character, and DCL picks the bank.
 # The program ROM comes after DataRAM.
 [[level]]
 name = "RAM8"
-group = "06_computer"
+group = "06_ram"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "Register4"]
 requires = ["CPU"]
 
 [[level]]
 name = "RAM64"
-group = "06_computer"
+group = "06_ram"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "RAM8"]
 
 [[level]]
 name = "RAM4002"
-group = "06_computer"
+group = "06_ram"
 parts = ["Nand", "DMux", "Mux4", "RAM8", "RAM64"]
 
 [[level]]
 name = "RAMBank"
-group = "06_computer"
+group = "06_ram"
 parts = ["Nand", "DMux4Way", "Mux4Way4", "RAM4002"]
 
 [[level]]
 name = "DataRAM"
-group = "06_computer"
+group = "06_ram"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "RAMBank"]
