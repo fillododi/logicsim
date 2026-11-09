@@ -53,51 +53,82 @@ A table row only sets, evaluates and checks: it never ticks. Every DFF starts un
 
 ## Memories
 
-A CPU reaches its program and its data through its pins. A script can attach a **program
-memory** and a **data memory**, held by the test runner, to those pins. They aren't chips:
-nothing about them is built in HDL, and they exist only while the test runs.
+The CPU has the 4004's pins and reaches its memories only through its bus. A script can put
+the memories of an MCS-4 system, held by the test runner, on that bus: sixteen 4001 ROMs
+with the 4 KB of program memory (chip n holds addresses `n·256` to `n·256+255`, and each
+has an I/O port) and eight banks of four 4002 RAMs (each with an output port). They aren't
+chips: nothing about them is built in HDL, and they exist only while the test runs.
 
 | Command | Meaning |
 |---|---|
-| `attach rom addr=<pin> out=<pin>` | A program memory of 4096 bytes, all 0. It reads its address from a chip output of up to 12 bits and sends the byte there to an 8-bit chip input. |
-| `attach ram in=<pin> addr=<pin> bank=<pin> status=<pin> load=<pin> out=<pin>` | A data memory with DataRAM's pins and layout: 8 banks of 4002s, every character undefined. `in`, `addr` (8 bits), `bank` (3), `status` and `load` are chip outputs; `out` (4 bits) is a chip input. |
-| `rom <addr> <byte> <byte>...` | Writes bytes into the program memory from `addr` on. |
-| `rom <file>` | Loads a `.rom` file into the program memory from address 0. The path is relative to the `.tst` file. |
-| `ram <bank> <addr> <value>` | Sets a main character of the data memory. |
-| `ramstatus <bank> <addr> <value>` | Sets a status character: `addr[4..7]` pick the chip and register and `addr[0..1]` the character, as in DataRAM with `status` at 1. |
-| `expect ram <bank> <addr> <value>` | Checks a main character. `*` is allowed, and an unwritten character is undefined. |
+| `attach mcs4 din=<pin> dout=<pin> drive=<pin> sync=<pin> cmrom=<pin> cmram=<pin> reset=<pin>` | Puts the memories on the chip's bus. `din` (4 bits) and `reset` are chip inputs; `dout` (4), `drive`, `sync`, `cmrom` and `cmram` (4) are chip outputs. Once only, before the commands below. |
+| `rom <addr> <byte> <byte>...` | Writes bytes into program memory from `addr` on. Program memory starts as all 0 (NOP). |
+| `rom <file>` | Loads a `.rom` file into program memory from address 0. The path is relative to the `.tst` file. |
+| `ram <bank> <addr> <value>` | Sets a main character. `addr` is what SRC sends: `addr[6..7]` pick the 4002, `addr[4..5]` its register, `addr[0..3]` the character. Characters start undefined. |
+| `ramstatus <bank> <addr> <value>` | Sets a status character: `addr[4..7]` as above, `addr[0..1]` the character. |
+| `set romport <chip> <value>` | What the I/O lines of 4001 `chip` show: what RDR reads. |
+| `expect ram <bank> <addr> <value>` | Checks a main character. `*` is allowed. |
 | `expect ramstatus <bank> <addr> <value>` | Checks a status character. |
+| `expect romport <chip> <value>` | Checks what WRR last wrote to 4001 `chip`'s port. |
+| `expect ramport <bank> <chip> <value>` | Checks what WMP last wrote to the port of 4002 `chip` in `bank`. |
 
-Each memory can be attached once, and before any command that uses it. The memory pins
-can be connected to any chip pins of the right direction and width. A pin a memory
-drives can't be `set`.
+With only two words after it, `set` or `expect` takes the first as a pin, so a chip may
+still have a pin named `ram` or `romport`. `din` can't be `set`: the memories drive it.
 
-**How they run.** A memory answers like combinational logic: on every `eval`, and before and
-after every `tick` and `tock`, the runner evaluates the chip, sends each memory's `out` the
-value at its current address, and evaluates again, until nothing changes. So the byte at
-the address a CPU puts out is on its input before the tick stores it. If the address keeps
-changing with the byte it gets back, the run stops after 8 passes with an error. An
-undefined address reads as undefined.
+**How they run.** Like a real 4001 or 4002, the memories count the 8 clock periods of each
+instruction cycle, A1 A2 A3 M1 M2 X1 X2 X3, one per `tick` and `tock`. While `reset` is 1 at
+a tick, the next period is A1. Until the first reset they do nothing. At each tick they
+read what the CPU puts on the bus in the current period, and after each tock they put on
+`din` what they send in the new one, or 0 when they send nothing:
 
-The data memory writes like a DFF: if `load` is 1 at a `tick`, it remembers `in` and the
-character picked, and stores it at the `tock`. Between the two, `out` still shows the old
-value. An undefined `load` writes nothing, since a CPU's control lines are undefined until
-its reset cycle has run. A `load` of 1 with an undefined `addr`, `bank` or `status` is a
-failure, and nothing is written.
+- **A1, A2, A3:** they take the address, low nibble first. At A3, if `cmrom` is 1, the 4001
+  whose number is that nibble is selected.
+- **M1, M2:** that 4001 sends the byte at the address, its high nibble (OPR) at M1 and its
+  low one (OPA) at M2. If `cmrom` or a CM-RAM line is 1 at M2, the instruction is an I/O or
+  RAM instruction for the chips SRC selected. Which ones depends on the line:
+  - `cmrom`: the 4001 SRC selected;
+  - CM-RAM0 alone: bank 0;
+  - CM-RAM1–3: banks 1–7, as a binary number, as `DCL` selects them.
+- **X2:** if `cmrom` or a CM-RAM line is 1, this is SRC. The 4001s take their chip number
+  from `dout`, and the bank whose line is up takes the 4002 and register. For an I/O or RAM
+  instruction, this is where the data moves. Writes (WRM, WMP, WRR, WR0–3) take `dout`. Reads
+  (RDM, RDR, RD0–3, SBM, ADM) are sent on `din`. WPM goes nowhere: it needs a 4008/4009.
+- **X3:** the bank that took X2 of an SRC takes the character from `dout`.
 
-An example, with pin names for illustration (the CPU's own come with its level):
+A reset clears the SRC selections and sets every output port to 0. It keeps the contents
+of program and data memory, so a test can fill them first.
+
+**Bus problems** are failures, reported at the tick where they happen, with the period:
+
+- `sync` must be 1 at X3 and only at X3.
+- `dout` must be 0 when `drive` is 0.
+- The CPU must drive the bus at A1–A3, at X2 and X3 of an SRC, and at X2 of a write.
+- It must not drive the bus while a memory sends.
+- A RAM instruction needs a 4002 selected by SRC in its bank, and an RDR a 4001 selected
+  by SRC.
+- The CM-RAM lines may not select bank 0 and another bank at once.
+
+Only the first bus problem in a test is reported: a CPU that gets the protocol wrong once
+usually gets it wrong every cycle.
 
 ```
-// LDM 5, then XCH R0: two instructions from the program memory
+Bus.tst:52:1: bus at M1: drive is 1 while 4001 #0 sends on the bus (cycle 4)
+```
+
+The start of a CPU test, with the program LDM 5, XCH R0:
+
+```
 chip CPU
-attach rom addr=romaddr out=instr
+attach mcs4 din=din dout=dout drive=drive sync=sync cmrom=cmrom cmram=cmram reset=reset
 rom 0 0xD5 0xB0
+set test 0
 set reset 1
+// 8 instruction cycles of reset, as on the chip: 64 clock periods
 tick
 tock
+// ...
 set reset 0
-tick
-tock
+// then 8 clock periods for each instruction
 ```
 
 ### `.rom` files
