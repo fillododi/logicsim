@@ -241,6 +241,13 @@ name = "CmLines"
 group = "05_cpu"
 parts = ["Nand", "Not", "And", "Or"]
 
+# The instruction from the bus: OPR at M1, OPA at M2, or a two-word instruction's second
+# word while `second` is 1.
+[[level]]
+name = "InstrReg"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Mux4", "DMux8Way", "Register4", "Register8"]
+
 # The computer around the CPU, which reaches its data memory through RAM pins.
 # Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address
