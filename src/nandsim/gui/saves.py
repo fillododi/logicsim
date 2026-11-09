@@ -81,7 +81,7 @@ class SaveStore:
             self._write_progress()
 
     def is_unlocked(self, level: Level) -> bool:
-        needed = {p for p in level.parts if p not in FREE_PRIMITIVES}
+        needed = {p for p in level.parts if p not in FREE_PRIMITIVES} | set(level.requires)
         return needed <= self._solved
 
     def unlocked_primitives(self) -> frozenset[str]:

@@ -248,15 +248,26 @@ name = "InstrReg"
 group = "05_cpu"
 parts = ["Nand", "Not", "And", "Mux4", "DMux8Way", "Register4", "Register8"]
 
-# The computer around the CPU, which reaches its data memory through RAM pins.
+# The 4004 itself, on its 16 pins.
+[[level]]
+name = "CPU"
+group = "05_cpu"
+parts = [
+    "Nand", "Not", "And", "Or", "Xor", "Mux", "Mux4", "Mux8", "Mux12", "Mux4Way4", "Mux8Way4",
+    "Mux4Way12", "DMux", "DMux8Way", "And4", "Or4", "Or4Way", "Inc4", "Bit", "Register4",
+    "Register8", "Register12", "Timing", "InstrReg", "Cond", "CmLines", "PC", "IndexRegs", "ALU",
+]
+
+# The computer around the CPU, which opens once the CPU is solved (`requires`).
 # Data memory comes in 4-bit characters, up to eight banks of four 4002 chips. A
 # 4002 has 4 registers of 16 main and 4 status characters; SRC's 8-bit address
 # picks the chip, the register and the main character, and DCL picks the bank.
-# The CPU level goes between PC and RAM8, and the program ROM after DataRAM.
+# The program ROM comes after DataRAM.
 [[level]]
 name = "RAM8"
 group = "06_computer"
 parts = ["Nand", "DMux8Way", "Mux8Way4", "Register4"]
+requires = ["CPU"]
 
 [[level]]
 name = "RAM64"
