@@ -6,6 +6,13 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ## [Unreleased]
 
+### Added
+
+- **Memories for tests.** A `.tst` file can now attach a program memory and a data memory to
+  a chip's pins (`attach rom`, `attach ram`), fill them inline or from a `.rom` file (one
+  byte per line, in binary), and check what was written (`expect ram`). The CPU's tests will
+  run programs this way. See `docs/tst.md`.
+
 ### Changed
 
 - **The RAM levels move to a new *Computer* group.** RAM8, RAM64, RAM4002, RAMBank and
