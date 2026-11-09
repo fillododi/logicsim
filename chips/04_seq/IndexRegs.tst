@@ -1,7 +1,9 @@
 // IndexRegs: each register and each pair written and read back, a cycle with neither
-// load, load and loadpair together, then 64 random cycles (seed 4004). Each clock cycle
-// checks out and pairout after its tick (still the old value) and after its tock.
+// load, load and loadpair together, then 64 random cycles (seed 4004), all with reset
+// at 0. Each clock cycle checks out and pairout after its tick (still the old value) and
+// after its tock. Then reset: it wins over load and loadpair and clears all 16 registers.
 chip IndexRegs
+set reset 0
 // Each register on its own, the high half of in ignored
 set in 0x8F
 set addr 0
@@ -1280,3 +1282,104 @@ expect pairout 0x8B
 tock
 expect out 0x8
 expect pairout 0x8B
+// Reset, with a load asked for at the same time: reset wins, every register is 0.
+set in 0x77
+set addr 5
+set load 1
+set loadpair 0
+set reset 1
+tick
+expect out *
+tock
+expect out 0
+expect pairout 0
+set load 0
+set reset 0
+set addr 0
+eval
+expect out 0
+expect pairout 0
+set addr 1
+eval
+expect out 0
+expect pairout 0
+set addr 2
+eval
+expect out 0
+expect pairout 0
+set addr 3
+eval
+expect out 0
+expect pairout 0
+set addr 4
+eval
+expect out 0
+expect pairout 0
+set addr 5
+eval
+expect out 0
+expect pairout 0
+set addr 6
+eval
+expect out 0
+expect pairout 0
+set addr 7
+eval
+expect out 0
+expect pairout 0
+set addr 8
+eval
+expect out 0
+expect pairout 0
+set addr 9
+eval
+expect out 0
+expect pairout 0
+set addr 10
+eval
+expect out 0
+expect pairout 0
+set addr 11
+eval
+expect out 0
+expect pairout 0
+set addr 12
+eval
+expect out 0
+expect pairout 0
+set addr 13
+eval
+expect out 0
+expect pairout 0
+set addr 14
+eval
+expect out 0
+expect pairout 0
+set addr 15
+eval
+expect out 0
+expect pairout 0
+// Writes work again after reset.
+set in 0x35
+set addr 3
+set load 1
+tick
+expect out 0
+tock
+expect out 0x5
+expect pairout 0x05
+// Reset wins over loadpair too.
+set load 0
+set loadpair 1
+set in 0xA9
+set addr 6
+set reset 1
+tick
+expect pairout 0
+tock
+expect pairout 0
+set addr 3
+set loadpair 0
+set reset 0
+eval
+expect out 0

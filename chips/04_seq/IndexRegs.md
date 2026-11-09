@@ -5,6 +5,7 @@ The 4004's scratchpad: 16 registers of 4 bits, R0 to R15. The same registers als
 - `out` is always the register numbered `addr`, and `pairout` is always the pair that holds it, `pairout[4..7]` = the even register, `pairout[0..3]` = the odd one.
 - When `load` is 1, the next cycle stores `in[0..3]` in that register.
 - When `loadpair` is 1, the next cycle stores all of `in` in the pair: `in[4..7]` in the even register, `in[0..3]` in the odd one. If both are 1, `loadpair` wins.
+- When `reset` is 1, the next cycle sets all 16 registers to 0, whatever the loads say, as the 4004's RESET does.
 
 In the 4004 an instruction's low digit is `addr`. Pair instructions such as `FIM` and `SRC` name the pair in its top three bits, and use bit 0 for something else.
 
