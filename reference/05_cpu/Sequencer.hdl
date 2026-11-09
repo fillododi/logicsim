@@ -1,0 +1,26 @@
+// Sequencer: Which instruction cycle of a two-cycle instruction this is.
+CHIP Sequencer {
+    IN opr[4], opa[4], period[3], reset;
+    OUT second, finfetch;
+    PARTS:
+    // JCN FIM FIN JUN JMS ISZ take two cycles: OPR 1, 4, 5, 7, and 2 or 3 with OPA even.
+    Not(in=opr[3], out=lowopr);
+    DMux8Way(in=lowopr, sel=opr[0..2], b=isjcn, c=is2, d=is3, e=isjun, f=isjms, h=isisz);
+    Not(in=opa[0], out=opaeven);
+    And(a=is2, b=opaeven, out=isfim);
+    And(a=is3, b=opaeven, out=isfin);
+    Or(a=isjcn, b=isfim, out=t1);
+    Or(a=t1, b=isfin, out=t2);
+    Or(a=t2, b=isjun, out=t3);
+    Or(a=t3, b=isjms, out=t4);
+    Or(a=t4, b=isisz, out=twocycle);
+    // At X3 the next cycle is the second one if this was the first of a two-cycle instruction.
+    Not(in=state, out=first);
+    And(a=first, b=twocycle, out=gosecond);
+    Not(in=reset, out=nreset);
+    And(a=gosecond, b=nreset, out=next);
+    DMux8Way(in=true, sel=period, h=x3);
+    Or(a=x3, b=reset, out=load);
+    Bit(in=next, load=load, out=state, out=second);
+    And(a=state, b=isfin, out=finfetch);
+}

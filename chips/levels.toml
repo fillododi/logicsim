@@ -248,14 +248,42 @@ name = "InstrReg"
 group = "05_cpu"
 parts = ["Nand", "Not", "And", "Mux4", "DMux8Way", "Register4", "Register8"]
 
+# `second` is 1 in the second cycle of JCN FIM FIN JUN JMS ISZ; `finfetch` in FIN's.
+[[level]]
+name = "Sequencer"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux", "DMux8Way", "Bit"]
+
+# A, CY and DCL's bank: what each instruction does to them when `write` is 1.
+[[level]]
+name = "Accumulator"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux", "Mux4", "DMux8Way", "Bit", "Register4", "ALU"]
+
+# The index registers as the instructions use them: XCH, INC, ISZ, FIM, FIN.
+[[level]]
+name = "Registers"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux4", "DMux8Way", "Inc4", "IndexRegs"]
+
+# The PC as the jumps use it: JCN, ISZ, JIN, JUN, JMS and BBL.
+[[level]]
+name = "Jumps"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux12", "DMux8Way", "Or4Way", "Cond", "PC"]
+
+# Everything the 4004 sends: the address, SRC's pair, A for writes, and CM lines.
+[[level]]
+name = "BusOut"
+group = "05_cpu"
+parts = ["Nand", "Not", "And", "Or", "Mux4", "Mux12", "Mux4Way4", "DMux8Way", "CmLines"]
+
 # The 4004 itself, on its 16 pins.
 [[level]]
 name = "CPU"
 group = "05_cpu"
 parts = [
-    "Nand", "Not", "And", "Or", "Xor", "Mux", "Mux4", "Mux8", "Mux12", "Mux4Way4", "Mux8Way4",
-    "Mux4Way12", "DMux", "DMux8Way", "And4", "Or4", "Or4Way", "Inc4", "Bit", "Register4",
-    "Register8", "Register12", "Timing", "InstrReg", "Cond", "CmLines", "PC", "IndexRegs", "ALU",
+    "Nand", "Not", "And", "Or", "Mux", "Mux4", "DMux8Way", "Timing", "InstrReg", "Sequencer", "Accumulator", "Registers", "Jumps", "BusOut",
 ]
 
 # The computer around the CPU, which opens once the CPU is solved (`requires`).

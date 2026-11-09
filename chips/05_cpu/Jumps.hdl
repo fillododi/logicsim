@@ -1,0 +1,7 @@
+// Jumps: The PC and its stack: steps, jumps, calls and returns.
+// You may use: Nand, Not, And, Or, Mux12, DMux8Way, Or4Way, Cond, PC
+CHIP Jumps {
+    IN opr[4], opa[4], data[8], pair[8], reg[4], acc[4], carry, test, second, step, exec, reset;
+    OUT pc[12];
+    PARTS:
+}

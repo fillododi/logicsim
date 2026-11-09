@@ -3,144 +3,30 @@ CHIP CPU {
     IN din[4], test, reset;
     OUT dout[4], drive, sync, cmrom, cmram[4];
     PARTS:
-    Not(in=reset, out=nreset);
-
-    // ---- timing and the instruction --------------------------------------
     Timing(reset=reset, period=period, sync=sync);
-    DMux8Way(in=true, sel=period, a=a1, b=a2, c=a3, d=m1, e=m2, f=x1, g=x2, h=x3);
-    Or(a=a1, b=a2, out=a12);
-    Or(a=a12, b=a3, out=early);
+    DMux8Way(in=true, sel=period, a=a1, b=a2, c=a3, g=x2, h=x3);
     InstrReg(din=din, period=period, second=second, opr=opr, opa=opa, data=data);
+    Sequencer(opr=opr, opa=opa, period=period, reset=reset, second=second, finfetch=finfetch);
     Not(in=second, out=first);
 
-    // Which instruction: OPR 0-7 and 8-F, and the OPA codes the I/O and accumulator groups use.
-    Not(in=opr[3], out=lowopr);
-    DMux8Way(in=lowopr, sel=opr[0..2], b=isjcn, c=is2, d=is3, e=isjun, f=isjms, g=isinc, h=isisz);
-    DMux8Way(in=opr[3], sel=opr[0..2], a=isadd, b=issub, d=isxch, e=isbbl, g=isio, h=isacc);
-    DMux8Way(in=opa[3], sel=opa[0..2], a=opa8, d=opa11, f=opa13, g=opa14, h=opa15);
-    Not(in=opa[0], out=opaeven);
-    And(a=is2, b=opaeven, out=isfim);
-    And(a=is2, b=opa[0], out=issrc0);
-    And(a=is3, b=opaeven, out=isfin);
-    And(a=is3, b=opa[0], out=isjin);
+    // FIN's second cycle sends register pair 0 as the address, at A1-A3.
+    Or(a=a1, b=a2, out=a12);
+    Or(a=a12, b=a3, out=early);
+    And(a=finfetch, b=early, out=readp0);
+    Registers(opr=opr, opa=opa, acc=acc, data=data, second=second, write=x2, readp0=readp0,
+              reset=reset, reg=reg, pair=pair);
 
-    // Two-cycle instructions set `second` at X3 of their first cycle; it clears at the next X3.
-    Or(a=isjcn, b=isfim, out=two1);
-    Or(a=two1, b=isfin, out=two2);
-    Or(a=two2, b=isjun, out=two3);
-    Or(a=two3, b=isjms, out=two4);
-    Or(a=two4, b=isisz, out=twocycle);
-    And(a=first, b=twocycle, out=gosecond);
-    And(a=gosecond, b=nreset, out=secondin);
-    Or(a=x3, b=reset, out=secondload);
-    Bit(in=secondin, load=secondload, out=second);
-    And(a=second, b=isfin, out=fin2);
+    // A, CY and DCL change at X2 of a one-cycle instruction.
+    And(a=x2, b=first, out=accwrite);
+    Accumulator(opr=opr, opa=opa, reg=reg, din=din, write=accwrite, reset=reset, acc=acc,
+                carry=carry, bank=bank);
 
-    // ---- index registers -------------------------------------------------
-    // FIN's second cycle sends P0 as the address; otherwise OPA names the register or pair.
-    And(a=fin2, b=early, out=readp0);
-    Mux4(a=opa, b=false, sel=readp0, out=regaddr);
-    Inc4(in=reg, out=regplus);
-    Mux4(a=regplus, b=acc, sel=isxch, out=regnew);
-    Mux4(a=regnew, b=data[0..3], sel=second, out=reglow);
-    // XCH, INC and ISZ write one register at X2; FIM and FIN write a pair at X2 of cycle two.
-    Or(a=isxch, b=isinc, out=w1);
-    Or(a=w1, b=isisz, out=writesreg);
-    And(a=x2, b=first, out=x2first);
-    And(a=x2, b=second, out=x2second);
-    And(a=x2first, b=writesreg, out=regload);
-    Or(a=isfim, b=isfin, out=writespair);
-    And(a=x2second, b=writespair, out=pairload);
-    IndexRegs(in[0..3]=reglow, in[4..7]=data[4..7], addr=regaddr, load=regload,
-              loadpair=pairload, reset=reset, out=reg, pairout=pair);
+    // The PC steps after A3, except in FIN's second cycle; jumps act at X3.
+    Not(in=finfetch, out=fetchpc);
+    And(a=a3, b=fetchpc, out=step);
+    Jumps(opr=opr, opa=opa, data=data, pair=pair, reg=reg, acc=acc, carry=carry, test=test,
+          second=second, step=step, exec=x3, reset=reset, pc=pc);
 
-    // ---- accumulator, carry and the ALU ----------------------------------
-    // b is a register (8-B), OPA's data (BBL, LDM) or the bus (I/O reads).
-    Mux4(a=opa, b=din, sel=opr[1], out=bhigh);
-    Mux4(a=reg, b=bhigh, sel=opr[2], out=alub);
-    // op: OPA for 1111 xxxx; else ADD (14) for ADD and ADM, SUB (15) for SUB and SBM, LD (13).
-    And(a=isio, b=opa11, out=isadm);
-    And(a=isio, b=opa8, out=issbm);
-    Or(a=isadd, b=isadm, out=addlike);
-    Or(a=issub, b=issbm, out=sublike);
-    Not(in=addlike, out=op0);
-    Or(a=addlike, b=sublike, out=op1);
-    Mux4(a[0]=op0, a[1]=op1, a[2]=true, a[3]=true, b=opa, sel=isacc, out=aluop);
-    ALU(a=acc, b=alub, cin=carry, op=aluop, out=aluout, cout=alucarry);
-    // Writes to A and CY at X2: OPR 8-D, I/O reads (OPA 8-F), and 1111 0000 to 1111 1100.
-    And(a=opr[2], b=opr[1], out=opr67);
-    Not(in=opr67, out=notef);
-    And(a=opr[3], b=notef, out=group8d);
-    And(a=isio, b=opa[3], out=ioread);
-    Or(a=opa13, b=opa14, out=o1314);
-    Or(a=o1314, b=opa15, out=notalu);
-    Not(in=notalu, out=aluopa);
-    And(a=isacc, b=aluopa, out=accgroup);
-    Or(a=group8d, b=ioread, out=wa1);
-    Or(a=wa1, b=accgroup, out=writesacc);
-    And(a=x2first, b=writesacc, out=accwrite);
-    Or(a=accwrite, b=reset, out=accload);
-    Mux4(a=aluout, b=false, sel=reset, out=accin);
-    Register4(in=accin, load=accload, out=acc);
-    And(a=alucarry, b=nreset, out=carryin);
-    Bit(in=carryin, load=accload, out=carry);
-    // DCL: the bank from A's low three bits, 0 after a reset.
-    And(a=isacc, b=opa13, out=isdcl);
-    And(a=x2first, b=isdcl, out=dclwrite);
-    Or(a=dclwrite, b=reset, out=bankload);
-    Mux4(a=acc, b=false, sel=reset, out=bankin);
-    Register4(in[0..2]=bankin[0..2], in[3]=false, load=bankload, out[0..2]=bank);
-
-    // ---- program counter -------------------------------------------------
-    // Step after A3, except in FIN's second cycle, which fetches from P0 instead.
-    Not(in=fin2, out=notfin2);
-    And(a=a3, b=notfin2, out=pcinc);
-    // Targets: JCN and ISZ in the page of the next instruction, JIN there with a pair, JUN/JMS anywhere.
-    Mux12(a[0..7]=data, a[8..11]=pc[8..11], b[0..7]=pair, b[8..11]=pc[8..11], sel=isjin,
-          out=nearjump);
-    Or(a=isjun, b=isjms, out=farjump);
-    Mux12(a=nearjump, b[0..7]=data, b[8..11]=opa, sel=farjump, out=target);
-    Cond(cond=opa, acc=acc, carry=carry, test=test, jump=condok);
-    Or4Way(in=reg, out=regnonzero);
-    And(a=isjcn, b=condok, out=j1);
-    And(a=isisz, b=regnonzero, out=j2);
-    Or(a=j1, b=j2, out=j12);
-    Or(a=j12, b=isjun, out=jumps2);
-    And(a=x3, b=second, out=x3second);
-    And(a=x3, b=first, out=x3first);
-    And(a=x3second, b=jumps2, out=load2);
-    And(a=x3first, b=isjin, out=load1);
-    Or(a=load2, b=load1, out=pcload);
-    And(a=x3second, b=isjms, out=pcpush);
-    And(a=x3first, b=isbbl, out=pcpop);
-    PC(in=target, inc=pcinc, load=pcload, push=pcpush, pop=pcpop, reset=reset, out=pc);
-
-    // ---- the bus ---------------------------------------------------------
-    // A1-A3: the address, low nibble first (P0 and the page for FIN's second cycle).
-    Mux12(a=pc, b[0..7]=pair, b[8..11]=pc[8..11], sel=fin2, out=fetch);
-    Mux4Way4(a=fetch[0..3], b=fetch[4..7], c=fetch[8..11], d=false, sel=period[0..1],
-             out=nibble);
-    // X2-X3: SRC sends its pair; the I/O writes (OPA 0-7) send A at X2.
-    And(a=issrc0, b=first, out=issrc);
-    Not(in=opa[3], out=opalow);
-    And(a=isio, b=opalow, out=iowrite0);
-    And(a=iowrite0, b=first, out=iowrite);
-    Mux4(a=acc, b=pair[4..7], sel=issrc, out=x2value);
-    Mux4(a=pair[0..3], b=x2value, sel=x2, out=xvalue);
-    Mux4(a=xvalue, b=nibble, sel=early, out=value);
-    Or(a=issrc, b=iowrite, out=x2drives);
-    And(a=x2, b=x2drives, out=d2);
-    And(a=x3, b=issrc, out=d3);
-    Or(a=early, b=d2, out=d12);
-    Or(a=d12, b=d3, out=driving);
-    Mux4(a=false, b=value, sel=driving, out=dout);
-    drive = driving;
-    // CM-ROM and DCL's CM-RAM lines: at A3, at M2 of an I/O instruction, at X2 of SRC.
-    And(a=m2, b=isio, out=m2io0);
-    And(a=m2io0, b=first, out=m2io);
-    And(a=x2, b=issrc, out=x2src);
-    Or(a=a3, b=m2io, out=cm1);
-    Or(a=cm1, b=x2src, out=cmon);
-    cmrom = cmon;
-    CmLines(bank=bank, on=cmon, cmram=cmram);
+    BusOut(period=period, pc=pc, pair=pair, acc=acc, opr=opr, opa=opa, second=second,
+           finfetch=finfetch, bank=bank, dout=dout, drive=drive, cmrom=cmrom, cmram=cmram);
 }

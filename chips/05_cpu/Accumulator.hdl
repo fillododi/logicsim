@@ -1,0 +1,7 @@
+// Accumulator: A, CY and the DCL bank, changed by the instruction when write is 1.
+// You may use: Nand, Not, And, Or, Mux, Mux4, DMux8Way, Bit, Register4, ALU
+CHIP Accumulator {
+    IN opr[4], opa[4], reg[4], din[4], write, reset;
+    OUT acc[4], carry, bank[3];
+    PARTS:
+}

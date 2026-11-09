@@ -1,0 +1,7 @@
+// Sequencer: Which instruction cycle of a two-cycle instruction this is.
+// You may use: Nand, Not, And, Or, Mux, DMux8Way, Bit
+CHIP Sequencer {
+    IN opr[4], opa[4], period[3], reset;
+    OUT second, finfetch;
+    PARTS:
+}

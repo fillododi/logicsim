@@ -31,3 +31,11 @@ def test_cpu_test_matches_its_generator() -> None:
     assert committed == load_tool("gen_cpu_tst").generate(), (
         "CPU.tst is stale: run tools/gen_cpu_tst.py chips/05_cpu"
     )
+
+
+def test_cpu_unit_tests_match_their_generator() -> None:
+    generated = load_tool("gen_cpu_units").generate()
+    assert sorted(generated) == ["Accumulator", "BusOut", "Jumps", "Registers", "Sequencer"]
+    for name, text in generated.items():
+        committed = (ROOT / "chips" / "05_cpu" / f"{name}.tst").read_text()
+        assert committed == text, f"{name}.tst is stale: run tools/gen_cpu_units.py chips/05_cpu"

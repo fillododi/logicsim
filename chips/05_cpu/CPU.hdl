@@ -1,7 +1,6 @@
 // CPU: The Intel 4004, on its own pins: 8 clock periods per instruction cycle.
-// You may use: Nand, Not, And, Or, Xor, Mux, Mux4, Mux8, Mux12, Mux4Way4, Mux8Way4,
-//   Mux4Way12, DMux, DMux8Way, And4, Or4, Or4Way, Inc4, Bit, Register4, Register8,
-//   Register12, Timing, InstrReg, Cond, CmLines, PC, IndexRegs, ALU
+// You may use: Nand, Not, And, Or, Mux, Mux4, DMux8Way,
+//   Timing, InstrReg, Sequencer, Accumulator, Registers, Jumps, BusOut
 CHIP CPU {
     IN din[4], test, reset;
     OUT dout[4], drive, sync, cmrom, cmram[4];

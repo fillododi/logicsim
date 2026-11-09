@@ -1,0 +1,41 @@
+// BusOut: What the 4004 puts on the bus and the command lines, period by period.
+CHIP BusOut {
+    IN period[3], pc[12], pair[8], acc[4], opr[4], opa[4], second, finfetch, bank[3];
+    OUT dout[4], drive, cmrom, cmram[4];
+    PARTS:
+    DMux8Way(in=true, sel=period, a=a1, b=a2, c=a3, e=m2, g=x2, h=x3);
+    Or(a=a1, b=a2, out=a12);
+    Or(a=a12, b=a3, out=early);
+    // A1-A3: the address, low nibble first (P0 and the page in FIN's second cycle).
+    Mux12(a=pc, b[0..7]=pair, b[8..11]=pc[8..11], sel=finfetch, out=fetch);
+    Mux4Way4(a=fetch[0..3], b=fetch[4..7], c=fetch[8..11], d=false, sel=period[0..1],
+             out=nibble);
+    // X2-X3: SRC sends its pair; the I/O writes (OPR 1110, OPA 0-7) send A at X2.
+    Not(in=second, out=first);
+    Not(in=opr[3], out=lowopr);
+    DMux8Way(in=lowopr, sel=opr[0..2], c=is2);
+    DMux8Way(in=opr[3], sel=opr[0..2], g=isio);
+    And(a=is2, b=opa[0], out=src0);
+    And(a=src0, b=first, out=issrc);
+    Not(in=opa[3], out=opalow);
+    And(a=isio, b=opalow, out=iowrite0);
+    And(a=iowrite0, b=first, out=iowrite);
+    Mux4(a=acc, b=pair[4..7], sel=issrc, out=x2value);
+    Mux4(a=pair[0..3], b=x2value, sel=x2, out=xvalue);
+    Mux4(a=xvalue, b=nibble, sel=early, out=value);
+    Or(a=issrc, b=iowrite, out=x2drives);
+    And(a=x2, b=x2drives, out=d2);
+    And(a=x3, b=issrc, out=d3);
+    Or(a=early, b=d2, out=d12);
+    Or(a=d12, b=d3, out=driving);
+    Mux4(a=false, b=value, sel=driving, out=dout);
+    drive = driving;
+    // CM-ROM and DCL's CM-RAM lines: at A3, at M2 of an I/O instruction, at X2 of SRC.
+    And(a=m2, b=isio, out=m2io0);
+    And(a=m2io0, b=first, out=m2io);
+    And(a=x2, b=issrc, out=x2src);
+    Or(a=a3, b=m2io, out=cm1);
+    Or(a=cm1, b=x2src, out=cmon);
+    cmrom = cmon;
+    CmLines(bank=bank, on=cmon, cmram=cmram);
+}
