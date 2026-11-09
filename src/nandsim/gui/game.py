@@ -148,7 +148,12 @@ class GameState:
 
 
 # Groups whose folder name is shortened: `03_arith` reads better as "Arithmetic".
-_GROUP_LABELS = {"03_arith": "Arithmetic", "04_seq": "Memory", "06_computer": "Computer"}
+_GROUP_LABELS = {
+    "03_arith": "Arithmetic",
+    "04_seq": "Memory",
+    "05_cpu": "CPU",
+    "06_computer": "Computer",
+}
 
 
 def group_label(group: str) -> str:
