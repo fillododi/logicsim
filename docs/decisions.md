@@ -924,3 +924,50 @@ Ambiguous spec points and the option chosen. Newest last.
 - Expected values written by hand in each `.tst`: unchecked and slow to extend to 46 instructions.
 - The model inside `src/nandsim`: it is test tooling, and the emulator of project 2 will be its own package, which can start from this file.
 **Consequences:** the CPU level's `.tst` files will be generated from this model, like the RAM levels' from `gen_ram_tst.py`, with a test that the committed files match. The manual's scan is the reference for the CPU from now on.
+
+## 2026-11-09 — The CPU level, and why reset can't clear the index registers
+**Context:** the goal of milestone 8: the 4004 on its own pins (decided earlier), built from the CPU group's levels and the earlier register, PC and ALU levels. Open questions: when each part changes within the 8 periods, how reset behaves, how the CPU is tested, and when the Computer group opens.
+**Decision:**
+- **`CHIP CPU { IN din[4], test, reset; OUT dout[4], drive, sync, cmrom, cmram[4]; }`.** Parts: the gates, the Mux and DMux family, And4, Or4, Or4Way, Inc4, Bit, the registers, Timing, InstrReg, Cond, CmLines, PC, IndexRegs and the ALU.
+- **The reference's timing:**
+  - **A1–A3:** the PC's nibbles. In FIN's second cycle they are P0's and then the PC's page.
+  - **M1/M2:** InstrReg takes OPR and OPA.
+  - **After A3:** the PC steps, except in FIN's second cycle.
+  - **X2:** the accumulator, carry, index registers (one register, or a pair in a second cycle) and DCL load. I/O reads arrive on `din` at X2, and I/O writes and the first half of SRC go out then.
+  - **X3:** SRC's second half goes out. Jumps load the PC, JMS pushes, BBL pops, and `second` is set or cleared.
+  - **CM-ROM and DCL's CM-RAM lines** are up at A3, at M2 of OPR 1110 and at X2 of SRC.
+
+  This is one working schedule, not a requirement: the test checks the bus and memory, not internal timing.
+- **Reset can't clear the index registers, unlike the chip.** The real 4004 clears them over 8 instruction cycles with its refresh counter, which sweeps the pairs from whatever state it powers up in. In this simulator every DFF powers up undefined, and `reset` is the only defined input. A defined signal that changes over time can't be derived from all-undefined state and a constant input: any value the logic can be sure of is one it would also produce with every unknown bit set, and that doesn't change from clock to clock. IndexRegs has no reset pin, and adding one would change a solved level. So after reset the PC, the stack, A, CY and the DCL bank are 0, and the index registers stay as they were (undefined at power-on). This replaces the reset clause of "The CPU has the 4004's own pins". The model refuses to read a register before it is written, so no test depends on it, and the brief says a program must set registers before using them. Reset is still held for 64 clocks in the test, as on the chip.
+- **The test is generated** by `tools/gen_cpu_tst.py` from the 4004 model, and a test keeps the committed file in step with it. One program covers all 46 instructions in segments, each on its own ROM page:
+  - the accumulator group from set values of A and CY, starting with A and CY straight after reset;
+  - registers, ADD, SUB and an ISZ loop;
+  - every JCN condition, with TEST at 0 and at 1;
+  - JMS three deep with BBL values;
+  - FIN, JIN, and a FIN at a page's last byte;
+  - DCL with SRC in two banks, every RAM, status and port instruction (WPM included);
+  - Intel's 16-digit decimal addition, on operands whose sum carries out of 16 digits.
+
+  Results go to RAM chip 1 through inline stores (and through a `put` subroutine in the JMS segment). After each segment the test checks every RAM character and port it changed: 126 checks over 7,500 clocks. Any bus mistake fails it at the period where it happens. Ten wrong CPUs fail it:
+  - the PC stepping at A2;
+  - SRC's halves swapped;
+  - FIN fetching from the PC;
+  - JIN into page 0;
+  - DCL ignored;
+  - BBL not returning;
+  - no CM lines at M2;
+  - `sync` at X2;
+  - CY not cleared on reset;
+  - ISZ jumping on zero.
+- **`.tst` gains `cycles <n>`,** shorthand for n ticks and tocks, so a CPU test stays readable.
+- **The runner evaluates less:** before a tick only if an input changed, and after driving `din` only if it changed. This halves the CPU test's time.
+- **The Computer group opens after the CPU:** a level may list `requires`, levels that must be solved besides its parts. RAM8 requires CPU. `is_unlocked`, `missing` and the level-order test read it.
+**Alternatives:**
+- A reset pin on IndexRegs: it changes a solved level's interface and players' saves.
+- Clearing registers with an undefined address: writes with an undefined load leave undefined registers undefined.
+- One `.tst` per instruction group: a level has one test file, and a reset per group would add 64 clocks each.
+- A Decoder level now: still possible, see the consequences.
+**Consequences:**
+- **Size and speed:** the reference is 5,639 primitives, 84 levels deep, in 110 parts. The test runs in about 4 s: roughly 2,000 clocks/s, 250 instruction cycles/s, against the real 4004's 92.5k. 110 parts is a lot for one level. If playtesting shows it, a Decoder level can be cut from the reference's control lines.
+- **The GUI's clock panel doesn't attach the bus memories yet,** so the CPU can't be stepped by hand on a program. That is the next change.
+- **Players:** players who solved RAM levels see them locked until they solve the CPU, as the RAM-after-CPU entry said.
