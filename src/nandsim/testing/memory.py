@@ -1,9 +1,12 @@
-"""Memories held by the test runner and wired to a chip's pins: program ROM and data RAM.
+"""The MCS-4 memories a test runner puts on a 4004's bus: 4001 ROMs and 4002 RAMs.
 
-The CPU levels reach memory through their pins, and the memory chips come later in the
-game, so a `.tst` script attaches these instead (see docs/tst.md and docs/decisions.md).
-They are test-harness code, not chips: they act like a combinational read port plus, for
-the data memory, a write that is sampled at `tick` and stored at `tock`, as a DFF does.
+The CPU level has the 4004's pins (see docs/decisions.md, 2026-11-09), and the memory chips
+come later in the game, so a `.tst` script attaches these with `attach mcs4`. They are
+test-harness code, not chips. Like the real 4001s and 4002s they count the 8 clock periods
+of each instruction cycle (A1 A2 A3 M1 M2 X1 X2 X3) from reset, read the bus at every tick,
+and drive `din` for the periods in which they send. Sixteen 4001s hold the 4 KB of program
+memory, each with an I/O port; eight banks of four 4002s hold the data memory, each 4002
+with an output port.
 
 Also here: the `.rom` file format, one byte per line in binary, shared with the ROM editor.
 """
@@ -16,7 +19,28 @@ from nandsim.hdl import HdlError, SourcePos
 from nandsim.sim import Simulator
 
 ROM_SIZE = 4096  # the 4004's whole program address space
-DATA_PINS = {"in": 4, "addr": 8, "bank": 3, "status": 1, "load": 1, "out": 4}  # as DataRAM
+PERIODS = ("A1", "A2", "A3", "M1", "M2", "X1", "X2", "X3")
+A1, A2, A3, M1, M2, X1, X2, X3 = range(8)
+
+# The CPU pins `attach mcs4` connects: name -> (width, direction seen from the CPU).
+BUS_PINS: dict[str, tuple[int, str]] = {
+    "din": (4, "in"),
+    "dout": (4, "out"),
+    "drive": (1, "out"),
+    "sync": (1, "out"),
+    "cmrom": (1, "out"),
+    "cmram": (4, "out"),
+    "reset": (1, "in"),
+}
+
+# The I/O and RAM instructions (OPR 1110), by OPA. Writes take the accumulator from the
+# bus at X2; reads put a value on it.
+IO_NAMES = (
+    "WRM", "WMP", "WRR", "WPM", "WR0", "WR1", "WR2", "WR3",
+    "SBM", "RDM", "RDR", "ADM", "RD0", "RD1", "RD2", "RD3",
+)  # fmt: skip
+WRM, WMP, WRR, WPM = 0, 1, 2, 3
+SBM, RDM, RDR, ADM = 8, 9, 10, 11
 
 # A data memory character: (bank, "main", addr) or (bank, "status", chip and register, char).
 CellKey = tuple[int, str, int] | tuple[int, str, int, int]
@@ -58,195 +82,246 @@ def parse_rom(text: str, filename: str = "<rom>") -> list[int]:
 
 
 def cell_key(bank: int, addr: int, status: bool) -> CellKey:
-    """The character `addr` picks in `bank`, as DataRAM decodes it.
+    """The character `addr` picks in `bank`, as DataRAM and SRC address it.
 
-    A main character is `addr` itself. A status character is picked by the chip and
-    register bits `addr[4..7]` and the character `addr[0..1]`; `addr[2..3]` are ignored.
+    `addr[6..7]` pick the 4002 and `addr[4..5]` its register, which is what SRC sends at
+    X2. A main character is then `addr[0..3]`, sent at X3. A status character is
+    `addr[0..1]`; `addr[2..3]` are ignored.
     """
     if status:
         return (bank, "status", addr >> 4, addr & 3)
     return (bank, "main", addr)
 
 
-def _check_pins(
-    sim: Simulator,
-    chip: str,
-    links: dict[str, tuple[str, SourcePos]],
-    widths: dict[str, int],
-    kind: str,
-) -> None:
-    """Every memory pin reads a chip output of its width, and `out` drives a chip input."""
+def decode_bank(lines: int) -> int | None:
+    """The bank the CM-RAM lines select, or None for none.
+
+    CM-RAM0 alone is bank 0; CM-RAM1..3 carry banks 1-7 as a binary number, as a 3-to-8
+    decoder on them does in Intel's 8-bank layout. So bank n is what `DCL` n selects.
+    Raises ValueError when CM-RAM0 and another line are both active.
+    """
+    if lines & 1:
+        if lines >> 1:
+            raise ValueError("cmram selects bank 0 and another bank at once")
+        return 0
+    return (lines >> 1) or None
+
+
+def check_pins(sim: Simulator, chip: str, links: dict[str, tuple[str, SourcePos]]) -> None:
+    """Each link reaches a chip pin of the width and direction `BUS_PINS` gives."""
     nl = sim.netlist
-    for mem_pin, (chip_pin, pos) in links.items():
-        if mem_pin == "out":
-            nets = nl.inputs.get(chip_pin)
-            if nets is None:
-                what = "an output" if chip_pin in nl.outputs else "not a pin"
-                raise HdlError(
-                    f"the {kind}'s out drives '{chip_pin}', which is {what} of {chip}: "
-                    "it must be an input",
-                    pos,
-                )
-        else:
-            nets = nl.outputs.get(chip_pin)
-            if nets is None:
-                what = "an input" if chip_pin in nl.inputs else "not a pin"
-                raise HdlError(
-                    f"the {kind}'s {mem_pin} reads '{chip_pin}', which is {what} of {chip}: "
-                    "it must be an output",
-                    pos,
-                )
-        want = widths[mem_pin]
-        if mem_pin == "addr" and kind == "program memory":
-            if not 1 <= len(nets) <= want:
-                raise HdlError(
-                    f"the {kind}'s addr has at most {want} bits, '{chip_pin}' has {len(nets)}",
-                    pos,
-                )
-        elif len(nets) != want:
+    for name, (pin, pos) in links.items():
+        width, direction = BUS_PINS[name]
+        table, other = (nl.inputs, nl.outputs) if direction == "in" else (nl.outputs, nl.inputs)
+        nets = table.get(pin)
+        if nets is None:
+            what = (
+                f"an {'output' if direction == 'in' else 'input'}" if pin in other else "not a pin"
+            )
             raise HdlError(
-                f"the {kind}'s {mem_pin} has {want} bit{'s' if want > 1 else ''}, "
-                f"'{chip_pin}' has {len(nets)}",
+                f"mcs4 {name} needs {chip}'s {direction}put, but '{pin}' is {what} of {chip}",
+                pos,
+            )
+        if len(nets) != width:
+            raise HdlError(
+                f"mcs4 {name} has {width} bit{'s' if width > 1 else ''}, '{pin}' has {len(nets)}",
                 pos,
             )
 
 
 @dataclass
-class ProgramMemory:
-    """4096 bytes, all 0 until written; `out` is the byte at `addr`, with no clock."""
+class Mcs4:
+    """Sixteen 4001s and eight banks of 4002s on a CPU's bus, as the runner simulates them."""
 
-    addr: str
-    out: str
-    data: list[int] = field(default_factory=lambda: [0] * ROM_SIZE)
-
-    def write(self, start: int, values: list[int], pos: SourcePos) -> None:
-        if start + len(values) > ROM_SIZE:
-            raise HdlError(
-                f"{len(values)} bytes from 0x{start:03X} run past the end of program memory "
-                f"(0x{ROM_SIZE - 1:03X})",
-                pos,
-            )
-        self.data[start : start + len(values)] = values
-
-    def read(self, sim: Simulator) -> int | None:
-        addr = sim.get(self.addr)
-        return None if addr is None else self.data[addr]
-
-
-@dataclass
-class DataMemory:
-    """The data memory DataRAM models: 8 banks of 4002s, every character undefined at first."""
-
-    pins: dict[str, str]  # DataRAM pin -> chip pin
+    sim: Simulator
+    pins: dict[str, str]  # BUS_PINS name -> chip pin
+    rom: list[int] = field(default_factory=lambda: [0] * ROM_SIZE)
     cells: dict[CellKey, int | None] = field(default_factory=dict)
-    pending: tuple[CellKey, int | None] | None = None  # sampled at tick, stored at tock
+    romport_in: dict[int, int] = field(default_factory=dict)  # what RDR reads, per 4001
+    romport_out: dict[int, int | None] = field(default_factory=dict)  # what WRR wrote
+    ramport: dict[tuple[int, int], int | None] = field(default_factory=dict)  # (bank, 4002)
+    phase: int | None = None  # the current period; None until the first reset
+    next_phase: int | None = None  # decided at the tick, taken at the tock
+    complained: bool = False  # only the first bus problem is reported
 
-    def _key(self, sim: Simulator) -> CellKey | None:
-        bank, addr, status = (sim.get(self.pins[p]) for p in ("bank", "addr", "status"))
-        if bank is None or addr is None or status is None:
+    # One instruction cycle's state.
+    addr: list[int | None] = field(default_factory=lambda: [None, None, None])
+    fetch_chip: int | None = None  # the 4001 that matched at A3
+    opa: int | None = None
+    io_rom: bool = False  # CM-ROM at M2: the 4001 picked by SRC takes this instruction
+    io_bank: int | None = None  # CM-RAM at M2: that bank's 4002 picked by SRC takes it
+    # What SRC selected: the 4001 chip number, and per bank the X2 and X3 nibbles.
+    src_rom: int | None = None
+    src_ram: dict[int, tuple[int, int | None]] = field(default_factory=dict)
+    src_bank: int | None = None  # the bank that took X2 of this cycle's SRC
+
+    def period(self) -> str:
+        return "?" if self.phase is None else PERIODS[self.phase]
+
+    def _get(self, name: str) -> int | None:
+        return self.sim.get(self.pins[name])
+
+    # ---- what the memories send -----------------------------------------
+
+    def sender(self) -> tuple[str, int | None] | None:
+        """Who drives the bus in the current period, and the value, or None if no memory does."""
+        p = self.phase
+        if p in (M1, M2) and self.fetch_chip is not None:
+            if None in self.addr:
+                return (f"4001 #{self.fetch_chip}", None)
+            a = self.addr[0] | self.addr[1] << 4 | self.addr[2] << 8  # type: ignore[operator]
+            byte = self.rom[a]
+            return (f"4001 #{self.fetch_chip}", byte >> 4 if p == M1 else byte & 15)
+        if p != X2 or self.opa is None or self.opa < SBM:
             return None
-        return cell_key(bank, addr, bool(status))
-
-    def read(self, sim: Simulator) -> int | None:
-        key = self._key(sim)
-        return None if key is None else self.cells.get(key)
-
-    def sample(self, sim: Simulator) -> str | None:
-        """At tick: remember the write `load` asks for. Returns a problem to report, if any.
-
-        An undefined `load` writes nothing (a CPU's control lines are undefined until its
-        reset cycle has run); `load` at 1 with an undefined address is a failure.
-        """
-        self.pending = None
-        if sim.get(self.pins["load"]) != 1:
+        if self.opa == RDR:
+            if self.io_rom and self.src_rom is not None:
+                return (f"4001 #{self.src_rom}", self.romport_in.get(self.src_rom))
             return None
-        key = self._key(sim)
+        key = self._ram_key()
         if key is None:
-            pins = [self.pins[p] for p in ("bank", "addr", "status")]
-            undefined = [p for p in pins if sim.get(p) is None]
+            return None
+        return (f"4002 in bank {self.io_bank}", self.cells.get(key))
+
+    def _ram_key(self) -> CellKey | None:
+        """The character this cycle's RAM instruction reaches, if SRC picked a 4002 there."""
+        if self.io_bank is None or self.opa is None or self.io_bank not in self.src_ram:
+            return None
+        high, char = self.src_ram[self.io_bank]
+        if self.opa >= 12 or 4 <= self.opa < 8:  # RD0-3, WR0-3: a status character
+            return cell_key(self.io_bank, high << 4 | (self.opa & 3), True)
+        if char is None:
+            return None
+        return cell_key(self.io_bank, high << 4 | char, False)
+
+    def drive_bus(self) -> None:
+        """Put the sender's value on `din`, or 0 when no memory sends, and evaluate."""
+        s = self.sender()
+        self.sim.set(self.pins["din"], 0 if s is None else s[1])
+        self.sim.eval()
+
+    # ---- the clock ------------------------------------------------------
+
+    def tick(self) -> str | None:
+        """Read the bus for the current period. Returns the first protocol problem, if any."""
+        reset = self._get("reset")
+        if reset == 1:
+            self._reset()
+            return None
+        self.next_phase = None if self.phase is None else (self.phase + 1) % 8
+        if self.phase is None or reset is None:
+            return None
+        problem = self._period()
+        if problem is None or self.complained:
+            return None
+        self.complained = True
+        return problem
+
+    def tock(self) -> None:
+        """The next period starts: the memories that send in it drive the bus."""
+        self.phase = self.next_phase
+        if self.phase == A1:
+            self.addr = [None, None, None]
+            self.fetch_chip = None
+            self.opa = None
+            self.io_rom, self.io_bank = False, None
+        self.drive_bus()
+
+    def _reset(self) -> None:
+        """RESET: the next period is A1, SRC selections and output ports are cleared.
+
+        The memory contents stay, so a test can fill them before it resets the CPU.
+        """
+        self.next_phase = A1
+        self.src_rom, self.src_ram, self.src_bank = None, {}, None
+        self.romport_out = dict.fromkeys(range(16), 0)
+        self.ramport = {(b, c): 0 for b in range(8) for c in range(4)}
+
+    def _period(self) -> str | None:
+        p = self.phase
+        drive, dout, sync = self._get("drive"), self._get("dout"), self._get("sync")
+        if sync != (p == X3):
+            want = "1 only during X3" if p != X3 else "1 during X3, before each A1"
+            return f"sync is {_show(sync)} at {PERIODS[p]}: it must be {want}"  # type: ignore[index]
+        if drive == 0 and dout != 0:
             return (
-                f"data memory: {self.pins['load']} is 1 but {', '.join(undefined)} "
-                f"{'is' if len(undefined) == 1 else 'are'} undefined, so nothing was written"
+                f"dout is {_show(dout)} while drive is 0: it must be 0 when the CPU isn't driving"
             )
-        self.pending = (key, sim.get(self.pins["in"]))
+        s = self.sender()
+        if s is not None and drive != 0:
+            return f"drive is {_show(drive)} while {s[0]} sends on the bus"
+        if p in (A1, A2, A3):
+            if drive != 1:
+                return f"the CPU must send the address at {PERIODS[p]}, but drive is {_show(drive)}"
+            self.addr[p] = dout  # type: ignore[index]
+            if p == A3 and self._get("cmrom") == 1:
+                self.fetch_chip = dout
+        elif p == M2:
+            self.opa = s[1] if s is not None else None
+            self.io_rom = self._get("cmrom") == 1
+            try:
+                self.io_bank = self._bank()
+            except ValueError as e:
+                return f"{e} at M2"
+            if not (self.io_rom or self.io_bank is not None):
+                self.opa = None  # not an I/O or RAM instruction: no memory acts on it
+        elif p == X2:
+            return self._x2(drive, dout)
+        elif p == X3 and self.src_bank is not None:
+            if drive != 1:
+                return f"SRC must send its second register at X3, but drive is {_show(drive)}"
+            high, _ = self.src_ram[self.src_bank]
+            self.src_ram[self.src_bank] = (high, dout)
+            self.src_bank = None
         return None
 
-    def commit(self) -> None:
-        """At tock: store the write sampled at the tick."""
-        if self.pending is not None:
-            key, value = self.pending
-            self.cells[key] = value
-            self.pending = None
+    def _bank(self) -> int | None:
+        lines = self._get("cmram")
+        if lines is None:
+            raise ValueError("cmram is undefined")
+        return decode_bank(lines)
 
-
-MAX_PASSES = 8
-
-
-class Memories:
-    """The memories a script attached, kept in step with the simulator."""
-
-    def __init__(self, sim: Simulator, chip: str) -> None:
-        self.sim = sim
-        self.chip = chip
-        self.rom: ProgramMemory | None = None
-        self.ram: DataMemory | None = None
-
-    def __bool__(self) -> bool:
-        return self.rom is not None or self.ram is not None
-
-    def attach(self, kind: str, links: dict[str, tuple[str, SourcePos]]) -> None:
-        if kind == "rom":
-            _check_pins(self.sim, self.chip, links, {"addr": 12, "out": 8}, "program memory")
-            self.rom = ProgramMemory(links["addr"][0], links["out"][0])
-        else:
-            _check_pins(self.sim, self.chip, links, DATA_PINS, "data memory")
-            self.ram = DataMemory({p: pin for p, (pin, _) in links.items()})
-
-    def driver(self, pin: str) -> str | None:
-        """Which memory drives this chip input, if one does."""
-        if self.rom is not None and self.rom.out == pin:
-            return "program memory"
-        if self.ram is not None and self.ram.pins["out"] == pin:
-            return "data memory"
+    def _x2(self, drive: int | None, dout: int | None) -> str | None:
+        """SRC (CM lines active now), or the data of an I/O or RAM instruction."""
+        cmrom = self._get("cmrom") == 1
+        try:
+            bank = self._bank()
+        except ValueError as e:
+            return f"{e} at X2"
+        if cmrom or bank is not None:
+            if drive != 1:
+                return f"SRC must send its first register at X2, but drive is {_show(drive)}"
+            if cmrom:
+                self.src_rom = dout
+            if bank is not None:
+                self.src_ram[bank] = (dout, None)  # type: ignore[assignment]
+                self.src_bank = bank
+        op = self.opa
+        if op is not None and op >= SBM:  # a read: `sender` put the value on the bus
+            if self.sender() is None:
+                chip = "4001" if op == RDR else "4002"
+                return f"{IO_NAMES[op]} at X2, but no {chip} was selected by SRC"
+            return None
+        if op is None or op == WPM:
+            return None  # WPM needs a 4008/4009, which isn't modelled
+        if drive != 1:
+            return f"{IO_NAMES[op]} must send the accumulator at X2, but drive is {_show(drive)}"
+        if op == WRR:
+            if self.io_rom and self.src_rom is not None:
+                self.romport_out[self.src_rom] = dout
+            return None
+        if self.io_bank is None:
+            return f"{IO_NAMES[op]} at X2, but no CM-RAM line was 1 at M2"
+        if self.io_bank not in self.src_ram:
+            return f"{IO_NAMES[op]} at X2, but no 4002 was selected by SRC in bank {self.io_bank}"
+        if op == WMP:
+            self.ramport[(self.io_bank, self.src_ram[self.io_bank][0] >> 2)] = dout
+            return None
+        key = self._ram_key()
+        if key is not None:
+            self.cells[key] = dout
         return None
 
-    def settle(self, pos: SourcePos) -> None:
-        """Evaluate, then drive each memory's `out` from its address until nothing changes."""
-        sim = self.sim
-        sim.eval()
-        mems = [m for m in (self.rom, self.ram) if m is not None]
-        for _ in range(MAX_PASSES):
-            changed = False
-            for mem in mems:
-                out = mem.out if isinstance(mem, ProgramMemory) else mem.pins["out"]
-                want = mem.read(sim)
-                have = sim.get_bits(out)
-                if want is None:
-                    stale = any(b is not None for b in have)
-                else:
-                    stale = sim.get(out) != want
-                if stale:
-                    sim.set(out, want)
-                    changed = True
-            if not changed:
-                return
-            sim.eval()
-        addrs = [p for p in (self.rom and self.rom.addr, self.ram and self.ram.pins["addr"]) if p]
-        raise HdlError(
-            f"the memories and {self.chip} never settled: after {MAX_PASSES} passes, "
-            f"{' and '.join(addrs)} still changed with what the memory sent back",
-            pos,
-        )
 
-    def before_tick(self, pos: SourcePos) -> str | None:
-        self.settle(pos)
-        return self.ram.sample(self.sim) if self.ram is not None else None
-
-    def after_tick(self, pos: SourcePos) -> None:
-        if self.sim.reads_clock:  # the rising clock may have moved an address
-            self.settle(pos)
-
-    def after_tock(self, pos: SourcePos) -> None:
-        if self.ram is not None:
-            self.ram.commit()
-        self.settle(pos)
+def _show(v: int | None) -> str:
+    return "undefined" if v is None else str(v)

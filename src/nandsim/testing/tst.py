@@ -2,9 +2,9 @@
 
 A script names its chip, then lists steps. A `table` block is shorthand: each row
 sets the inputs, evaluates, and checks the outputs. `tick` and `tock` are the two
-halves of a clock cycle, for chips with DFFs. `attach` connects a program memory or a
-data memory, held by the runner, to the chip's pins; `rom`, `ram` and `ramstatus` fill
-them, and `expect ram` / `expect ramstatus` check the data memory.
+halves of a clock cycle, for chips with DFFs. `attach mcs4` puts the runner's 4001 ROMs
+and 4002 RAMs on a 4004's bus pins; `rom`, `ram`, `ramstatus` and `set romport` fill
+them, and `expect ram`, `ramstatus`, `romport` and `ramport` check them.
 """
 
 from __future__ import annotations
@@ -68,7 +68,7 @@ class ExpectStep:
 
 @dataclass(frozen=True)
 class PinLink:
-    """`addr=romaddr` in an `attach` line: a memory pin and the chip pin it connects to."""
+    """`din=din` in an `attach` line: a bus signal and the chip pin it connects to."""
 
     memory_pin: str
     chip_pin: str
@@ -77,10 +77,23 @@ class PinLink:
 
 @dataclass(frozen=True)
 class AttachStep:
-    """`attach rom ...` or `attach ram ...`: a runner-held memory wired to the chip's pins."""
+    """`attach mcs4 ...`: the runner's 4001s and 4002s wired to a 4004's bus pins."""
 
-    kind: str  # "rom" or "ram"
     links: tuple[PinLink, ...]
+    pos: SourcePos
+
+
+@dataclass(frozen=True)
+class PortStep:
+    """`set romport`, `expect romport` or `expect ramport`: an I/O port of a memory chip.
+
+    `where` is the 4001's chip number, or the bank and 4002 chip number.
+    """
+
+    kind: str  # "romport" or "ramport"
+    expect: bool
+    where: tuple[Value, ...]
+    value: Value
     pos: SourcePos
 
 
@@ -126,14 +139,13 @@ Step = (
     | RomStep
     | RamStep
     | ExpectRamStep
+    | PortStep
 )
 
-# The pins of each memory, in the order `attach` documents them.
-MEMORY_PINS: dict[str, tuple[str, ...]] = {
-    "rom": ("addr", "out"),
-    "ram": ("in", "addr", "bank", "status", "load", "out"),
-}
+# The 4004 signals `attach mcs4` connects, in the order docs/tst.md lists them.
+MCS4_PINS = ("din", "dout", "drive", "sync", "cmrom", "cmram", "reset")
 CELL_WORDS = {"ram": False, "ramstatus": True}  # target word -> is a status character
+PORT_WORDS = {"romport": ("<chip>",), "ramport": ("<bank>", "<chip>")}
 
 
 @dataclass(frozen=True)
@@ -207,7 +219,7 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
     steps: list[Step] = []
     header: tuple[list[_Word], list[_Word]] | None = None
     table_pos: SourcePos | None = None
-    attached: set[str] = set()
+    attached = False
 
     for lineno, line in enumerate(lines, start=1):
         words = _words(line, filename, lineno)
@@ -255,6 +267,11 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
             bar = texts.index("|")
             header = (args[:bar], args[bar + 1 :])
             table_pos = head.pos
+        elif cmd == "set" and args and args[0].text == "romport" and len(args) != 2:
+            _arity(head, args, 3, "set romport <chip> <value>")
+            _need(attached, head)
+            where, value = parse_value(args[1], False), parse_value(args[2], False)
+            steps.append(PortStep("romport", False, (where,), value, head.pos))
         elif cmd == "set":
             _arity(head, args, 2, "set <pin> <value>")
             steps.append(SetStep(args[0].text, parse_value(args[1], False), head.pos))
@@ -264,17 +281,27 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
         elif cmd == "expect" and args and args[0].text in CELL_WORDS and len(args) != 2:
             word = args[0].text
             _arity(head, args, 4, f"expect {word} <bank> <addr> <value>")
-            _need(attached, "ram", head)
+            _need(attached, head)
             bank, addr = (parse_value(w, False) for w in args[1:3])
             value = parse_value(args[3], True)
             steps.append(ExpectRamStep(CELL_WORDS[word], bank, addr, value, head.pos))
+        elif cmd == "expect" and args and args[0].text in PORT_WORDS and len(args) != 2:
+            word = args[0].text
+            n = len(PORT_WORDS[word])
+            _arity(head, args, n + 2, f"expect {word} {' '.join(PORT_WORDS[word])} <value>")
+            _need(attached, head)
+            where = tuple(parse_value(w, False) for w in args[1 : n + 1])
+            steps.append(PortStep(word, True, where, parse_value(args[-1], True), head.pos))
         elif cmd == "expect":
             _arity(head, args, 2, "expect <pin> <value>")
             steps.append(ExpectStep(args[0].text, parse_value(args[1], True), head.pos))
         elif cmd == "attach":
-            steps.append(_attach(head, args, attached))
+            if attached:
+                raise HdlError("the MCS-4 memories are already attached", head.pos)
+            steps.append(_attach(head, args))
+            attached = True
         elif cmd == "rom":
-            _need(attached, "rom", head)
+            _need(attached, head)
             usage = "usage: rom <addr> <byte>... or rom <file>.rom"
             if len(args) == 1 and not args[0].text[:1].isdigit():
                 steps.append(RomStep(head.pos, file=args[0].text))
@@ -285,7 +312,7 @@ def parse_tst(text: str, filename: str = "<input>") -> TstScript:
                 raise HdlError(usage, head.pos)
         elif cmd in CELL_WORDS:
             _arity(head, args, 3, f"{cmd} <bank> <addr> <value>")
-            _need(attached, "ram", head)
+            _need(attached, head)
             bank, addr, value = (parse_value(w, False) for w in args)
             steps.append(RamStep(CELL_WORDS[cmd], bank, addr, value, head.pos))
         elif cmd == "tick":
@@ -313,32 +340,30 @@ def _arity(head: _Word, args: list[_Word], n: int, usage: str) -> None:
         raise HdlError(f"usage: {usage}", head.pos)
 
 
-def _need(attached: set[str], kind: str, head: _Word) -> None:
-    if kind not in attached:
-        what = "program memory" if kind == "rom" else "data memory"
-        raise HdlError(f"'{head.text}' needs a {what}: add 'attach {kind} ...' before it", head.pos)
+def _need(attached: bool, head: _Word) -> None:
+    if not attached:
+        raise HdlError(
+            f"'{head.text}' needs the MCS-4 memories: add 'attach mcs4 ...' before it", head.pos
+        )
 
 
-def _attach(head: _Word, args: list[_Word], attached: set[str]) -> AttachStep:
-    if not args or args[0].text not in MEMORY_PINS:
-        ram = " ".join(f"{p}=<pin>" for p in MEMORY_PINS["ram"])
-        raise HdlError(f"usage: attach rom addr=<pin> out=<pin>, or attach ram {ram}", head.pos)
-    kind = args[0].text
-    if kind in attached:
-        raise HdlError(f"a {kind} is already attached", head.pos)
-    pins = MEMORY_PINS[kind]
+def _attach(head: _Word, args: list[_Word]) -> AttachStep:
+    if not args or args[0].text != "mcs4":
+        usage = " ".join(f"{p}=<pin>" for p in MCS4_PINS)
+        raise HdlError(f"usage: attach mcs4 {usage}", head.pos)
     links: dict[str, PinLink] = {}
     for w in args[1:]:
         name, eq, pin = w.text.partition("=")
         if not eq or not name or not pin:
-            raise HdlError(f"expected <memory pin>=<chip pin>, found '{w.text}'", w.pos)
-        if name not in pins:
-            raise HdlError(f"the {kind} has no pin '{name}' (its pins: {', '.join(pins)})", w.pos)
+            raise HdlError(f"expected <signal>=<chip pin>, found '{w.text}'", w.pos)
+        if name not in MCS4_PINS:
+            raise HdlError(
+                f"mcs4 has no signal '{name}' (its signals: {', '.join(MCS4_PINS)})", w.pos
+            )
         if name in links:
-            raise HdlError(f"the {kind}'s pin '{name}' is connected twice", w.pos)
+            raise HdlError(f"mcs4 {name} is connected twice", w.pos)
         links[name] = PinLink(name, pin, w.pos)
-    missing = [p for p in pins if p not in links]
+    missing = [p for p in MCS4_PINS if p not in links]
     if missing:
-        raise HdlError(f"attach {kind} must connect {', '.join(missing)}", head.pos)
-    attached.add(kind)
-    return AttachStep(kind, tuple(links[p] for p in pins), head.pos)
+        raise HdlError(f"attach mcs4 must connect {', '.join(missing)}", head.pos)
+    return AttachStep(tuple(links[p] for p in MCS4_PINS), head.pos)

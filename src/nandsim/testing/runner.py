@@ -16,12 +16,13 @@ from nandsim.netlist import ChipLibrary, Primitive, elaborate, net_names
 from nandsim.paths import data_root, default_save_dir, exports_dir
 from nandsim.sim import Simulator
 from nandsim.testing.levels import Level, exported_chips, find_level, load_levels
-from nandsim.testing.memory import CellKey, Memories, cell_key, parse_rom
+from nandsim.testing.memory import ROM_SIZE, CellKey, Mcs4, cell_key, check_pins, parse_rom
 from nandsim.testing.tst import (
     AttachStep,
     EvalStep,
     ExpectRamStep,
     ExpectStep,
+    PortStep,
     RamStep,
     RomStep,
     SetStep,
@@ -178,8 +179,7 @@ def _cell(bank: Value, addr: Value, status: bool) -> CellKey:
     return cell_key(bank.encode(3, "bank"), addr.encode(8, "addr"), status)
 
 
-def _rom_step(step: RomStep, mem: Memories, base: Path) -> None:
-    assert mem.rom is not None  # the parser checks the attach comes first
+def _rom_step(step: RomStep, mem: Mcs4, base: Path) -> None:
     if step.file is not None:
         path = base / step.file
         try:
@@ -188,67 +188,98 @@ def _rom_step(step: RomStep, mem: Memories, base: Path) -> None:
             raise HdlError(
                 f"can't read program file '{step.file}': {e.strerror}", step.pos
             ) from None
-        mem.rom.write(0, parse_rom(text, str(path)), step.pos)
+        start, values = 0, parse_rom(text, str(path))
     else:
         assert step.addr is not None
-        values = [v.encode(8, "rom") for v in step.data]
-        mem.rom.write(step.addr.encode(12, "addr"), values, step.pos)
+        start, values = step.addr.encode(12, "addr"), [v.encode(8, "rom") for v in step.data]
+    if start + len(values) > ROM_SIZE:
+        raise HdlError(
+            f"{len(values)} bytes from 0x{start:03X} run past the end of program memory "
+            f"(0x{ROM_SIZE - 1:03X})",
+            step.pos,
+        )
+    mem.rom[start : start + len(values)] = values
+
+
+def _port_step(step: PortStep, mem: Mcs4, sim: Simulator, result: TstResult) -> None:
+    if step.kind == "romport":
+        chip = step.where[0].encode(4, "chip")
+        if not step.expect:
+            mem.romport_in[chip] = step.value.encode(4, "romport")
+            return
+        got = mem.romport_out.get(chip)
+    else:
+        key = (step.where[0].encode(3, "bank"), step.where[1].encode(2, "chip"))
+        got = mem.ramport.get(key)
+    where = " ".join(v.text for v in step.where)
+    _check_value(result, step.value, got, f"{step.kind} {where}", step.pos, sim)
+
+
+def _check_value(
+    result: TstResult, value: Value, got: int | None, label: str, pos: SourcePos, sim: Simulator
+) -> None:
+    """One check of a 4-bit memory value against an expected one (`*` always passes)."""
+    result.checks += 1
+    if value.number is None:
+        return
+    want = value.encode(4, label.split()[0])
+    if got != want:
+        bits = [None] * 4 if got is None else [(got >> i) & 1 for i in range(4)]
+        shown = _format(got, bits, value)
+        failure = f"{label}: expected {value.text}, got {shown} ({_when(sim)})"
+        result.failures.append(Failure(pos, failure))
 
 
 def _run_steps(script: TstScript, sim: Simulator, result: TstResult, base: Path) -> None:
     nl = sim.netlist
     names: dict[int, str] = {}  # filled on the first failure that needs them
     clocked = any(isinstance(s, TickStep | TockStep) for s in script.steps)
-    mem = Memories(sim, script.chip)
+    mem: Mcs4 | None = None
     for step in script.steps:
         if isinstance(step, SetStep):
             if step.pin not in nl.inputs:
                 hint = ": use 'expect' to check outputs" if step.pin in nl.outputs else ""
                 raise HdlError(f"'{step.pin}' is not an input of {script.chip}{hint}", step.pos)
-            driver = mem.driver(step.pin)
-            if driver is not None:
-                raise HdlError(f"'{step.pin}' is driven by the {driver}: it can't be set", step.pos)
+            if mem is not None and step.pin == mem.pins["din"]:
+                raise HdlError(
+                    f"'{step.pin}' is driven by the MCS-4 memories: it can't be set", step.pos
+                )
             sim.set(step.pin, step.value.encode(len(nl.inputs[step.pin]), step.pin))
         elif isinstance(step, EvalStep):
-            if mem:
-                mem.settle(step.pos)
-            else:
-                sim.eval()
+            sim.eval()
         elif isinstance(step, TickStep):
-            problem = mem.before_tick(step.pos) if mem else None
-            if problem is not None:
-                result.failures.append(Failure(step.pos, f"{problem} ({_when(sim)})"))
+            if mem is not None:
+                sim.eval()  # the memories read the bus as the CPU drives it now
+                period = mem.period()
+                problem = mem.tick()
+                if problem is not None:
+                    failure = f"bus at {period}: {problem} ({_when(sim)})"
+                    result.failures.append(Failure(step.pos, failure))
             sim.tick()
-            if mem:
-                mem.after_tick(step.pos)
         elif isinstance(step, TockStep):
             sim.tock()
-            if mem:
-                mem.after_tock(step.pos)
+            if mem is not None:
+                mem.tock()
         elif isinstance(step, AttachStep):
             links = {k.memory_pin: (k.chip_pin, k.pos) for k in step.links}
-            mem.attach(step.kind, links)
-        elif isinstance(step, RomStep):
-            _rom_step(step, mem, base)
-        elif isinstance(step, RamStep):
-            assert mem.ram is not None  # the parser checks the attach comes first
-            mem.ram.cells[_cell(step.bank, step.addr, step.status)] = step.value.encode(4, "ram")
-        elif isinstance(step, ExpectRamStep):
-            assert mem.ram is not None
-            result.checks += 1
-            if step.value.number is None:
-                continue
-            want = step.value.encode(4, "ram")
-            got = mem.ram.cells.get(_cell(step.bank, step.addr, step.status))
-            if got != want:
-                bits = [None] * 4 if got is None else [(got >> i) & 1 for i in range(4)]
-                shown = _format(got, bits, step.value)
+            check_pins(sim, script.chip, links)
+            mem = Mcs4(sim, {name: pin for name, (pin, _) in links.items()})
+            mem.drive_bus()
+        elif isinstance(step, RomStep | RamStep | PortStep | ExpectRamStep):
+            assert mem is not None  # the parser checks the attach comes first
+            if isinstance(step, RomStep):
+                _rom_step(step, mem, base)
+            elif isinstance(step, RamStep):
+                key = _cell(step.bank, step.addr, step.status)
+                mem.cells[key] = step.value.encode(4, "ram")
+            elif isinstance(step, PortStep):
+                _port_step(step, mem, sim, result)
+            else:
+                got = mem.cells.get(_cell(step.bank, step.addr, step.status))
                 word = "ramstatus" if step.status else "ram"
-                failure = (
-                    f"{word} {step.bank.text} {step.addr.text}: expected {step.value.text}, "
-                    f"got {shown} ({_when(sim)})"
-                )
-                result.failures.append(Failure(step.pos, failure))
+                label = f"{word} {step.bank.text} {step.addr.text}"
+                _check_value(result, step.value, got, label, step.pos, sim)
+            mem.drive_bus()  # what the memories send this period may have changed
         elif isinstance(step, ExpectStep):
             nets = nl.outputs.get(step.pin) or nl.inputs.get(step.pin)
             if nets is None:
