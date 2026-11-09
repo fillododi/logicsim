@@ -8,10 +8,12 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ### Added
 
-- **Memories for tests.** A `.tst` file can now attach a program memory and a data memory to
-  a chip's pins (`attach rom`, `attach ram`), fill them inline or from a `.rom` file (one
-  byte per line, in binary), and check what was written (`expect ram`). The CPU's tests will
-  run programs this way. See `docs/tst.md`.
+- **Memories for tests.** A `.tst` file can put the ROMs and RAMs of an MCS-4 system on a
+  4004's bus (`attach mcs4`): sixteen 4001s holding the program, eight banks of 4002s, and
+  their I/O ports. Programs go in inline or from a `.rom` file (one byte per line, in
+  binary). Tests can check the data memory and the ports (`expect ram`, `expect romport`,
+  `expect ramport`). A CPU that breaks the bus protocol gets a failure naming the clock
+  period. The CPU's tests will run programs this way. See `docs/tst.md`.
 
 ### Changed
 

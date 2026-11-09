@@ -834,3 +834,21 @@ Ambiguous spec points and the option chosen. Newest last.
 - Milestone 9 gains bus levels: the 4001's and 4002's bus logic around the player's ROM4001 and RAM4002, so that they plug into the CPU. The RAM levels' pins stay as they are, as the inside of those chips.
 - The emulator in project 2 works at the instruction level and isn't affected. The GUI can step through single clock periods, which shows the bus at work.
 - CLAUDE.md now describes the pin-level 4004 and the 8-clock instruction cycle.
+
+## 2026-11-09 — The MCS-4 memories on the bus: how the runner plays the 4001s and 4002s
+**Context:** the entry before this one settled that `.tst` scripts attach 4001s and 4002s to the CPU's bus with `attach mcs4`, and left the syntax and the details for when it was built.
+**Decision:**
+- **`attach mcs4 din= dout= drive= sync= cmrom= cmram= reset=`.** It connects all seven signals, once, before any command that uses the memories. `reset` is the CPU's own input: the real 4001s and 4002s share the RESET line, and the memories need it to know where A1 is.
+- **The memories count periods from reset and check `sync` instead of following it.** A tick with `reset` at 1 makes the next period A1. After that they count, and a `sync` that isn't 1 at X3 and only at X3 is a failure. Following `sync` would let a CPU with a broken timing generator half-work. Until the first reset the memories do nothing, so a CPU still undefined before its reset can't trip them.
+- **`din` is 0 when no memory sends,** which matches the OR-the-outputs convention for the bus. While a memory sends, `din` is its value, undefined if the cell is.
+- **Protocol failures name the period and stop after the first one.** The list: `sync` wrong; `dout` not 0 while `drive` is 0; the CPU not driving where it must (A1–A3, X2 and X3 of SRC, X2 of writes); driving while a memory sends; a RAM instruction with no 4002 selected by SRC in its bank, or with no CM-RAM line at M2; RDR with no 4001 selected; CM-RAM0 together with another line. A broken CPU repeats its mistake every cycle, so later ones would only bury the first.
+- **Not checked, on purpose:** the CM lines at periods where no chip reads them, and the CM-RAM lines at A3, which the previous entry left to be confirmed against the datasheet.
+- **A reset clears the SRC selections and sets every output port to 0, but keeps both memories.** The real 4002 needs 32 instruction cycles of reset to clear its RAM. Keeping memory lets a test fill it before resetting the CPU, and a CPU test never relies on reset clearing RAM.
+- **Ports:** `set romport <chip> <value>` is what RDR reads from a 4001. `expect romport <chip>` and `expect ramport <bank> <chip>` check what WRR and WMP last wrote. The 4001's per-line choice of input or output is a mask option that doesn't matter here: input and output are kept apart. WPM writes nowhere, since no 4008/4009 is modelled.
+- **`set` and `expect` decide by argument count:** with two arguments they read a pin, so a chip may still have a pin named `ram` or `romport`.
+- **`attach rom` and `attach ram` are gone,** with the combinational settling they needed. Nothing reads `din` combinationally now: the memories decide what they send from their own state at the start of each period.
+**Alternatives:**
+- Following `sync` to find A1: more lenient, but it hides timing bugs that a real 4001 would also stumble on.
+- Reporting every bus problem: one off-by-one in the timing generator would produce thousands of lines.
+- Leaving `din` undefined when nobody sends: a CPU that reads the bus at the wrong period would see `x` instead of a wrong value. That is more honest, but it doesn't match the OR convention a Computer level will use.
+**Consequences:** with memories attached, a cycle costs one more evaluation (the runner evaluates before the memories read the bus). The CPU level's tests are written in clock periods, 8 per instruction, and need the 64-clock reset. The developer tests use a pass-through `Bus` chip to drive the protocol by hand.
