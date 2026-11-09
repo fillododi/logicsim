@@ -32,6 +32,10 @@ released as version `0.N.0` (milestone 1 = `0.1.0`, …, milestone 9 = `0.9.0`).
 
 ### Changed
 
+- **IndexRegs has a `reset` pin.** Reset sets all 16 registers to 0, ahead of `load` and
+  `loadpair`, as the 4004's RESET does, and the CPU relies on it. An IndexRegs you solved
+  in 0.7.0 no longer fits the level: add `reset` to its pins and make it clear every
+  register, then run its tests again.
 - **The RAM levels move to a new *Computer* group.** RAM8, RAM64, RAM4002, RAMBank and
   DataRAM are the memory the CPU will be wired to, so they now come after it in the level
   list instead of in Memory, and open once the CPU is solved. Your solutions and progress
