@@ -249,7 +249,7 @@ def _run_steps(script: TstScript, sim: Simulator, result: TstResult, base: Path)
             sim.eval()
         elif isinstance(step, TickStep):
             if mem is not None:
-                sim.eval()  # the memories read the bus as the CPU drives it now
+                sim.refresh()  # the memories read the bus as the CPU drives it now
                 period = mem.period()
                 problem = mem.tick()
                 if problem is not None:
